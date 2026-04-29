@@ -1,23 +1,58 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
 
 :root {
-  --green: #16a34a;
-  --bg: #0a0a0a;
-  --surface: #141414;
-  --surface2: #1e1e1e;
-  --border: #2a2a2a;
-  --text: #f5f5f5;
-  --text-muted: #888;
+  /* Colors â€” from Figma tokens */
+  --color-bg: #ffffff;
+  --color-surface-primary: #f8f8f8;
+  --color-surface-secondary: #efefef;
+  --color-surface-accent: #082996;
+  --color-surface-accent-light: #e6f8ff;
+  --color-surface-white: #ffffff;
+  --color-surface-quaternary: #66d1ff;
+
+  --color-fg-primary: #1a1a1a;
+  --color-fg-secondary: #8e8e93;
+  --color-fg-tertiary: #ffffff;
+  --color-fg-accent: #082996;
+
+  --color-border: #efefef;
+  --color-divider: rgba(0,0,0,0.1);
+
+  --color-success: #34c759;
+  --color-warning: #ff9500;
+  --color-danger: #ff3b30;
+
+  /* Typography */
+  --font-primary: 'Poppins', sans-serif;
+  --font-size-12: 12px;
+  --font-size-14: 14px;
+  --font-size-16: 16px;
+  --font-size-18: 18px;
+  --font-size-24: 24px;
+  --font-size-32: 32px;
+
+  /* Spacing */
+  --space-8: 8px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-40: 40px;
+
+  /* Radius */
+  --radius-pill: 99999px;
+  --radius-card: 24px;
+  --radius-tag: 16px;
 }
 
-* { -webkit-tap-highlight-color: transparent; }
+* { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-fg-primary);
+  font-family: var(--font-primary);
   min-height: 100dvh;
   overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
 }
 
 #root { min-height: 100dvh; display: flex; flex-direction: column; }

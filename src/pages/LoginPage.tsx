@@ -16,56 +16,77 @@ export default function LoginPage() {
     if (error) toast.error(error)
   }
 
+  const filled = email.length > 0 && password.length > 0
+
   return (
-    <div className="min-h-dvh flex flex-col items-center justify-center px-6" style={{ background: 'var(--bg)' }}>
-      <div className="mb-10 text-center">
-        <img
-          src="/logo-time.png"
-          alt="Logo do time"
-          width={56}
-          height={56}
-          className="mx-auto mb-3"
-        />
-        <h1 className="text-3xl font-bold text-white">Chico FC</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>O app da nossa pelada</p>
+    <div className="min-h-dvh flex flex-col" style={{ background: 'var(--color-bg)' }}>
+      {/* Logo area */}
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <img src="/logo.png" alt="Chico FC" width={72} height={72} />
+          <p className="text-sm font-medium" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)' }}>
+            O app da nossa pelada
+          </p>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
-        <div>
-          <label className="block text-sm mb-2" style={{ color: 'var(--text-muted)' }}>Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="seu@email.com"
-            required
-            autoComplete="email"
-            className="w-full px-4 py-3 rounded-xl text-white outline-none"
-            style={{ background: 'var(--surface2)', border: '1px solid var(--border)' }}
-          />
+      {/* Form area */}
+      <div className="px-6 pb-12 flex flex-col gap-6">
+        <div className="flex flex-col gap-2 items-center">
+          <h1 className="font-bold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)' }}>
+            Entrar
+          </h1>
+          <p className="text-center" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-18)' }}>
+            Digite seu email e a senha
+          </p>
         </div>
-        <div>
-          <label className="block text-sm mb-2" style={{ color: 'var(--text-muted)' }}>Senha</label>
-          <input
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder="••••••••"
-            required
-            autoComplete="current-password"
-            className="w-full px-4 py-3 rounded-xl text-white outline-none"
-            style={{ background: 'var(--surface2)', border: '1px solid var(--border)' }}
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-3 rounded-xl font-semibold text-white transition-all active:scale-95 disabled:opacity-50"
-          style={{ background: 'var(--green)' }}
-        >
-          {loading ? 'Entrando...' : 'Entrar'}
-        </button>
-      </form>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4">
+            <div style={{ background: 'var(--color-surface-primary)', borderRadius: 'var(--radius-pill)' }}
+              className="flex items-center px-6 py-4">
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="Email"
+                required
+                autoComplete="email"
+                className="w-full bg-transparent outline-none font-medium"
+                style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}
+              />
+            </div>
+            <div style={{ background: 'var(--color-surface-primary)', borderRadius: 'var(--radius-pill)' }}
+              className="flex items-center px-6 py-4">
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Senha"
+                required
+                autoComplete="current-password"
+                className="w-full bg-transparent outline-none font-medium"
+                style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading || !filled}
+            className="w-full py-4 font-medium transition-all active:scale-95"
+            style={{
+              background: filled && !loading ? 'var(--color-surface-accent)' : 'var(--color-surface-secondary)',
+              color: filled && !loading ? 'var(--color-fg-tertiary)' : 'var(--color-fg-secondary)',
+              borderRadius: 'var(--radius-pill)',
+              fontFamily: 'var(--font-primary)',
+              fontSize: 'var(--font-size-16)',
+            }}
+          >
+            {loading ? 'Entrando...' : 'Entrar'}
+          </button>
+        </form>
+      </div>
     </div>
   )
 }

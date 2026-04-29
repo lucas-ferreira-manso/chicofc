@@ -4,25 +4,22 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { format, isAfter, nextWednesday, isWednesday, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { MapPin, Clock, CheckCircle2, XCircle, Clock3, Crown } from 'lucide-react'
+import { Crown } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Attendance } from '../types'
 
 const MAX_PLAYERS = 14
 
-// Calcula a próxima quarta-feira (ou hoje se já for quarta)
 function getNextWednesday(): Date {
   const today = startOfDay(new Date())
   if (isWednesday(today)) return today
   return nextWednesday(today)
 }
 
-// ID do jogo baseado na data (ex: "2025-04-30")
 function getGameId(date: Date): string {
   return format(date, 'yyyy-MM-dd')
 }
 
-// Prazo de prioridade: terça-feira às 13:00
 function getPriorityDeadline(gameDate: Date): Date {
   const tuesday = new Date(gameDate)
   tuesday.setDate(gameDate.getDate() - 1)
@@ -57,7 +54,6 @@ export default function GamesPage() {
   const priorityOpen = isPriorityWindowOpen(gameDate)
   const deadline = getPriorityDeadline(gameDate)
   const deadlineStr = format(deadline, "EEE dd/MM 'às' HH'h'mm", { locale: ptBR })
-  const gameDateStr = format(gameDate, "d 'de' MMMM", { locale: ptBR })
 
   const { data: attendances = [], isLoading } = useQuery({
     queryKey: ['attendances', gameId],
@@ -76,58 +72,26 @@ export default function GamesPage() {
   const handleToggle = useMutation({
     mutationFn: async () => {
       const batch = writeBatch(db)
-
       if (myAttendance) {
-        // Sair da lista
         batch.delete(doc(db, 'attendances', myAttendance.id))
-
-        // Se saiu da confirmada e tem alguém na espera, promove o primeiro
         if (myAttendance.status === 'confirmed' && waitlist.length > 0) {
           const next = waitlist[0]
           batch.update(doc(db, 'attendances', next.id), { status: 'confirmed' })
           if (next.player_type === 'avulso') {
             const payRef = doc(collection(db, 'payments'))
-            batch.set(payRef, {
-              user_id: next.user_id,
-              amount: 22,
-              type: 'jogo',
-              game_id: gameId,
-              month: gameId,
-              paid: false,
-              created_at: new Date().toISOString()
-            })
+            batch.set(payRef, { user_id: next.user_id, amount: 22, type: 'jogo', game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString() })
           }
         }
       } else {
-        // Entrar na lista
         const playerType = user!.player_type ?? 'avulso'
-        const status: 'confirmed' | 'waitlist' =
-          isFull || (playerType === 'avulso' && priorityOpen) ? 'waitlist' : 'confirmed'
-
+        const status: 'confirmed' | 'waitlist' = isFull || (playerType === 'avulso' && priorityOpen) ? 'waitlist' : 'confirmed'
         const attRef = doc(collection(db, 'attendances'))
-        batch.set(attRef, {
-          game_id: gameId,
-          user_id: user!.id,
-          player_type: playerType,
-          status,
-          confirmed_at: new Date().toISOString()
-        })
-
-        // Avulso confirmado direto gera pagamento
+        batch.set(attRef, { game_id: gameId, user_id: user!.id, player_type: playerType, status, confirmed_at: new Date().toISOString() })
         if (status === 'confirmed' && playerType === 'avulso') {
           const payRef = doc(collection(db, 'payments'))
-          batch.set(payRef, {
-            user_id: user!.id,
-            amount: 22,
-            type: 'jogo',
-            game_id: gameId,
-            month: gameId,
-            paid: false,
-            created_at: new Date().toISOString()
-          })
+          batch.set(payRef, { user_id: user!.id, amount: 22, type: 'jogo', game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString() })
         }
       }
-
       await batch.commit()
     },
     onSuccess: () => {
@@ -138,7 +102,7 @@ export default function GamesPage() {
       } else {
         const playerType = user!.player_type ?? 'avulso'
         if (isFull || (playerType === 'avulso' && priorityOpen)) {
-          toast('Na lista de espera ⏳', { description: 'Você será confirmado quando houver vaga.' })
+          toast('Na lista de espera ⏳')
         } else {
           toast.success('Presença confirmada! 🙌')
         }
@@ -147,160 +111,199 @@ export default function GamesPage() {
     onError: () => toast.error('Erro ao atualizar presença')
   })
 
+  const pct = Math.min((confirmed.length / MAX_PLAYERS) * 100, 100)
+
   return (
-    <div className="flex flex-col min-h-full pb-24 px-4">
+    <div className="flex flex-col min-h-full pb-28" style={{ background: 'var(--color-bg)' }}>
 
-      {/* Cabeçalho */}
-      <div className="pt-8 pb-2">
-        <p className="text-sm font-medium uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
-          Próxima pelada
-        </p>
-        <h1 className="text-4xl font-bold text-white mt-1">Quarta-feira</h1>
-        <p className="text-lg mt-0.5" style={{ color: 'var(--text-muted)' }}>{gameDateStr}</p>
-      </div>
+      {/* Header — título à esquerda, botão Sair à direita (só quando confirmado) */}
+      <div className="px-6 pt-12 pb-4 flex items-start justify-between">
+        <div>
+          <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px' }}>
+            Próximo Jogo
+          </p>
+          <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+            Dia: Quarta-feira, 21:30
+          </p>
+          <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+            Local: 9E10
+          </p>
+        </div>
 
-      {/* Info */}
-      <div className="flex gap-5 mt-4">
-        <div className="flex items-center gap-2">
-          <Clock size={15} style={{ color: 'var(--green)' }} />
-          <span className="text-white font-semibold">21:30</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <MapPin size={15} style={{ color: 'var(--green)' }} />
-          <span className="text-white font-semibold">9e10</span>
-        </div>
-      </div>
-
-      {/* Barra de vagas */}
-      <div className="mt-6">
-        <div className="flex justify-between items-baseline mb-2">
-          <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Confirmados</span>
-          <span className="font-bold text-white text-xl">
-            {confirmed.length}
-            <span className="font-normal text-sm" style={{ color: 'var(--text-muted)' }}>/{MAX_PLAYERS}</span>
-          </span>
-        </div>
-        <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface2)' }}>
-          <div className="h-full rounded-full transition-all"
+        {/* Botão Sair — aparece só quando está na lista */}
+        {myAttendance && (
+          <button
+            onClick={() => handleToggle.mutate()}
+            disabled={handleToggle.isPending}
+            className="transition-all active:scale-95 disabled:opacity-40"
             style={{
-              width: `${Math.min((confirmed.length / MAX_PLAYERS) * 100, 100)}%`,
-              background: isFull ? '#ef4444' : 'var(--green)'
-            }} />
+              background: 'var(--color-surface-accent-light)',
+              color: 'var(--color-fg-accent)',
+              borderRadius: 'var(--radius-pill)',
+              fontFamily: 'var(--font-primary)',
+              fontSize: 'var(--font-size-16)',
+              fontWeight: 500,
+              padding: '8px 20px',
+              marginTop: 4,
+              flexShrink: 0
+            }}
+          >
+            {handleToggle.isPending ? '...' : 'Sair'}
+          </button>
+        )}
+      </div>
+
+      {/* Counter + progress bar */}
+      <div className="px-6 mb-4">
+        <div className="flex items-end justify-between mb-2">
+          <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px' }}>
+            Lista de<br />Presença
+          </p>
+          <div className="text-right">
+            <p className="font-semibold" style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)' }}>
+              {confirmed.length}/{MAX_PLAYERS}
+            </p>
+            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+              confirmados
+            </p>
+          </div>
+        </div>
+        <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-surface-primary)' }}>
+          <div className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${pct}%`, background: isFull ? 'var(--color-danger)' : 'var(--color-surface-quaternary)' }} />
         </div>
       </div>
 
       {/* Aviso prazo */}
       {priorityOpen && (
-        <div className="mt-4 px-4 py-3 rounded-xl flex items-start gap-2"
-          style={{ background: '#92400e22', border: '1px solid #92400e66' }}>
-          <Clock3 size={14} style={{ color: '#fbbf24', marginTop: 1, flexShrink: 0 }} />
-          <span className="text-sm" style={{ color: '#fbbf24' }}>
+        <div className="mx-6 mb-4 px-4 py-3 rounded-2xl flex items-center gap-2"
+          style={{ background: '#fff8e6', border: '1px solid #ffd580' }}>
+          <span>⏰</span>
+          <p style={{ color: '#b45309', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
             Prioridade mensalistas até <strong>{deadlineStr}</strong>
-          </span>
+          </p>
         </div>
       )}
 
-      {/* Botão */}
-      <button
-        onClick={() => handleToggle.mutate()}
-        disabled={handleToggle.isPending}
-        className="w-full mt-5 py-4 rounded-2xl font-semibold text-white text-base transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2"
-        style={{ background: myAttendance ? '#7f1d1d' : 'var(--green)' }}
-      >
-        {handleToggle.isPending ? 'Aguarde...'
-          : myAttendance ? <><XCircle size={18} />Sair da lista</>
-          : <><CheckCircle2 size={18} />Confirmar presença</>}
-      </button>
-
-      {amConfirmed && (
-        <p className="text-center text-sm mt-2" style={{ color: 'var(--green)' }}>✓ Você está confirmado</p>
-      )}
-      {amInWaitlist && (
-        <p className="text-center text-sm mt-2" style={{ color: '#fbbf24' }}>⏳ Você está na lista de espera</p>
+      {/* Status */}
+      {(amConfirmed || amInWaitlist) && (
+        <div className="mx-6 mb-4 px-4 py-3 rounded-2xl flex items-center gap-2"
+          style={{ background: amConfirmed ? '#f0fdf4' : '#fffbeb', border: `1px solid ${amConfirmed ? '#bbf7d0' : '#fde68a'}` }}>
+          <span>{amConfirmed ? '✓' : '⏳'}</span>
+          <p style={{ color: amConfirmed ? '#166534' : '#92400e', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+            {amConfirmed ? 'Você está confirmado' : 'Você está na lista de espera'}
+          </p>
+        </div>
       )}
 
       {/* Listas */}
       {isLoading ? (
-        <div className="flex justify-center mt-8"><div className="text-3xl animate-spin">⚽</div></div>
+        <div className="flex justify-center py-8"><div className="text-4xl animate-spin">⚽</div></div>
       ) : (
-        <div className="mt-8 space-y-5">
+        <div className="px-6 flex flex-col gap-2">
           {confirmedMensalistas.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-2">
-                <Crown size={12} style={{ color: '#fbbf24' }} />
-                <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+            <>
+              <div className="flex items-center gap-1.5 mt-2 mb-1">
+                <Crown size={12} color="#f59e0b" />
+                <p className="font-semibold uppercase tracking-wider" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
                   Mensalistas ({confirmedMensalistas.length})
-                </h2>
+                </p>
               </div>
-              <div className="space-y-2">
-                {confirmedMensalistas.map((a, i) => (
-                  <PlayerRow key={a.id} attendance={a} index={i + 1} isMe={a.user_id === user?.id} />
-                ))}
-              </div>
-            </section>
+              {confirmedMensalistas.map((a, i) => (
+                <PlayerRow key={a.id} attendance={a} index={i + 1} />
+              ))}
+            </>
           )}
 
           {confirmedAvulsos.length > 0 && (
-            <section>
-              <h2 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+            <>
+              <p className="font-semibold uppercase tracking-wider mt-3 mb-1" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
                 Avulsos ({confirmedAvulsos.length})
-              </h2>
-              <div className="space-y-2">
-                {confirmedAvulsos.map((a, i) => (
-                  <PlayerRow key={a.id} attendance={a} index={confirmedMensalistas.length + i + 1} isMe={a.user_id === user?.id} />
-                ))}
-              </div>
-            </section>
+              </p>
+              {confirmedAvulsos.map((a, i) => (
+                <PlayerRow key={a.id} attendance={a} index={confirmedMensalistas.length + i + 1} />
+              ))}
+            </>
           )}
 
           {confirmed.length === 0 && (
-            <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-center py-6" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
               Ninguém confirmado ainda 🙋
             </p>
           )}
 
           {waitlist.length > 0 && (
-            <section>
-              <h2 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
-                Lista de espera ({waitlist.length})
-              </h2>
-              <div className="space-y-2">
-                {waitlist.map((a, i) => (
-                  <PlayerRow key={a.id} attendance={a} index={i + 1} isMe={a.user_id === user?.id} waitlist />
-                ))}
+            <>
+              <div className="flex items-center justify-between mt-4 mb-1">
+                <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                  Lista de espera
+                </p>
+                <div className="px-3 py-1 rounded-2xl" style={{ background: 'var(--color-surface-primary)' }}>
+                  <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+                    {waitlist.length} jogadores
+                  </p>
+                </div>
               </div>
-            </section>
+              {waitlist.map((a, i) => (
+                <PlayerRow key={a.id} attendance={a} index={i + 1} waitlist />
+              ))}
+            </>
           )}
+        </div>
+      )}
+
+      {/* Botão confirmar fixo — só aparece quando NÃO está na lista */}
+      {!myAttendance && (
+        <div className="fixed inset-x-0 px-6 pt-4 pb-3"
+          style={{ bottom: 90, background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
+          <button
+            onClick={() => handleToggle.mutate()}
+            disabled={handleToggle.isPending}
+            className="w-full py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
+            style={{
+              background: 'var(--color-surface-accent)',
+              color: 'white',
+              borderRadius: 'var(--radius-pill)',
+              fontFamily: 'var(--font-primary)',
+              fontSize: 'var(--font-size-16)',
+              fontWeight: 500,
+            }}
+          >
+            {handleToggle.isPending ? 'Aguarde...' : 'Confirmar presença'}
+          </button>
         </div>
       )}
     </div>
   )
 }
 
-function PlayerRow({ attendance, index, isMe, waitlist = false }: {
-  attendance: Attendance
-  index: number
-  isMe: boolean
-  waitlist?: boolean
+function PlayerRow({ attendance, index, waitlist = false }: {
+  attendance: Attendance; index: number; waitlist?: boolean
 }) {
   const name = (attendance.profile as any)?.name || (attendance.profile as any)?.email || 'Jogador'
   return (
-    <div className="flex items-center gap-3 px-4 py-3 rounded-xl"
+    <div className="flex items-center gap-3 p-4 rounded-3xl"
       style={{
-        background: 'var(--surface)',
-        border: `1px solid ${isMe ? 'var(--green)' : 'var(--border)'}`,
-        opacity: waitlist ? 0.7 : 1
+        background: 'var(--color-surface-primary)',
+        opacity: waitlist ? 0.65 : 1,
+        border: '1.5px solid transparent'
       }}>
-      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-        style={{ background: 'var(--surface2)', color: waitlist ? 'var(--text-muted)' : 'var(--green)' }}>
+      <div className="w-8 h-8 rounded-full flex items-center justify-center font-semibold shrink-0"
+        style={{
+          background: 'var(--color-surface-white)',
+          border: '2px solid var(--color-surface-secondary)',
+          color: 'var(--color-fg-primary)',
+          fontFamily: 'var(--font-primary)',
+          fontSize: 'var(--font-size-16)'
+        }}>
         {waitlist ? '⏳' : index}
       </div>
-      <p className="text-sm font-medium text-white truncate flex-1">
+      <p className="flex-1 font-medium truncate" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
         {name}
-        {isMe && <span className="ml-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>(você)</span>}
       </p>
       {attendance.player_type === 'avulso' && !waitlist && (
-        <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: '#1e3a2e', color: '#4ade80' }}>
+        <span className="px-2 py-0.5 rounded-full text-xs font-medium"
+          style={{ background: '#e6f4ea', color: '#166534', fontFamily: 'var(--font-primary)' }}>
           R$22
         </span>
       )}

@@ -273,7 +273,7 @@ export default function GameDetailPage() {
             </div>
             <div className="space-y-2">
               {confirmedMensalistas.map((a, i) => (
-                <PlayerRow key={a.id} attendance={a} index={i + 1} isMe={a.user_id === user?.id} />
+                <PlayerRow key={a.id} attendance={a} index={i + 1} />
               ))}
             </div>
           </section>
@@ -287,7 +287,7 @@ export default function GameDetailPage() {
             </h2>
             <div className="space-y-2">
               {confirmedAvulsos.map((a, i) => (
-                <PlayerRow key={a.id} attendance={a} index={confirmedMensalistas.length + i + 1} isMe={a.user_id === user?.id} />
+                <PlayerRow key={a.id} attendance={a} index={confirmedMensalistas.length + i + 1} />
               ))}
             </div>
           </section>
@@ -305,7 +305,7 @@ export default function GameDetailPage() {
             </h2>
             <div className="space-y-2">
               {waitlist.map((a, i) => (
-                <PlayerRow key={a.id} attendance={a} index={i + 1} isMe={a.user_id === user?.id} waitlist />
+                <PlayerRow key={a.id} attendance={a} index={i + 1} waitlist />
               ))}
             </div>
           </section>
@@ -316,11 +316,10 @@ export default function GameDetailPage() {
 }
 
 function PlayerRow({
-  attendance, index, isMe, waitlist = false
+  attendance, index, waitlist = false
 }: {
   attendance: Attendance
   index: number
-  isMe: boolean
   waitlist?: boolean
 }) {
   const name = (attendance.profile as any)?.name || (attendance.profile as any)?.email || 'Jogador'
@@ -329,7 +328,7 @@ function PlayerRow({
       className="flex items-center gap-3 px-4 py-3 rounded-xl"
       style={{
         background: 'var(--surface)',
-        border: `1px solid ${isMe ? 'var(--green)' : 'var(--border)'}`,
+        border: '1px solid var(--border)',
         opacity: waitlist ? 0.7 : 1
       }}
     >
@@ -341,7 +340,6 @@ function PlayerRow({
       </div>
       <p className="text-sm font-medium text-white truncate flex-1">
         {name}
-        {isMe && <span className="ml-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>(você)</span>}
       </p>
       {attendance.player_type === 'avulso' && !waitlist && (
         <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: '#1e3a2e', color: '#4ade80' }}>
