@@ -216,7 +216,7 @@ export default function StatsPage() {
 
       {/* Bottom Sheet */}
       {showSheet && (
-        <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.4)' }}
+        <div className="fixed inset-0 z-[100] flex items-end" style={{ background: 'rgba(0,0,0,0.4)' }}
           onClick={() => setShowSheet(false)}>
           <div className="w-full rounded-t-3xl flex flex-col gap-6 pt-6 pb-10 px-6"
             style={{ background: 'var(--color-bg)' }}
