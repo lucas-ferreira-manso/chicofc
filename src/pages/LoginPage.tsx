@@ -19,7 +19,13 @@ export default function LoginPage() {
   return (
     <div className="min-h-dvh flex flex-col items-center justify-center px-6" style={{ background: 'var(--bg)' }}>
       <div className="mb-10 text-center">
-        <div className="text-6xl mb-3">⚽</div>
+        <img
+          src="/logo-time.png"
+          alt="Logo do time"
+          width={56}
+          height={56}
+          className="mx-auto mb-3"
+        />
         <h1 className="text-3xl font-bold text-white">Chico FC</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>O app da nossa pelada</p>
       </div>
