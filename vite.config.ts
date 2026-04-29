@@ -14,8 +14,8 @@ export default defineConfig({
         name: 'Chico FC',
         short_name: 'ChicoFC',
         description: 'App da pelada do Chico',
-        theme_color: '#16a34a',
-        background_color: '#0a0a0a',
+        theme_color: '#082996',
+        background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait',
         scope: '/',
@@ -29,9 +29,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+            urlPattern: /^https:\/\/.*\.firebaseio\.com\/.*/i,
             handler: 'NetworkFirst',
-            options: { cacheName: 'supabase-cache', expiration: { maxEntries: 50, maxAgeSeconds: 300 } }
+            options: { cacheName: 'firebase-cache', expiration: { maxEntries: 50, maxAgeSeconds: 300 } }
           }
         ]
       }
