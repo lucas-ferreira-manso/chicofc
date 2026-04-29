@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { collection, getDocs, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore'
-import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth'
+import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore'
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, getAuth } from 'firebase/auth'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
-import { UserPlus, Trash2, Crown, Shield, ToggleLeft, ToggleRight } from 'lucide-react'
+import { UserPlus, Shield, ToggleLeft, ToggleRight, Crown } from 'lucide-react'
 import type { Profile } from '../types'
 
 const auth = getAuth()
@@ -34,9 +34,15 @@ export default function AdminPage() {
 
   const createPlayer = useMutation({
     mutationFn: async () => {
-      // Cria usuário no Firebase Auth
+      // Guarda credenciais do admin atual antes de criar novo usuário
+      const adminEmail = user!.email
+      const adminPassword = await getAdminPassword()
+      if (!adminPassword) throw new Error('cancelled')
+
+      // Cria novo usuário (isso troca a sessão automaticamente no Firebase)
       const result = await createUserWithEmailAndPassword(auth, form.email, form.password)
-      // Salva perfil no Firestore
+
+      // Salva no Firestore
       await setDoc(doc(db, 'players', result.user.uid), {
         name: form.name,
         email: form.email.toLowerCase(),
@@ -45,6 +51,9 @@ export default function AdminPage() {
         active: true,
         created_at: new Date().toISOString()
       })
+
+      // Volta a logar como admin
+      await signInWithEmailAndPassword(auth, adminEmail, adminPassword)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['players'] })
@@ -53,6 +62,7 @@ export default function AdminPage() {
       setShowForm(false)
     },
     onError: (e: any) => {
+      if (e.message === 'cancelled') return
       const msg = e.code === 'auth/email-already-in-use'
         ? 'Email já cadastrado.'
         : 'Erro ao adicionar jogador.'
@@ -104,60 +114,42 @@ export default function AdminPage() {
       {showForm && (
         <div className="mx-4 mb-4 p-4 rounded-2xl space-y-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <h2 className="text-sm font-semibold text-white">Novo jogador</h2>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Sua senha será solicitada para manter sua sessão após criar o jogador.
+          </p>
           <div>
             <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Nome</label>
-            <input
-              type="text"
-              placeholder="João Silva"
-              value={form.name}
+            <input type="text" placeholder="João Silva" value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              className="w-full px-3 py-2.5 rounded-xl text-white outline-none text-sm"
-              style={inputStyle}
-            />
+              className="w-full px-3 py-2.5 rounded-xl text-white outline-none text-sm" style={inputStyle} />
           </div>
           <div>
             <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Email</label>
-            <input
-              type="email"
-              placeholder="joao@email.com"
-              value={form.email}
+            <input type="email" placeholder="joao@email.com" value={form.email}
               onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-              className="w-full px-3 py-2.5 rounded-xl text-white outline-none text-sm"
-              style={inputStyle}
-            />
+              className="w-full px-3 py-2.5 rounded-xl text-white outline-none text-sm" style={inputStyle} />
           </div>
           <div>
             <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Senha inicial</label>
-            <input
-              type="text"
-              placeholder="Senha para o jogador entrar"
-              value={form.password}
+            <input type="text" placeholder="Senha para o jogador entrar" value={form.password}
               onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-              className="w-full px-3 py-2.5 rounded-xl text-white outline-none text-sm"
-              style={inputStyle}
-            />
+              className="w-full px-3 py-2.5 rounded-xl text-white outline-none text-sm" style={inputStyle} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Tipo</label>
-              <select
-                value={form.player_type}
+              <select value={form.player_type}
                 onChange={e => setForm(f => ({ ...f, player_type: e.target.value as any }))}
-                className="w-full px-3 py-2.5 rounded-xl text-white outline-none text-sm"
-                style={inputStyle}
-              >
+                className="w-full px-3 py-2.5 rounded-xl text-white outline-none text-sm" style={inputStyle}>
                 <option value="mensalista">Mensalista</option>
                 <option value="avulso">Avulso</option>
               </select>
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Papel</label>
-              <select
-                value={form.role}
+              <select value={form.role}
                 onChange={e => setForm(f => ({ ...f, role: e.target.value as any }))}
-                className="w-full px-3 py-2.5 rounded-xl text-white outline-none text-sm"
-                style={inputStyle}
-              >
+                className="w-full px-3 py-2.5 rounded-xl text-white outline-none text-sm" style={inputStyle}>
                 <option value="player">Jogador</option>
                 <option value="admin">Admin</option>
               </select>
@@ -180,19 +172,10 @@ export default function AdminPage() {
       ) : (
         <div className="px-4 space-y-2">
           {players.map(player => (
-            <div
-              key={player.id}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl"
-              style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                opacity: player.active ? 1 : 0.5
-              }}
-            >
-              <div
-                className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-                style={{ background: 'var(--surface2)', color: 'var(--green)' }}
-              >
+            <div key={player.id} className="flex items-center gap-3 px-4 py-3 rounded-xl"
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)', opacity: player.active ? 1 : 0.5 }}>
+              <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+                style={{ background: 'var(--surface2)', color: 'var(--green)' }}>
                 {(player.name || player.email || '?')[0].toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
@@ -201,22 +184,18 @@ export default function AdminPage() {
                   {player.role === 'admin' && <Crown size={12} style={{ color: '#fbbf24', flexShrink: 0 }} />}
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span
-                    className="text-xs px-1.5 py-0.5 rounded"
+                  <span className="text-xs px-1.5 py-0.5 rounded"
                     style={{
                       background: player.player_type === 'mensalista' ? '#1e3a2e' : '#1a1a2e',
                       color: player.player_type === 'mensalista' ? '#4ade80' : '#818cf8'
-                    }}
-                  >
+                    }}>
                     {player.player_type}
                   </span>
                   <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{player.email}</p>
                 </div>
               </div>
-              <button
-                onClick={() => toggleActive.mutate({ id: player.id, active: player.active })}
-                style={{ color: player.active ? 'var(--green)' : 'var(--text-muted)' }}
-              >
+              <button onClick={() => toggleActive.mutate({ id: player.id, active: player.active })}
+                style={{ color: player.active ? 'var(--green)' : 'var(--text-muted)' }}>
                 {player.active ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
               </button>
             </div>
@@ -225,4 +204,12 @@ export default function AdminPage() {
       )}
     </div>
   )
+}
+
+// Pede a senha do admin via prompt nativo
+function getAdminPassword(): Promise<string | null> {
+  return new Promise(resolve => {
+    const pwd = window.prompt('Digite sua senha para confirmar:')
+    resolve(pwd)
+  })
 }
