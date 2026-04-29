@@ -21,10 +21,18 @@ interface ScoreData {
   history: GameEntry[]
 }
 
+const EMPTY_SCORE: ScoreData = { blueWins: 0, yellowWins: 0, updatedAt: '', history: [] }
+
 async function fetchScore(): Promise<ScoreData> {
   const snap = await getDoc(doc(db, 'config', 'score'))
-  if (!snap.exists()) return { blueWins: 0, yellowWins: 0, updatedAt: '', history: [] }
-  return snap.data() as ScoreData
+  if (!snap.exists()) return EMPTY_SCORE
+  const data = snap.data()
+  return {
+    blueWins: data.blueWins ?? 0,
+    yellowWins: data.yellowWins ?? 0,
+    updatedAt: data.updatedAt ?? '',
+    history: data.history ?? []
+  }
 }
 
 export default function StatsPage() {
@@ -44,17 +52,20 @@ export default function StatsPage() {
       const yellow = parseInt(yellowGoals) || 0
       const now = new Date().toISOString()
 
-      const current = score ?? { blueWins: 0, yellowWins: 0, history: [] }
-      const newBlueWins = current.blueWins + (blue > yellow ? 1 : 0)
-      const newYellowWins = current.yellowWins + (yellow > blue ? 1 : 0)
-      const newEntry: GameEntry = { blue, yellow, date: now }
+      const current = score ?? EMPTY_SCORE
 
-      await setDoc(doc(db, 'config', 'score'), {
-        blueWins: newBlueWins,
-        yellowWins: newYellowWins,
+      // Determina vencedor e atualiza vitórias
+      const blueWon = blue > yellow
+      const yellowWon = yellow > blue
+
+      const newData: ScoreData = {
+        blueWins: current.blueWins + (blueWon ? 1 : 0),
+        yellowWins: current.yellowWins + (yellowWon ? 1 : 0),
         updatedAt: now,
-        history: [...(current.history ?? []), newEntry]
-      })
+        history: [...current.history, { blue, yellow, date: now }]
+      }
+
+      await setDoc(doc(db, 'config', 'score'), newData)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['score'] })
@@ -92,23 +103,16 @@ export default function StatsPage() {
       ) : (
         <div className="px-6 flex flex-col gap-4">
 
-          {/* Placar de vitórias */}
+          {/* Placar geral de vitórias */}
           <div className="flex items-center justify-between px-5 py-6 rounded-[20px]"
             style={{ background: 'var(--color-surface-primary)' }}>
-
-            {/* Time Azul */}
             <div className="flex flex-col items-center gap-4">
               <p className="font-bold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)' }}>
                 {String(blueWins).padStart(2, '0')}
               </p>
               <img src="/team-blue.png" alt="Time Azul" width={126} height={126} style={{ objectFit: 'contain' }} />
             </div>
-
-            <p className="font-bold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)' }}>
-              x
-            </p>
-
-            {/* Time Amarelo */}
+            <p className="font-bold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)' }}>x</p>
             <div className="flex flex-col items-center gap-4">
               <p className="font-bold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)' }}>
                 {String(yellowWins).padStart(2, '0')}
@@ -120,7 +124,7 @@ export default function StatsPage() {
           {/* Divider */}
           <div style={{ height: 1, background: 'var(--color-border)' }} />
 
-          {/* Histórico */}
+          {/* Histórico de jogos */}
           {history.length > 0 && (
             <div className="flex flex-col gap-2">
               <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
@@ -133,30 +137,17 @@ export default function StatsPage() {
                 return (
                   <div key={i} className="flex items-center px-5 py-4 rounded-3xl"
                     style={{ background: 'var(--color-surface-primary)' }}>
-                    {/* Time azul */}
                     <div className="flex items-center gap-2 flex-1">
                       <img src="/team-blue.png" alt="Azul" width={26} height={26} style={{ objectFit: 'contain' }} />
-                      <p className="font-semibold" style={{
-                        color: blueWon ? 'var(--color-fg-accent)' : 'var(--color-fg-secondary)',
-                        fontFamily: 'var(--font-primary)',
-                        fontSize: 'var(--font-size-16)'
-                      }}>
+                      <p className="font-semibold" style={{ color: blueWon ? 'var(--color-fg-accent)' : 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                         {entry.blue}
                       </p>
                     </div>
-
-                    {/* Data */}
                     <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
                       {dateStr}
                     </p>
-
-                    {/* Time amarelo */}
                     <div className="flex items-center gap-2 flex-1 justify-end">
-                      <p className="font-semibold" style={{
-                        color: yellowWon ? '#b8860b' : 'var(--color-fg-secondary)',
-                        fontFamily: 'var(--font-primary)',
-                        fontSize: 'var(--font-size-16)'
-                      }}>
+                      <p className="font-semibold" style={{ color: yellowWon ? '#b8860b' : 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                         {entry.yellow}
                       </p>
                       <img src="/team-yellow.png" alt="Amarelo" width={26} height={26} style={{ objectFit: 'contain' }} />
@@ -179,11 +170,10 @@ export default function StatsPage() {
       {isAdmin && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3"
           style={{ bottom: 90, background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
-          <button
-            onClick={() => setShowSheet(true)}
+          <button onClick={() => setShowSheet(true)}
             className="w-full py-4 font-medium transition-all active:scale-95"
             style={{ background: 'var(--color-surface-accent)', color: 'white', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-            Inserir Placar
+            Adicionar Placar
           </button>
         </div>
       )}
@@ -196,7 +186,6 @@ export default function StatsPage() {
             style={{ background: 'var(--color-bg)' }}
             onClick={e => e.stopPropagation()}>
 
-            {/* Header sheet */}
             <div className="flex items-center justify-between">
               <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                 Adicionar placar
@@ -208,7 +197,6 @@ export default function StatsPage() {
               </button>
             </div>
 
-            {/* Inputs de gols */}
             <div className="flex items-center justify-between px-5 py-6 rounded-[20px]"
               style={{ background: 'var(--color-surface-primary)' }}>
 
@@ -221,24 +209,13 @@ export default function StatsPage() {
                   onChange={e => setBlueGoals(e.target.value)}
                   placeholder="00"
                   min={0}
-                  className="text-center font-bold outline-none w-[82px] rounded-[16px]"
-                  style={{
-                    background: 'white',
-                    color: 'var(--color-fg-primary)',
-                    fontFamily: 'var(--font-primary)',
-                    fontSize: 'var(--font-size-32)',
-                    padding: '8px 20px',
-                    border: '2px solid transparent',
-                  }}
-                  onFocus={e => e.target.style.borderColor = 'var(--color-surface-accent)'}
-                  onBlur={e => e.target.style.borderColor = 'transparent'}
+                  className="text-center font-bold outline-none w-[82px] rounded-2xl"
+                  style={{ background: 'white', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)', padding: '8px 12px', border: '2px solid var(--color-border)' }}
                 />
                 <img src="/team-blue.png" alt="Time Azul" width={96} height={96} style={{ objectFit: 'contain' }} />
               </div>
 
-              <p className="font-bold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)' }}>
-                x
-              </p>
+              <p className="font-bold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)' }}>x</p>
 
               {/* Time Amarelo */}
               <div className="flex flex-col items-center gap-4">
@@ -249,26 +226,16 @@ export default function StatsPage() {
                   onChange={e => setYellowGoals(e.target.value)}
                   placeholder="00"
                   min={0}
-                  className="text-center font-bold outline-none w-[82px] rounded-[16px]"
-                  style={{
-                    background: 'white',
-                    color: 'var(--color-fg-primary)',
-                    fontFamily: 'var(--font-primary)',
-                    fontSize: 'var(--font-size-32)',
-                    padding: '8px 20px',
-                    border: '2px solid transparent',
-                  }}
-                  onFocus={e => e.target.style.borderColor = 'var(--color-surface-accent-yellow)'}
-                  onBlur={e => e.target.style.borderColor = 'transparent'}
+                  className="text-center font-bold outline-none w-[82px] rounded-2xl"
+                  style={{ background: 'white', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)', padding: '8px 12px', border: '2px solid var(--color-border)' }}
                 />
                 <img src="/team-yellow.png" alt="Time Amarelo" width={96} height={96} style={{ objectFit: 'contain' }} />
               </div>
             </div>
 
-            {/* Botão salvar */}
             <button
               onClick={() => saveScore.mutate()}
-              disabled={saveScore.isPending || (blueGoals === '' && yellowGoals === '')}
+              disabled={saveScore.isPending || (blueGoals === '' || yellowGoals === '')}
               className="w-full py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
               style={{ background: 'var(--color-surface-accent)', color: 'white', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
               {saveScore.isPending ? 'Salvando...' : 'Salvar'}
