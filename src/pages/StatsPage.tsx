@@ -5,7 +5,7 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { X } from '@phosphor-icons/react'
+import { X, TrashSimple } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
 interface GameEntry {
@@ -51,20 +51,15 @@ export default function StatsPage() {
       const blue = parseInt(blueGoals) || 0
       const yellow = parseInt(yellowGoals) || 0
       const now = new Date().toISOString()
-
       const current = score ?? EMPTY_SCORE
-
-      // Determina vencedor e atualiza vitórias
       const blueWon = blue > yellow
       const yellowWon = yellow > blue
-
       const newData: ScoreData = {
         blueWins: current.blueWins + (blueWon ? 1 : 0),
         yellowWins: current.yellowWins + (yellowWon ? 1 : 0),
         updatedAt: now,
         history: [...current.history, { blue, yellow, date: now }]
       }
-
       await setDoc(doc(db, 'config', 'score'), newData)
     },
     onSuccess: () => {
@@ -75,6 +70,28 @@ export default function StatsPage() {
       setYellowGoals('')
     },
     onError: () => toast.error('Erro ao salvar placar')
+  })
+
+  const deleteEntry = useMutation({
+    mutationFn: async (originalIndex: number) => {
+      const current = score ?? EMPTY_SCORE
+      const newHistory = current.history.filter((_, i) => i !== originalIndex)
+      // Recalcula vitórias com base no histórico restante
+      const newBlueWins = newHistory.filter(e => e.blue > e.yellow).length
+      const newYellowWins = newHistory.filter(e => e.yellow > e.blue).length
+      await setDoc(doc(db, 'config', 'score'), {
+        ...current,
+        blueWins: newBlueWins,
+        yellowWins: newYellowWins,
+        history: newHistory,
+        updatedAt: new Date().toISOString()
+      })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['score'] })
+      toast.success('Jogo removido!')
+    },
+    onError: () => toast.error('Erro ao remover jogo')
   })
 
   const updatedStr = score?.updatedAt
@@ -124,37 +141,56 @@ export default function StatsPage() {
           {/* Divider */}
           <div style={{ height: 1, background: 'var(--color-border)' }} />
 
-          {/* Histórico de jogos */}
+          {/* Histórico */}
           {history.length > 0 && (
             <div className="flex flex-col gap-2">
               <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                 Histórico
               </p>
-              {[...history].reverse().map((entry, i) => {
-                const blueWon = entry.blue > entry.yellow
-                const yellowWon = entry.yellow > entry.blue
-                const dateStr = format(new Date(entry.date), "d MMM", { locale: ptBR })
-                return (
-                  <div key={i} className="flex items-center px-5 py-4 rounded-3xl"
-                    style={{ background: 'var(--color-surface-primary)' }}>
-                    <div className="flex items-center gap-2 flex-1">
-                      <img src="/team-blue.png" alt="Azul" width={26} height={26} style={{ objectFit: 'contain' }} />
-                      <p className="font-semibold" style={{ color: blueWon ? 'var(--color-fg-accent)' : 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-                        {entry.blue}
+              {[...history].map((entry, i) => ({ entry, originalIndex: i }))
+                .reverse()
+                .map(({ entry, originalIndex }) => {
+                  const blueWon = entry.blue > entry.yellow
+                  const yellowWon = entry.yellow > entry.blue
+                  const dateStr = format(new Date(entry.date), "d MMM", { locale: ptBR })
+                  return (
+                    <div key={originalIndex} className="flex items-center px-4 py-4 rounded-3xl gap-2"
+                      style={{ background: 'var(--color-surface-primary)' }}>
+
+                      {/* Time azul */}
+                      <div className="flex items-center gap-2 flex-1">
+                        <img src="/team-blue.png" alt="Azul" width={26} height={26} style={{ objectFit: 'contain' }} />
+                        <p className="font-medium" style={{ color: blueWon ? 'var(--color-fg-accent)' : 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                          {entry.blue}
+                        </p>
+                      </div>
+
+                      {/* Data */}
+                      <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-11)' }}>
+                        {dateStr}
                       </p>
+
+                      {/* Time amarelo */}
+                      <div className="flex items-center gap-2 flex-1 justify-end">
+                        <p className="font-medium" style={{ color: yellowWon ? '#b8860b' : 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                          {entry.yellow}
+                        </p>
+                        <img src="/team-yellow.png" alt="Amarelo" width={26} height={26} style={{ objectFit: 'contain' }} />
+                      </div>
+
+                      {/* Trash — só para admins */}
+                      {isAdmin && (
+                        <button
+                          onClick={() => deleteEntry.mutate(originalIndex)}
+                          disabled={deleteEntry.isPending}
+                          className="ml-1 flex items-center justify-center disabled:opacity-40"
+                          style={{ width: 14, height: 14, flexShrink: 0 }}>
+                          <TrashSimple size={14} weight="bold" color="var(--color-fg-secondary)" />
+                        </button>
+                      )}
                     </div>
-                    <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
-                      {dateStr}
-                    </p>
-                    <div className="flex items-center gap-2 flex-1 justify-end">
-                      <p className="font-semibold" style={{ color: yellowWon ? '#b8860b' : 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-                        {entry.yellow}
-                      </p>
-                      <img src="/team-yellow.png" alt="Amarelo" width={26} height={26} style={{ objectFit: 'contain' }} />
-                    </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
             </div>
           )}
 
@@ -199,43 +235,27 @@ export default function StatsPage() {
 
             <div className="flex items-center justify-between px-5 py-6 rounded-[20px]"
               style={{ background: 'var(--color-surface-primary)' }}>
-
-              {/* Time Azul */}
               <div className="flex flex-col items-center gap-4">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={blueGoals}
+                <input type="number" inputMode="numeric" value={blueGoals}
                   onChange={e => setBlueGoals(e.target.value)}
-                  placeholder="00"
-                  min={0}
+                  placeholder="00" min={0}
                   className="text-center font-bold outline-none w-[82px] rounded-2xl"
-                  style={{ background: 'white', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)', padding: '8px 12px', border: '2px solid var(--color-border)' }}
-                />
+                  style={{ background: 'white', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)', padding: '8px 12px', border: '2px solid var(--color-border)' }} />
                 <img src="/team-blue.png" alt="Time Azul" width={96} height={96} style={{ objectFit: 'contain' }} />
               </div>
-
               <p className="font-bold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)' }}>x</p>
-
-              {/* Time Amarelo */}
               <div className="flex flex-col items-center gap-4">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={yellowGoals}
+                <input type="number" inputMode="numeric" value={yellowGoals}
                   onChange={e => setYellowGoals(e.target.value)}
-                  placeholder="00"
-                  min={0}
+                  placeholder="00" min={0}
                   className="text-center font-bold outline-none w-[82px] rounded-2xl"
-                  style={{ background: 'white', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)', padding: '8px 12px', border: '2px solid var(--color-border)' }}
-                />
+                  style={{ background: 'white', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)', padding: '8px 12px', border: '2px solid var(--color-border)' }} />
                 <img src="/team-yellow.png" alt="Time Amarelo" width={96} height={96} style={{ objectFit: 'contain' }} />
               </div>
             </div>
 
-            <button
-              onClick={() => saveScore.mutate()}
-              disabled={saveScore.isPending || (blueGoals === '' || yellowGoals === '')}
+            <button onClick={() => saveScore.mutate()}
+              disabled={saveScore.isPending || blueGoals === '' || yellowGoals === ''}
               className="w-full py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
               style={{ background: 'var(--color-surface-accent)', color: 'white', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
               {saveScore.isPending ? 'Salvando...' : 'Salvar'}
