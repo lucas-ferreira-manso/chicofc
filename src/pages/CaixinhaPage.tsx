@@ -11,6 +11,7 @@ import { toast } from 'sonner'
 import type { Payment, Profile } from '../types'
 
 const PIX_CODE = '42c4fc79-a983-4a02-88fb-81ec76948c0f'
+const SALDO_INICIAL = 1082
 
 async function fetchPlayers(): Promise<Profile[]> {
   const snap = await getDocs(collection(db, 'players'))
@@ -38,9 +39,9 @@ interface CaixinhaConfig {
 
 async function fetchConfig(): Promise<CaixinhaConfig> {
   const snap = await getDoc(doc(db, 'config', 'caixinha'))
-  if (!snap.exists()) return { quadraCost: 0, mensalistaValue: 80, avulsoValue: 22 }
+  if (!snap.exists()) return { quadraCost: 760, mensalistaValue: 80, avulsoValue: 22 }
   return {
-    quadraCost: snap.data().quadraCost ?? 0,
+    quadraCost: snap.data().quadraCost ?? 760,
     mensalistaValue: snap.data().mensalistaValue ?? 80,
     avulsoValue: snap.data().avulsoValue ?? 22
   }
@@ -76,14 +77,12 @@ export default function CaixinhaPage() {
   const saveField = useMutation({
     mutationFn: async () => {
       const value = parseFloat(editValue) || 0
-      const fieldMap = {
+      const fieldMap: Record<string, string> = {
         quadra: 'quadraCost',
         mensalista: 'mensalistaValue',
         avulso: 'avulsoValue'
       }
-      await setDoc(doc(db, 'config', 'caixinha'), {
-        [fieldMap[editingField!]]: value
-      }, { merge: true })
+      await setDoc(doc(db, 'config', 'caixinha'), { [fieldMap[editingField!]]: value }, { merge: true })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['caixinha-config'] })
@@ -118,62 +117,61 @@ export default function CaixinhaPage() {
     }
   })
 
+  // Cálculos
   const jogoPayments = payments.filter(p => p.type === 'jogo')
+  const mensalidadePayments = payments.filter(p => p.type === 'mensalidade')
   const avulsoPaid = jogoPayments.filter(p => p.paid).reduce((s, p) => s + p.amount, 0)
   const avulsoPending = jogoPayments.filter(p => !p.paid).reduce((s, p) => s + p.amount, 0)
-  const quadraCost = config?.quadraCost ?? 0
+  const mensalistaPaid = mensalidadePayments.filter(p => p.paid).reduce((s, p) => s + p.amount, 0)
+  const mensalistaPending = mensalidadePayments.filter(p => !p.paid).reduce((s, p) => s + p.amount, 0)
+  const quadraCost = config?.quadraCost ?? 760
   const mensalistaValue = config?.mensalistaValue ?? 80
   const avulsoValue = config?.avulsoValue ?? 22
-  const saldoTotal = avulsoPaid - quadraCost
+  const saldoTotal = SALDO_INICIAL + avulsoPaid + mensalistaPaid - quadraCost
 
-  const byMonth = payments.filter(p => p.type === 'mensalidade').reduce((acc, p) => {
+  const byMonth = mensalidadePayments.reduce((acc, p) => {
     if (!acc[p.month]) acc[p.month] = []
     acc[p.month].push(p)
     return acc
   }, {} as Record<string, Payment[]>)
 
-  const inputStyle: React.CSSProperties = {
-    background: 'white',
-    borderRadius: 'var(--radius-pill)',
-    border: '1.5px solid var(--color-border)',
-    outline: 'none',
-    padding: '10px 16px',
-    fontFamily: 'var(--font-primary)',
-    fontSize: 'var(--font-size-16)',
-    color: 'var(--color-fg-primary)',
-    flex: 1
-  }
-
-  const EditableValue = ({ field, label, value }: { field: EditField, label: string, value: number }) => (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+  // Componente inline de campo editável
+  const EditableRow = ({ field, label, value }: { field: EditField, label: string, value: number }) => (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1.5">
+        <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>
           {label}
         </p>
         {isAdmin && editingField !== field && (
           <button onClick={() => openEdit(field, value)}>
-            <PencilSimple size={14} color="var(--color-fg-secondary)" />
+            <PencilSimple size={11} color="var(--color-fg-secondary)" />
           </button>
         )}
         {isAdmin && editingField === field && (
           <button onClick={() => setEditingField(null)}>
-            <X size={14} color="var(--color-fg-secondary)" />
+            <X size={11} color="var(--color-fg-secondary)" />
           </button>
         )}
       </div>
       {editingField === field ? (
-        <div className="flex gap-2">
-          <input type="number" value={editValue} onChange={e => setEditValue(e.target.value)} style={inputStyle} />
+        <div className="flex gap-1.5">
+          <input
+            type="number"
+            value={editValue}
+            onChange={e => setEditValue(e.target.value)}
+            className="outline-none rounded-full px-3 py-1"
+            style={{ background: 'white', border: '1.5px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', color: 'var(--color-fg-primary)', width: 80 }}
+          />
           <button
             onClick={() => saveField.mutate()}
             disabled={saveField.isPending}
-            className="px-4 py-2 rounded-full font-medium transition-all active:scale-95 disabled:opacity-40"
-            style={{ background: 'var(--color-surface-accent)', color: 'white', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', whiteSpace: 'nowrap' }}>
-            Salvar
+            className="px-3 py-1 rounded-full font-medium text-xs disabled:opacity-40"
+            style={{ background: 'var(--color-surface-accent)', color: 'white', fontFamily: 'var(--font-primary)' }}>
+            OK
           </button>
         </div>
       ) : (
-        <p className="font-semibold" style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+        <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>
           R$ {value.toFixed(2)}
         </p>
       )}
@@ -190,7 +188,7 @@ export default function CaixinhaPage() {
             Caixinha
           </p>
           <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-            {players.length} jogadores
+            Total de usuários: {players.length}
           </p>
         </div>
         {isAdmin && (
@@ -208,27 +206,66 @@ export default function CaixinhaPage() {
 
         {/* Card financeiro */}
         <div className="flex flex-col gap-5 p-5 rounded-[20px]" style={{ background: 'var(--color-surface-primary)' }}>
+
+          {/* Saldo Total */}
           <div className="flex flex-col gap-2">
-            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Saldo Total</p>
-            <p className="font-semibold" style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px' }}>
+            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
+              Saldo Total
+            </p>
+            <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>
               R$ {saldoTotal.toFixed(2)}
             </p>
           </div>
 
-          <EditableValue field="quadra" label="Quadra Mensal" value={quadraCost} />
+          {/* Despesa Quadra e Goleiros */}
+          <EditableRow field="quadra" label="Despesa Quadra e Goleiros" value={quadraCost} />
 
-          <div className="flex flex-col gap-2">
-            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Valor Avulso Recebido</p>
-            <p className="font-semibold" style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-              R$ {avulsoPaid.toFixed(2)}
-            </p>
+          {/* Grid Mensalista */}
+          <div className="flex gap-5">
+            <div className="flex-1">
+              <div className="flex flex-col gap-0.5">
+                <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>
+                  Mensalista Recebido
+                </p>
+                <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>
+                  R$ {mensalistaPaid.toFixed(2)}
+                </p>
+              </div>
+            </div>
+            <div className="flex-1">
+              <div className="flex flex-col gap-0.5">
+                <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>
+                  Mensalista Pendente
+                </p>
+                <p style={{ color: mensalistaPending > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>
+                  R$ {mensalistaPending.toFixed(2)}
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Valor Avulso Pendente</p>
-            <p className="font-semibold" style={{ color: avulsoPending > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-              R$ {avulsoPending.toFixed(2)}
-            </p>
+          {/* Grid Avulso */}
+          <div className="flex gap-5">
+            <div className="flex-1">
+              <div className="flex flex-col gap-0.5">
+                <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>
+                  Avulso Recebido
+                </p>
+                <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>
+                  R$ {avulsoPaid.toFixed(2)}
+                </p>
+              </div>
+            </div>
+            <div className="flex-1">
+              <div className="flex flex-col gap-0.5">
+                <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>
+                  Avulso Pendente
+                </p>
+                <p style={{ color: avulsoPending > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>
+                  R$ {avulsoPending.toFixed(2)}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -236,16 +273,64 @@ export default function CaixinhaPage() {
         <div style={{ height: 1, background: 'var(--color-border)' }} />
 
         {/* ATENÇÃO JOVENS */}
-        <div className="flex flex-col gap-6 px-1 pb-2">
+        <div className="flex flex-col gap-6 pb-2">
           <p className="font-medium text-center" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
             ATENÇÃO JOVENS
           </p>
           <div className="flex gap-6">
-            <div className="flex-1">
-              <EditableValue field="mensalista" label="Valor do Mensalista:" value={mensalistaValue} />
+            <div className="flex-1 flex flex-col gap-2">
+              <div className="flex items-center gap-1.5">
+                <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Valor do Mensalista:</p>
+                {isAdmin && editingField !== 'mensalista' && (
+                  <button onClick={() => openEdit('mensalista', mensalistaValue)}>
+                    <PencilSimple size={13} color="var(--color-fg-secondary)" />
+                  </button>
+                )}
+                {isAdmin && editingField === 'mensalista' && (
+                  <button onClick={() => setEditingField(null)}><X size={13} color="var(--color-fg-secondary)" /></button>
+                )}
+              </div>
+              {editingField === 'mensalista' ? (
+                <div className="flex gap-2">
+                  <input type="number" value={editValue} onChange={e => setEditValue(e.target.value)}
+                    className="outline-none rounded-full px-3 py-1.5"
+                    style={{ background: 'white', border: '1.5px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', color: 'var(--color-fg-primary)', width: 90 }} />
+                  <button onClick={() => saveField.mutate()} disabled={saveField.isPending}
+                    className="px-3 rounded-full font-medium text-sm disabled:opacity-40"
+                    style={{ background: 'var(--color-surface-accent)', color: 'white' }}>OK</button>
+                </div>
+              ) : (
+                <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>
+                  R$ {mensalistaValue.toFixed(2)}
+                </p>
+              )}
             </div>
-            <div className="flex-1">
-              <EditableValue field="avulso" label="Valor do Avulso:" value={avulsoValue} />
+            <div className="flex-1 flex flex-col gap-2">
+              <div className="flex items-center gap-1.5">
+                <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Valor do Avulso:</p>
+                {isAdmin && editingField !== 'avulso' && (
+                  <button onClick={() => openEdit('avulso', avulsoValue)}>
+                    <PencilSimple size={13} color="var(--color-fg-secondary)" />
+                  </button>
+                )}
+                {isAdmin && editingField === 'avulso' && (
+                  <button onClick={() => setEditingField(null)}><X size={13} color="var(--color-fg-secondary)" /></button>
+                )}
+              </div>
+              {editingField === 'avulso' ? (
+                <div className="flex gap-2">
+                  <input type="number" value={editValue} onChange={e => setEditValue(e.target.value)}
+                    className="outline-none rounded-full px-3 py-1.5"
+                    style={{ background: 'white', border: '1.5px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', color: 'var(--color-fg-primary)', width: 90 }} />
+                  <button onClick={() => saveField.mutate()} disabled={saveField.isPending}
+                    className="px-3 rounded-full font-medium text-sm disabled:opacity-40"
+                    style={{ background: 'var(--color-surface-accent)', color: 'white' }}>OK</button>
+                </div>
+              ) : (
+                <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>
+                  R$ {avulsoValue.toFixed(2)}
+                </p>
+              )}
             </div>
           </div>
 
@@ -264,7 +349,7 @@ export default function CaixinhaPage() {
           <div style={{ height: 1, background: 'var(--color-border)' }} />
         )}
 
-        {/* Pagamentos por jogo */}
+        {/* Pagamentos avulsos */}
         {jogoPayments.length > 0 && (
           <section>
             <p className="font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
