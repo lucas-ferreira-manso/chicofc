@@ -296,6 +296,7 @@ export default function GamesPage() {
       )}
 
       {/* Botões fixos no rodapé — dois botões lado a lado quando não está na lista */}
+      {/* Dois botões sempre visíveis quando não confirmado nem na espera */}
       {!amConfirmed && !amInWaitlist && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 90, background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
@@ -307,25 +308,11 @@ export default function GamesPage() {
             {handleConfirm.isPending ? '...' : 'Bora Jogar'}
           </button>
           <button
-            onClick={() => handleDecline.mutate()}
-            disabled={isPending}
+            onClick={() => !amDeclined && handleDecline.mutate()}
+            disabled={isPending || amDeclined}
             className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-            style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+            style={{ background: amDeclined ? 'var(--color-surface-secondary)' : 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
             {handleDecline.isPending ? '...' : 'Muié não deixa'}
-          </button>
-        </div>
-      )}
-
-      {/* Se recusou, mostra só o botão Bora Jogar para mudar de ideia */}
-      {amDeclined && (
-        <div className="fixed inset-x-0 px-6 pt-4 pb-3"
-          style={{ bottom: 90, background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
-          <button
-            onClick={() => handleConfirm.mutate()}
-            disabled={isPending}
-            className="w-full py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-            style={{ background: 'var(--color-surface-accent)', color: 'white', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
-            {handleConfirm.isPending ? '...' : 'Bora Jogar'}
           </button>
         </div>
       )}
