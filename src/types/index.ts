@@ -23,7 +23,7 @@ export interface Attendance {
   id: string
   game_id: string
   user_id: string
-  status: 'confirmed' | 'waitlist'
+  status: 'confirmed' | 'waitlist' | 'declined'
   player_type: 'mensalista' | 'avulso'
   confirmed_at: string
   profile?: Profile

@@ -4,7 +4,7 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { format, isAfter, nextWednesday, isWednesday, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Crown } from 'lucide-react'
+import { Crown } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import type { Attendance } from '../types'
 
@@ -63,60 +63,100 @@ export default function GamesPage() {
   const myAttendance = attendances.find(a => a.user_id === user?.id)
   const confirmed = attendances.filter(a => a.status === 'confirmed')
   const waitlist = attendances.filter(a => a.status === 'waitlist')
+  const declined = attendances.filter(a => a.status === 'declined')
   const confirmedMensalistas = confirmed.filter(a => a.player_type === 'mensalista')
   const confirmedAvulsos = confirmed.filter(a => a.player_type === 'avulso')
   const isFull = confirmed.length >= MAX_PLAYERS
   const amConfirmed = myAttendance?.status === 'confirmed'
   const amInWaitlist = myAttendance?.status === 'waitlist'
+  const amDeclined = myAttendance?.status === 'declined'
 
-  const handleToggle = useMutation({
+  // Confirmar presença
+  const handleConfirm = useMutation({
     mutationFn: async () => {
       const batch = writeBatch(db)
+
       if (myAttendance) {
-        batch.delete(doc(db, 'attendances', myAttendance.id))
-        if (myAttendance.status === 'confirmed' && waitlist.length > 0) {
-          const next = waitlist[0]
-          batch.update(doc(db, 'attendances', next.id), { status: 'confirmed' })
-          if (next.player_type === 'avulso') {
-            const payRef = doc(collection(db, 'payments'))
-            batch.set(payRef, { user_id: next.user_id, amount: 22, type: 'jogo', game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString() })
-          }
-        }
+        // Atualiza status existente
+        batch.update(doc(db, 'attendances', myAttendance.id), { status: 'confirmed' })
       } else {
         const playerType = user!.player_type ?? 'avulso'
         const status: 'confirmed' | 'waitlist' = isFull || (playerType === 'avulso' && priorityOpen) ? 'waitlist' : 'confirmed'
         const attRef = doc(collection(db, 'attendances'))
-        batch.set(attRef, { game_id: gameId, user_id: user!.id, player_type: playerType, status, confirmed_at: new Date().toISOString() })
+        batch.set(attRef, {
+          game_id: gameId,
+          user_id: user!.id,
+          player_type: playerType,
+          status,
+          confirmed_at: new Date().toISOString()
+        })
         if (status === 'confirmed' && playerType === 'avulso') {
           const payRef = doc(collection(db, 'payments'))
-          batch.set(payRef, { user_id: user!.id, amount: 22, type: 'jogo', game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString() })
+          batch.set(payRef, {
+            user_id: user!.id, amount: 22, type: 'jogo',
+            game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString()
+          })
         }
       }
       await batch.commit()
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attendances', gameId] })
-      qc.invalidateQueries({ queryKey: ['payments'] })
-      if (myAttendance) {
-        toast.success('Saiu da lista')
+      const playerType = user!.player_type ?? 'avulso'
+      if (isFull || (playerType === 'avulso' && priorityOpen)) {
+        toast('Na lista de espera ⏳')
       } else {
-        const playerType = user!.player_type ?? 'avulso'
-        if (isFull || (playerType === 'avulso' && priorityOpen)) {
-          toast('Na lista de espera ⏳')
-        } else {
-          toast.success('Presença confirmada! 🙌')
-        }
+        toast.success('Bora jogar! 🙌')
       }
     },
-    onError: () => toast.error('Erro ao atualizar presença')
+    onError: () => toast.error('Erro ao confirmar presença')
+  })
+
+  // Recusar / "Muié não deixa"
+  const handleDecline = useMutation({
+    mutationFn: async () => {
+      const batch = writeBatch(db)
+
+      if (myAttendance) {
+        // Se estava confirmado, promove próximo da espera
+        if (myAttendance.status === 'confirmed' && waitlist.length > 0) {
+          const next = waitlist[0]
+          batch.update(doc(db, 'attendances', next.id), { status: 'confirmed' })
+          if (next.player_type === 'avulso') {
+            const payRef = doc(collection(db, 'payments'))
+            batch.set(payRef, {
+              user_id: next.user_id, amount: 22, type: 'jogo',
+              game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString()
+            })
+          }
+        }
+        batch.update(doc(db, 'attendances', myAttendance.id), { status: 'declined' })
+      } else {
+        const attRef = doc(collection(db, 'attendances'))
+        batch.set(attRef, {
+          game_id: gameId,
+          user_id: user!.id,
+          player_type: user!.player_type ?? 'avulso',
+          status: 'declined',
+          confirmed_at: new Date().toISOString()
+        })
+      }
+      await batch.commit()
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['attendances', gameId] })
+      toast('Muié não deixou 😅')
+    },
+    onError: () => toast.error('Erro ao registrar ausência')
   })
 
   const pct = Math.min((confirmed.length / MAX_PLAYERS) * 100, 100)
+  const isPending = handleConfirm.isPending || handleDecline.isPending
 
   return (
-    <div className="flex flex-col min-h-full pb-28" style={{ background: 'var(--color-bg)' }}>
+    <div className="flex flex-col min-h-full pb-40" style={{ background: 'var(--color-bg)' }}>
 
-      {/* Header — título à esquerda, botão Sair à direita (só quando confirmado) */}
+      {/* Header */}
       <div className="px-6 pt-12 pb-4 flex items-start justify-between">
         <div>
           <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px' }}>
@@ -130,30 +170,30 @@ export default function GamesPage() {
           </p>
         </div>
 
-        {/* Botão Sair — aparece só quando está na lista */}
-        {myAttendance && (
+        {/* Botão Sair — aparece só quando está confirmado ou na espera */}
+        {(amConfirmed || amInWaitlist) && (
           <button
-            onClick={() => handleToggle.mutate()}
-            disabled={handleToggle.isPending}
+            onClick={() => handleDecline.mutate()}
+            disabled={isPending}
             className="transition-all active:scale-95 disabled:opacity-40"
             style={{
               background: 'var(--color-surface-accent-light)',
               color: 'var(--color-fg-accent)',
               borderRadius: 'var(--radius-pill)',
               fontFamily: 'var(--font-primary)',
-              fontSize: 'var(--font-size-16)',
+              fontSize: 'var(--font-size-14)',
               fontWeight: 500,
-              padding: '8px 20px',
+              padding: '8px 16px',
               marginTop: 4,
               flexShrink: 0
             }}
           >
-            {handleToggle.isPending ? '...' : 'Sair'}
+            Sair
           </button>
         )}
       </div>
 
-      {/* Counter + progress bar */}
+      {/* Counter + progress */}
       <div className="px-6 mb-4">
         <div className="flex items-end justify-between mb-2">
           <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px' }}>
@@ -186,12 +226,15 @@ export default function GamesPage() {
       )}
 
       {/* Status */}
-      {(amConfirmed || amInWaitlist) && (
+      {(amConfirmed || amInWaitlist || amDeclined) && (
         <div className="mx-6 mb-4 px-4 py-3 rounded-2xl flex items-center gap-2"
-          style={{ background: amConfirmed ? '#f0fdf4' : '#fffbeb', border: `1px solid ${amConfirmed ? '#bbf7d0' : '#fde68a'}` }}>
-          <span>{amConfirmed ? '✓' : '⏳'}</span>
-          <p style={{ color: amConfirmed ? '#166534' : '#92400e', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-            {amConfirmed ? 'Você está confirmado' : 'Você está na lista de espera'}
+          style={{
+            background: amConfirmed ? '#f0fdf4' : amInWaitlist ? '#fffbeb' : '#fff1f0',
+            border: `1px solid ${amConfirmed ? '#bbf7d0' : amInWaitlist ? '#fde68a' : '#fecaca'}`
+          }}>
+          <span>{amConfirmed ? '✓' : amInWaitlist ? '⏳' : '😅'}</span>
+          <p style={{ color: amConfirmed ? '#166534' : amInWaitlist ? '#92400e' : '#991b1b', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+            {amConfirmed ? 'Você está confirmado' : amInWaitlist ? 'Você está na lista de espera' : 'Muié não deixou'}
           </p>
         </div>
       )}
@@ -204,13 +247,13 @@ export default function GamesPage() {
           {confirmedMensalistas.length > 0 && (
             <>
               <div className="flex items-center gap-1.5 mt-2 mb-1">
-                <Crown size={12} color="#f59e0b" />
+                <Crown size={12} color="#f59e0b" weight="fill" />
                 <p className="font-semibold uppercase tracking-wider" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
                   Mensalistas ({confirmedMensalistas.length})
                 </p>
               </div>
               {confirmedMensalistas.map((a, i) => (
-                <PlayerRow key={a.id} attendance={a} index={i + 1} />
+                <PlayerRow key={a.id} attendance={a} index={i + 1} isMe={a.user_id === user?.id} />
               ))}
             </>
           )}
@@ -221,7 +264,7 @@ export default function GamesPage() {
                 Avulsos ({confirmedAvulsos.length})
               </p>
               {confirmedAvulsos.map((a, i) => (
-                <PlayerRow key={a.id} attendance={a} index={confirmedMensalistas.length + i + 1} />
+                <PlayerRow key={a.id} attendance={a} index={confirmedMensalistas.length + i + 1} isMe={a.user_id === user?.id} />
               ))}
             </>
           )}
@@ -245,31 +288,44 @@ export default function GamesPage() {
                 </div>
               </div>
               {waitlist.map((a, i) => (
-                <PlayerRow key={a.id} attendance={a} index={i + 1} waitlist />
+                <PlayerRow key={a.id} attendance={a} index={i + 1} isMe={a.user_id === user?.id} waitlist />
               ))}
             </>
           )}
         </div>
       )}
 
-      {/* Botão confirmar fixo — só aparece quando NÃO está na lista */}
-      {!myAttendance && (
+      {/* Botões fixos no rodapé — dois botões lado a lado quando não está na lista */}
+      {!amConfirmed && !amInWaitlist && (
+        <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
+          style={{ bottom: 90, background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
+          <button
+            onClick={() => handleConfirm.mutate()}
+            disabled={isPending}
+            className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
+            style={{ background: 'var(--color-surface-accent)', color: 'white', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+            {handleConfirm.isPending ? '...' : 'Bora Jogar'}
+          </button>
+          <button
+            onClick={() => handleDecline.mutate()}
+            disabled={isPending}
+            className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
+            style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+            {handleDecline.isPending ? '...' : 'Muié não deixa'}
+          </button>
+        </div>
+      )}
+
+      {/* Se recusou, mostra só o botão Bora Jogar para mudar de ideia */}
+      {amDeclined && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3"
           style={{ bottom: 90, background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
           <button
-            onClick={() => handleToggle.mutate()}
-            disabled={handleToggle.isPending}
+            onClick={() => handleConfirm.mutate()}
+            disabled={isPending}
             className="w-full py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-            style={{
-              background: 'var(--color-surface-accent)',
-              color: 'white',
-              borderRadius: 'var(--radius-pill)',
-              fontFamily: 'var(--font-primary)',
-              fontSize: 'var(--font-size-16)',
-              fontWeight: 500,
-            }}
-          >
-            {handleToggle.isPending ? 'Aguarde...' : 'Confirmar presença'}
+            style={{ background: 'var(--color-surface-accent)', color: 'white', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+            {handleConfirm.isPending ? '...' : 'Bora Jogar'}
           </button>
         </div>
       )}
@@ -277,29 +333,24 @@ export default function GamesPage() {
   )
 }
 
-function PlayerRow({ attendance, index, waitlist = false }: {
-  attendance: Attendance; index: number; waitlist?: boolean
+function PlayerRow({ attendance, index, isMe, waitlist = false }: {
+  attendance: Attendance; index: number; isMe: boolean; waitlist?: boolean
 }) {
   const name = (attendance.profile as any)?.name || (attendance.profile as any)?.email || 'Jogador'
   return (
     <div className="flex items-center gap-3 p-4 rounded-3xl"
       style={{
-        background: 'var(--color-surface-primary)',
+        background: isMe ? 'var(--color-surface-accent-light)' : 'var(--color-surface-primary)',
         opacity: waitlist ? 0.65 : 1,
-        border: '1.5px solid transparent'
+        border: isMe ? '1.5px solid var(--color-fg-accent)' : '1.5px solid transparent'
       }}>
       <div className="w-8 h-8 rounded-full flex items-center justify-center font-semibold shrink-0"
-        style={{
-          background: 'var(--color-surface-white)',
-          border: '2px solid var(--color-surface-secondary)',
-          color: 'var(--color-fg-primary)',
-          fontFamily: 'var(--font-primary)',
-          fontSize: 'var(--font-size-16)'
-        }}>
+        style={{ background: 'var(--color-surface-white)', border: '2px solid var(--color-surface-secondary)', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
         {waitlist ? '⏳' : index}
       </div>
       <p className="flex-1 font-medium truncate" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
         {name}
+        {isMe && <span className="ml-1" style={{ color: 'var(--color-fg-secondary)', fontSize: 'var(--font-size-14)' }}>(você)</span>}
       </p>
       {attendance.player_type === 'avulso' && !waitlist && (
         <span className="px-2 py-0.5 rounded-full text-xs font-medium"
