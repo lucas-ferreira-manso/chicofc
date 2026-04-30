@@ -5,7 +5,7 @@ import { updatePassword, getAuth } from 'firebase/auth'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
-import { CaretRight } from '@phosphor-icons/react'
+import { CaretRight, Eye, EyeSlash } from '@phosphor-icons/react'
 
 const auth = getAuth()
 
@@ -14,6 +14,7 @@ export default function ProfilePage() {
   const signOut = useAuthStore(s => s.signOut)
   const [showNameForm, setShowNameForm] = useState(false)
   const [showPasswordForm, setShowPasswordForm] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [name, setName] = useState(user?.name ?? '')
   const [newPassword, setNewPassword] = useState('')
 
@@ -58,24 +59,18 @@ export default function ProfilePage() {
 
       <div className="px-6 flex flex-col gap-4">
 
-        {/* Card avatar + nome + tags */}
+        {/* Card avatar */}
         <div className="flex flex-col items-center gap-5 px-5 py-6 rounded-[20px]"
           style={{ background: 'var(--color-surface-primary)' }}>
-
-          {/* Avatar com iniciais */}
           <div className="w-[98px] h-[98px] rounded-full flex items-center justify-center"
             style={{ background: 'var(--color-surface-quaternary)' }}>
             <p className="font-bold" style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)' }}>
               {initials}
             </p>
           </div>
-
-          {/* Nome */}
           <p className="font-semibold text-center w-full" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px' }}>
             {user?.name || 'Sem nome'}
           </p>
-
-          {/* Tags */}
           <div className="flex items-center gap-2.5">
             <span className="px-4 py-2 rounded-full font-semibold"
               style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
@@ -93,7 +88,7 @@ export default function ProfilePage() {
         {/* Divider */}
         <div style={{ height: 1, background: 'var(--color-border)' }} />
 
-        {/* Itens de ação */}
+        {/* Itens */}
         <div className="flex flex-col gap-2 py-2">
 
           {/* Trocar Nome */}
@@ -120,7 +115,7 @@ export default function ProfilePage() {
 
           {/* Trocar Senha */}
           <button
-            onClick={() => { setShowPasswordForm(!showPasswordForm); setShowNameForm(false) }}
+            onClick={() => { setShowPasswordForm(!showPasswordForm); setShowNameForm(false); setShowPassword(false) }}
             className="w-full flex items-center justify-between px-5 py-4 rounded-3xl transition-all active:scale-[0.99]"
             style={{ background: 'var(--color-surface-primary)', height: 64 }}>
             <p className="font-medium" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
@@ -131,8 +126,24 @@ export default function ProfilePage() {
 
           {showPasswordForm && (
             <div className="flex flex-col gap-3 px-1">
-              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                placeholder="Nova senha (mín. 6 caracteres)" style={inputStyle} />
+              {/* Input com hide/show */}
+              <div className="flex items-center gap-3 px-5"
+                style={{ background: 'var(--color-surface-primary)', borderRadius: 'var(--radius-pill)', height: 52 }}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="Nova senha (mín. 6 caracteres)"
+                  className="flex-1 bg-transparent outline-none"
+                  style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  className="shrink-0 flex items-center justify-center">
+                  {showPassword
+                    ? <EyeSlash size={20} color="var(--color-fg-secondary)" />
+                    : <Eye size={20} color="var(--color-fg-secondary)" />}
+                </button>
+              </div>
               <button onClick={() => changePassword.mutate()} disabled={changePassword.isPending || newPassword.length < 6}
                 className="w-full py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
                 style={{ background: 'var(--color-surface-accent)', color: 'white', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>

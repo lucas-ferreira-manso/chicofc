@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { Eye, EyeSlash } from '@phosphor-icons/react'
 import { useAuthStore } from '../store/authStore'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const signIn = useAuthStore(s => s.signIn)
 
@@ -43,8 +45,9 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           <div className="flex flex-col gap-4">
-            <div style={{ background: 'var(--color-surface-primary)', borderRadius: 'var(--radius-pill)' }}
-              className="flex items-center px-6 py-4">
+            {/* Email */}
+            <div className="flex items-center px-6 py-4"
+              style={{ background: 'var(--color-surface-primary)', borderRadius: 'var(--radius-pill)' }}>
               <input
                 type="email"
                 value={email}
@@ -56,18 +59,26 @@ export default function LoginPage() {
                 style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}
               />
             </div>
-            <div style={{ background: 'var(--color-surface-primary)', borderRadius: 'var(--radius-pill)' }}
-              className="flex items-center px-6 py-4">
+
+            {/* Senha com hide/show */}
+            <div className="flex items-center px-6 py-4 gap-3"
+              style={{ background: 'var(--color-surface-primary)', borderRadius: 'var(--radius-pill)' }}>
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="Senha"
                 required
                 autoComplete="current-password"
-                className="w-full bg-transparent outline-none font-medium"
+                className="flex-1 bg-transparent outline-none font-medium"
                 style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}
               />
+              <button type="button" onClick={() => setShowPassword(!showPassword)}
+                className="shrink-0 flex items-center justify-center">
+                {showPassword
+                  ? <EyeSlash size={20} color="var(--color-fg-secondary)" />
+                  : <Eye size={20} color="var(--color-fg-secondary)" />}
+              </button>
             </div>
           </div>
 
