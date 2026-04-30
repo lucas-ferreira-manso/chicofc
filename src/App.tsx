@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from './lib/firebase'
 import { useAuthStore } from './store/authStore'
+import { requestNotificationPermission, listenForegroundMessages } from './lib/notifications'
 import BottomNav from './components/layout/BottomNav'
 import LoginPage from './pages/LoginPage'
 import GamesPage from './pages/GamesPage'
@@ -27,8 +28,16 @@ export default function App() {
     return unsub
   }, [])
 
+  // Pede permissão de notificação após login
+  useEffect(() => {
+    if (user?.id) {
+      requestNotificationPermission(user.id)
+      listenForegroundMessages()
+    }
+  }, [user?.id])
+
   if (loading) return (
-    <div className="flex-1 flex items-center justify-center min-h-dvh" style={{ background: 'var(--bg)' }}>
+    <div className="flex-1 flex items-center justify-center min-h-dvh" style={{ background: 'var(--color-bg)' }}>
       <div className="text-5xl animate-spin">⚽</div>
     </div>
   )
