@@ -30,11 +30,23 @@ async function fetchPayments(): Promise<Payment[]> {
   }).sort((a, b) => b.month.localeCompare(a.month))
 }
 
-async function fetchConfig(): Promise<{ quadraCost: number }> {
-  const snap = await getDoc(doc(db, 'config', 'caixinha'))
-  if (!snap.exists()) return { quadraCost: 0 }
-  return snap.data() as { quadraCost: number }
+interface CaixinhaConfig {
+  quadraCost: number
+  mensalistaValue: number
+  avulsoValue: number
 }
+
+async function fetchConfig(): Promise<CaixinhaConfig> {
+  const snap = await getDoc(doc(db, 'config', 'caixinha'))
+  if (!snap.exists()) return { quadraCost: 0, mensalistaValue: 80, avulsoValue: 22 }
+  return {
+    quadraCost: snap.data().quadraCost ?? 0,
+    mensalistaValue: snap.data().mensalistaValue ?? 80,
+    avulsoValue: snap.data().avulsoValue ?? 22
+  }
+}
+
+type EditField = 'quadra' | 'mensalista' | 'avulso' | null
 
 export default function CaixinhaPage() {
   const qc = useQueryClient()
@@ -46,8 +58,8 @@ export default function CaixinhaPage() {
   const { data: config } = useQuery({ queryKey: ['caixinha-config'], queryFn: fetchConfig })
 
   const [pixCopied, setPixCopied] = useState(false)
-  const [editingQuadra, setEditingQuadra] = useState(false)
-  const [quadraValue, setQuadraValue] = useState('')
+  const [editingField, setEditingField] = useState<EditField>(null)
+  const [editValue, setEditValue] = useState('')
 
   const handleCopyPix = () => {
     navigator.clipboard.writeText(PIX_CODE)
@@ -56,14 +68,27 @@ export default function CaixinhaPage() {
     setTimeout(() => setPixCopied(false), 3000)
   }
 
-  const saveQuadra = useMutation({
+  const openEdit = (field: EditField, currentValue: number) => {
+    setEditingField(field)
+    setEditValue(String(currentValue))
+  }
+
+  const saveField = useMutation({
     mutationFn: async () => {
-      await setDoc(doc(db, 'config', 'caixinha'), { quadraCost: parseFloat(quadraValue) || 0 }, { merge: true })
+      const value = parseFloat(editValue) || 0
+      const fieldMap = {
+        quadra: 'quadraCost',
+        mensalista: 'mensalistaValue',
+        avulso: 'avulsoValue'
+      }
+      await setDoc(doc(db, 'config', 'caixinha'), {
+        [fieldMap[editingField!]]: value
+      }, { merge: true })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['caixinha-config'] })
-      toast.success('Valor da quadra atualizado!')
-      setEditingQuadra(false)
+      toast.success('Valor atualizado!')
+      setEditingField(null)
     }
   })
 
@@ -77,12 +102,13 @@ export default function CaixinhaPage() {
   const generateMonth = useMutation({
     mutationFn: async () => {
       const month = format(new Date(), 'yyyy-MM')
+      const mensalistaValue = config?.mensalistaValue ?? 80
       const q = query(collection(db, 'payments'), where('month', '==', month), where('type', '==', 'mensalidade'))
       const existing = await getDocs(q)
       const existingIds = new Set(existing.docs.map(d => d.data().user_id))
       const mensalistas = players.filter(p => p.player_type === 'mensalista' && !existingIds.has(p.id))
       await Promise.all(mensalistas.map(p => addDoc(collection(db, 'payments'), {
-        user_id: p.id, amount: 88, type: 'mensalidade', month, paid: false, created_at: new Date().toISOString()
+        user_id: p.id, amount: mensalistaValue, type: 'mensalidade', month, paid: false, created_at: new Date().toISOString()
       })))
       return mensalistas.length
     },
@@ -92,11 +118,12 @@ export default function CaixinhaPage() {
     }
   })
 
-  // Cálculos financeiros
   const jogoPayments = payments.filter(p => p.type === 'jogo')
   const avulsoPaid = jogoPayments.filter(p => p.paid).reduce((s, p) => s + p.amount, 0)
   const avulsoPending = jogoPayments.filter(p => !p.paid).reduce((s, p) => s + p.amount, 0)
   const quadraCost = config?.quadraCost ?? 0
+  const mensalistaValue = config?.mensalistaValue ?? 80
+  const avulsoValue = config?.avulsoValue ?? 22
   const saldoTotal = avulsoPaid - quadraCost
 
   const byMonth = payments.filter(p => p.type === 'mensalidade').reduce((acc, p) => {
@@ -104,6 +131,54 @@ export default function CaixinhaPage() {
     acc[p.month].push(p)
     return acc
   }, {} as Record<string, Payment[]>)
+
+  const inputStyle: React.CSSProperties = {
+    background: 'white',
+    borderRadius: 'var(--radius-pill)',
+    border: '1.5px solid var(--color-border)',
+    outline: 'none',
+    padding: '10px 16px',
+    fontFamily: 'var(--font-primary)',
+    fontSize: 'var(--font-size-16)',
+    color: 'var(--color-fg-primary)',
+    flex: 1
+  }
+
+  const EditableValue = ({ field, label, value }: { field: EditField, label: string, value: number }) => (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+          {label}
+        </p>
+        {isAdmin && editingField !== field && (
+          <button onClick={() => openEdit(field, value)}>
+            <PencilSimple size={14} color="var(--color-fg-secondary)" />
+          </button>
+        )}
+        {isAdmin && editingField === field && (
+          <button onClick={() => setEditingField(null)}>
+            <X size={14} color="var(--color-fg-secondary)" />
+          </button>
+        )}
+      </div>
+      {editingField === field ? (
+        <div className="flex gap-2">
+          <input type="number" value={editValue} onChange={e => setEditValue(e.target.value)} style={inputStyle} />
+          <button
+            onClick={() => saveField.mutate()}
+            disabled={saveField.isPending}
+            className="px-4 py-2 rounded-full font-medium transition-all active:scale-95 disabled:opacity-40"
+            style={{ background: 'var(--color-surface-accent)', color: 'white', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', whiteSpace: 'nowrap' }}>
+            Salvar
+          </button>
+        </div>
+      ) : (
+        <p className="font-semibold" style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+          R$ {value.toFixed(2)}
+        </p>
+      )}
+    </div>
+  )
 
   return (
     <div className="flex flex-col min-h-full pb-28" style={{ background: 'var(--color-bg)' }}>
@@ -133,74 +208,24 @@ export default function CaixinhaPage() {
 
         {/* Card financeiro */}
         <div className="flex flex-col gap-5 p-5 rounded-[20px]" style={{ background: 'var(--color-surface-primary)' }}>
-
-          {/* Saldo Total */}
           <div className="flex flex-col gap-2">
-            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-              Saldo Total
-            </p>
+            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Saldo Total</p>
             <p className="font-semibold" style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px' }}>
               R$ {saldoTotal.toFixed(2)}
             </p>
           </div>
 
-          {/* Quadra Mensal */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-                Quadra Mensal
-              </p>
-              {isAdmin && !editingQuadra && (
-                <button onClick={() => { setEditingQuadra(true); setQuadraValue(String(quadraCost)) }}>
-                  <PencilSimple size={14} color="var(--color-fg-secondary)" />
-                </button>
-              )}
-              {isAdmin && editingQuadra && (
-                <button onClick={() => setEditingQuadra(false)}>
-                  <X size={14} color="var(--color-fg-secondary)" />
-                </button>
-              )}
-            </div>
-            {editingQuadra ? (
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  value={quadraValue}
-                  onChange={e => setQuadraValue(e.target.value)}
-                  placeholder="0,00"
-                  className="flex-1 px-4 py-2 rounded-full outline-none"
-                  style={{ background: 'white', border: '1.5px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', color: 'var(--color-fg-primary)' }}
-                />
-                <button
-                  onClick={() => saveQuadra.mutate()}
-                  disabled={saveQuadra.isPending}
-                  className="px-4 py-2 rounded-full font-medium transition-all active:scale-95"
-                  style={{ background: 'var(--color-surface-accent)', color: 'white', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-                  Salvar
-                </button>
-              </div>
-            ) : (
-              <p className="font-semibold" style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-                R$ {quadraCost.toFixed(2)}
-              </p>
-            )}
-          </div>
+          <EditableValue field="quadra" label="Quadra Mensal" value={quadraCost} />
 
-          {/* Avulso Recebido */}
           <div className="flex flex-col gap-2">
-            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-              Valor Avulso Recebido
-            </p>
+            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Valor Avulso Recebido</p>
             <p className="font-semibold" style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
               R$ {avulsoPaid.toFixed(2)}
             </p>
           </div>
 
-          {/* Avulso Pendente */}
           <div className="flex flex-col gap-2">
-            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-              Valor Avulso Pendente
-            </p>
+            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Valor Avulso Pendente</p>
             <p className="font-semibold" style={{ color: avulsoPending > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
               R$ {avulsoPending.toFixed(2)}
             </p>
@@ -215,24 +240,12 @@ export default function CaixinhaPage() {
           <p className="font-medium text-center" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
             ATENÇÃO JOVENS
           </p>
-
-          {/* Valores lado a lado */}
           <div className="flex gap-6">
-            <div className="flex-1 flex flex-col gap-2">
-              <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-                Valor do Mensalista:
-              </p>
-              <p className="font-semibold" style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px' }}>
-                R$ 88,00
-              </p>
+            <div className="flex-1">
+              <EditableValue field="mensalista" label="Valor do Mensalista:" value={mensalistaValue} />
             </div>
-            <div className="flex-1 flex flex-col gap-2">
-              <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-                Valor do Avulso:
-              </p>
-              <p className="font-semibold" style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px' }}>
-                R$ 22,00
-              </p>
+            <div className="flex-1">
+              <EditableValue field="avulso" label="Valor do Avulso:" value={avulsoValue} />
             </div>
           </div>
 
@@ -247,7 +260,7 @@ export default function CaixinhaPage() {
         </div>
 
         {/* Divider */}
-        {Object.keys(byMonth).length > 0 && (
+        {(jogoPayments.length > 0 || Object.keys(byMonth).length > 0) && (
           <div style={{ height: 1, background: 'var(--color-border)' }} />
         )}
 
@@ -255,7 +268,7 @@ export default function CaixinhaPage() {
         {jogoPayments.length > 0 && (
           <section>
             <p className="font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
-              Por jogo — avulsos (R$22)
+              Por jogo — avulsos
             </p>
             <div className="flex flex-col gap-2">
               {jogoPayments.map(p => (
