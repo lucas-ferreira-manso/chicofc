@@ -15,7 +15,25 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <App />
-        <Toaster position="top-center" richColors />
+        <Toaster
+          position="top-center"
+          duration={3000}
+          toastOptions={{
+            style: {
+              background: '#089527',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontFamily: "'Poppins', sans-serif",
+              fontSize: '12px',
+              fontWeight: 600,
+              lineHeight: '16px',
+              padding: '16px',
+              gap: '8px',
+              maxWidth: '345px',
+            }
+          }}
+        />
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>

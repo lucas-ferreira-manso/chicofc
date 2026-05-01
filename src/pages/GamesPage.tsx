@@ -4,7 +4,7 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { format, isAfter, nextWednesday, isWednesday, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Crown } from '@phosphor-icons/react'
+import { Crown, BellRinging, CheckCircle } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import type { Attendance } from '../types'
 
@@ -216,11 +216,11 @@ export default function GamesPage() {
 
       {/* Aviso prazo */}
       {priorityOpen && (
-        <div className="mx-6 mb-4 px-4 py-3 rounded-2xl flex items-center gap-2"
-          style={{ background: '#fff8e6', border: '1px solid #ffd580' }}>
-          <span>⏰</span>
-          <p style={{ color: '#b45309', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-            Prioridade mensalistas até <strong>{deadlineStr}</strong>
+        <div className="mx-6 mb-4 px-4 flex items-center gap-2"
+          style={{ background: 'var(--color-surface-accent-light)', borderRadius: 8, paddingTop: 10, paddingBottom: 10 }}>
+          <BellRinging size={16} color="var(--color-fg-accent)" weight="fill" style={{ flexShrink: 0 }} />
+          <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-11)', fontWeight: 400, whiteSpace: 'nowrap' }}>
+            Mensalistas terão prioridade até {deadlineStr}
           </p>
         </div>
       )}
