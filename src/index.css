@@ -50,6 +50,11 @@
 
   /* Bottom nav height â€” usado para padding dos botÃµes fixos */
   --bottom-nav-height: 80px;
+  --color-number-bg: #efefef;
+  --color-number-fg: #1a1a1a;
+  --color-number-border: #efefef;
+  --color-info-bg: #e6f8ff;
+  --color-info-fg: #082996;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -71,6 +76,11 @@
     --color-fg-accent-yellow: #FFDC50;
 
     --color-border: #2a2a2a;
+    --color-number-bg: #1a1a1a;
+    --color-number-fg: #ffffff;
+    --color-number-border: #8e8e93;
+    --color-info-bg: #1a1a1a;
+    --color-info-fg: #ffffff;
     --color-success: #30d158;
     --color-warning: #ff9f0a;
     --color-danger: #ff453a;

@@ -217,9 +217,9 @@ export default function GamesPage() {
       {/* Aviso prazo */}
       {priorityOpen && (
         <div className="mx-6 mb-4 px-4 flex items-center gap-2"
-          style={{ background: 'var(--color-surface-accent-light)', borderRadius: 8, paddingTop: 10, paddingBottom: 10 }}>
-          <BellRinging size={16} color="var(--color-fg-accent)" weight="fill" style={{ flexShrink: 0 }} />
-          <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-11)', fontWeight: 400, whiteSpace: 'nowrap' }}>
+          style={{ background: 'var(--color-info-bg)', borderRadius: 8, paddingTop: 10, paddingBottom: 10 }}>
+          <BellRinging size={16} color="var(--color-info-fg)" weight="fill" style={{ flexShrink: 0 }} />
+          <p style={{ color: 'var(--color-info-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', fontWeight: 600, whiteSpace: 'nowrap' }}>
             Mensalistas terão prioridade até {deadlineStr}
           </p>
         </div>
@@ -332,7 +332,7 @@ function PlayerRow({ attendance, index, isMe, waitlist = false }: {
         border: isMe ? '1.5px solid var(--color-fg-accent-light)' : '1.5px solid transparent'
       }}>
       <div className="w-8 h-8 rounded-full flex items-center justify-center font-semibold shrink-0"
-        style={{ background: 'var(--color-surface-primary)', border: '2px solid var(--color-fg-secondary)', color: 'var(--color-fg-tertiary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+        style={{ background: 'var(--color-number-bg)', border: '2px solid var(--color-number-border)', color: 'var(--color-number-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
         {waitlist ? '⏳' : index}
       </div>
       <p className="flex-1 font-medium truncate" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
