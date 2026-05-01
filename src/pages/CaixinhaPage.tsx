@@ -119,6 +119,8 @@ export default function CaixinhaPage() {
 
   // Cálculos
   const jogoPayments = payments.filter(p => p.type === 'jogo')
+  const despesaPayments = payments.filter(p => p.type === 'despesa')
+  const totalDespesas = despesaPayments.reduce((s, p) => s + p.amount, 0)
   const mensalidadePayments = payments.filter(p => p.type === 'mensalidade')
   const avulsoPaid = jogoPayments.filter(p => p.paid).reduce((s, p) => s + p.amount, 0)
   const avulsoPending = jogoPayments.filter(p => !p.paid).reduce((s, p) => s + p.amount, 0)
@@ -127,7 +129,7 @@ export default function CaixinhaPage() {
   const quadraCost = config?.quadraCost ?? 760
   const mensalistaValue = config?.mensalistaValue ?? 80
   const avulsoValue = config?.avulsoValue ?? 22
-  const saldoTotal = SALDO_INICIAL + avulsoPaid + mensalistaPaid - quadraCost
+  const saldoTotal = SALDO_INICIAL + avulsoPaid + mensalistaPaid - totalDespesas
 
   const byMonth = mensalidadePayments.reduce((acc, p) => {
     if (!acc[p.month]) acc[p.month] = []
