@@ -7,8 +7,6 @@ import { requestNotificationPermission, listenForegroundMessages } from './lib/n
 import BottomNav from './components/layout/BottomNav'
 import LoginPage from './pages/LoginPage'
 import GamesPage from './pages/GamesPage'
-import GameDetailPage from './pages/GameDetailPage'
-import NewGamePage from './pages/NewGamePage'
 import StatsPage from './pages/StatsPage'
 import CaixinhaPage from './pages/CaixinhaPage'
 import ProfilePage from './pages/ProfilePage'
@@ -50,8 +48,6 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/games" replace />} />
           <Route path="/games" element={<GamesPage />} />
-          <Route path="/games/new" element={<NewGamePage />} />
-          <Route path="/games/:id" element={<GameDetailPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/caixinha" element={<CaixinhaPage />} />
           <Route path="/profile" element={<ProfilePage />} />
