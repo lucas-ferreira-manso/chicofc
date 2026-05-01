@@ -332,7 +332,7 @@ function PlayerRow({ attendance, index, isMe, waitlist = false }: {
         border: isMe ? '1.5px solid var(--color-fg-accent-light)' : '1.5px solid transparent'
       }}>
       <div className="w-8 h-8 rounded-full flex items-center justify-center font-semibold shrink-0"
-        style={{ background: 'var(--color-surface-white)', border: '2px solid var(--color-surface-secondary)', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+        style={{ background: 'var(--color-surface-primary)', border: '2px solid var(--color-fg-secondary)', color: 'var(--color-fg-tertiary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
         {waitlist ? '⏳' : index}
       </div>
       <p className="flex-1 font-medium truncate" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>

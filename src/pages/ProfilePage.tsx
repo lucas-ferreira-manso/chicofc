@@ -59,8 +59,8 @@ export default function ProfilePage() {
         <div className="flex flex-col items-center gap-5 px-5 py-6 rounded-[20px]"
           style={{ background: 'var(--color-surface-primary)' }}>
           <div className="w-[98px] h-[98px] rounded-full flex items-center justify-center"
-            style={{ background: 'var(--color-surface-quaternary)' }}>
-            <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)', fontWeight: 700 }}>
+            style={{ background: 'var(--color-surface-primary)', border: '2px solid var(--color-fg-secondary)' }}>
+            <p style={{ color: 'var(--color-fg-tertiary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)', fontWeight: 700 }}>
               {initials}
             </p>
           </div>
