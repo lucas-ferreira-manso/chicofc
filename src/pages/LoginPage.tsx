@@ -1,103 +1,46 @@
-import { useState } from 'react'
-import { toast } from 'sonner'
-import { Eye, EyeSlash } from '@phosphor-icons/react'
-import { useAuthStore } from '../store/authStore'
+import { NavLink } from 'react-router-dom'
+import { SoccerBall, ChartBar, PiggyBank, ShieldStar, User } from '@phosphor-icons/react'
+import { useAuthStore } from '../../store/authStore'
 
-export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const signIn = useAuthStore(s => s.signIn)
+export default function BottomNav() {
+  const user = useAuthStore(s => s.user)
+  const isAdmin = user?.role === 'admin'
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    const { error } = await signIn(email.trim().toLowerCase(), password)
-    setLoading(false)
-    if (error) toast.error(error)
-  }
-
-  const filled = email.length > 0 && password.length > 0
+  const tabs = [
+    { to: '/games',    icon: SoccerBall, label: 'Jogo'     },
+    { to: '/stats',    icon: ChartBar,   label: 'Stats'    },
+    { to: '/caixinha', icon: PiggyBank,  label: 'Caixinha' },
+    ...(isAdmin ? [{ to: '/admin', icon: ShieldStar, label: 'Admin' }] : []),
+    { to: '/profile',  icon: User,       label: 'Perfil'   },
+  ]
 
   return (
-    <div className="min-h-dvh flex flex-col" style={{ background: 'var(--color-bg)' }}>
-      {/* Logo area */}
-      <div className="flex-1 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <img src="/logo.png" alt="Chico FC" width={72} height={72} />
-          <p className="text-sm font-medium" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)' }}>
-            O app da nossa pelada
-          </p>
-        </div>
-      </div>
-
-      {/* Form area */}
-      <div className="px-6 pb-12 flex flex-col gap-6">
-        <div className="flex flex-col gap-2 items-center">
-          <h1 className="font-bold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)' }}>
-            Entrar
-          </h1>
-          <p className="text-center" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-18)' }}>
-            Digite seu email e a senha
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-          <div className="flex flex-col gap-4">
-            {/* Email */}
-            <div className="flex items-center px-6 py-4"
-              style={{ background: 'var(--color-surface-primary)', borderRadius: 'var(--radius-pill)' }}>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="Email"
-                required
-                autoComplete="email"
-                className="w-full bg-transparent outline-none font-medium"
-                style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}
-              />
-            </div>
-
-            {/* Senha com hide/show */}
-            <div className="flex items-center px-6 py-4 gap-3"
-              style={{ background: 'var(--color-surface-primary)', borderRadius: 'var(--radius-pill)' }}>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="Senha"
-                required
-                autoComplete="current-password"
-                className="flex-1 bg-transparent outline-none font-medium"
-                style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}
-              />
-              <button type="button" onClick={() => setShowPassword(!showPassword)}
-                className="shrink-0 flex items-center justify-center">
-                {showPassword
-                  ? <EyeSlash size={20} color="var(--color-fg-secondary)" />
-                  : <Eye size={20} color="var(--color-fg-secondary)" />}
-              </button>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading || !filled}
-            className="w-full py-4 font-medium transition-all active:scale-95"
-            style={{
-              background: filled && !loading ? 'var(--color-surface-accent)' : 'var(--color-surface-secondary)',
-              color: filled && !loading ? 'var(--color-fg-tertiary)' : 'var(--color-fg-secondary)',
-              borderRadius: 'var(--radius-pill)',
+    <nav className="fixed bottom-0 inset-x-0 safe-bottom z-50"
+      style={{
+        background: 'var(--color-surface-primary)',
+        backdropFilter: 'blur(24px)',
+        borderTop: '1px solid var(--color-border)',
+        boxShadow: '0px -0.33px 0px rgba(0,0,0,0.3)'
+      }}>
+      <div className="flex px-4 pb-1">
+        {tabs.map(({ to, icon: Icon, label }) => (
+          <NavLink key={to} to={to}
+            className="flex-1 flex flex-col items-center justify-center py-3 gap-1.5 transition-colors"
+            style={({ isActive }) => ({
+              color: isActive ? 'var(--color-fg-accent-light)' : 'var(--color-fg-secondary)',
               fontFamily: 'var(--font-primary)',
-              fontSize: 'var(--font-size-16)',
-            }}
-          >
-            {loading ? 'Entrando...' : 'Entrar'}
-          </button>
-        </form>
+              fontSize: 'var(--font-size-12)',
+              fontWeight: 600
+            })}>
+            {({ isActive }) => (
+              <>
+                <Icon size={24} weight={isActive ? 'fill' : 'regular'} />
+                <span>{label}</span>
+              </>
+            )}
+          </NavLink>
+        ))}
       </div>
-    </div>
+    </nav>
   )
 }

@@ -38,8 +38,7 @@ export default function ProfilePage() {
   const inputStyle: React.CSSProperties = {
     background: 'var(--color-surface-primary)',
     borderRadius: 'var(--radius-pill)',
-    border: 'none',
-    outline: 'none',
+    border: 'none', outline: 'none',
     padding: '14px 20px',
     fontFamily: 'var(--font-primary)',
     fontSize: 'var(--font-size-16)',
@@ -49,8 +48,6 @@ export default function ProfilePage() {
 
   return (
     <div className="flex flex-col min-h-full pb-28" style={{ background: 'var(--color-bg)' }}>
-
-      {/* Header */}
       <div className="px-6 pt-12 pb-4">
         <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px' }}>
           Atleta
@@ -58,22 +55,21 @@ export default function ProfilePage() {
       </div>
 
       <div className="px-6 flex flex-col gap-4">
-
         {/* Card avatar */}
         <div className="flex flex-col items-center gap-5 px-5 py-6 rounded-[20px]"
           style={{ background: 'var(--color-surface-primary)' }}>
           <div className="w-[98px] h-[98px] rounded-full flex items-center justify-center"
             style={{ background: 'var(--color-surface-quaternary)' }}>
-            <p className="font-bold" style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)' }}>
+            <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)', fontWeight: 700 }}>
               {initials}
             </p>
           </div>
-          <p className="font-semibold text-center w-full" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px' }}>
+          <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', fontWeight: 600, lineHeight: '28px', textAlign: 'center', width: '100%' }}>
             {user?.name || 'Sem nome'}
           </p>
           <div className="flex items-center gap-2.5">
             <span className="px-4 py-2 rounded-full font-semibold"
-              style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
+              style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent-light)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
               {user?.player_type === 'mensalista' ? 'Mensalista' : 'Avulso'}
             </span>
             {user?.role === 'admin' && (
@@ -85,20 +81,14 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Divider */}
         <div style={{ height: 1, background: 'var(--color-border)' }} />
 
-        {/* Itens */}
         <div className="flex flex-col gap-2 py-2">
-
           {/* Trocar Nome */}
-          <button
-            onClick={() => { setShowNameForm(!showNameForm); setShowPasswordForm(false) }}
+          <button onClick={() => { setShowNameForm(!showNameForm); setShowPasswordForm(false) }}
             className="w-full flex items-center justify-between px-5 py-4 rounded-3xl transition-all active:scale-[0.99]"
             style={{ background: 'var(--color-surface-primary)', height: 64 }}>
-            <p className="font-medium" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-              Trocar Nome
-            </p>
+            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Trocar Nome</p>
             <CaretRight size={20} weight="regular" color="var(--color-fg-secondary)" />
           </button>
 
@@ -107,26 +97,22 @@ export default function ProfilePage() {
               <input value={name} onChange={e => setName(e.target.value)} placeholder="Novo nome" style={inputStyle} />
               <button onClick={() => updateName.mutate()} disabled={updateName.isPending || !name || name === user?.name}
                 className="w-full py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-                style={{ background: 'var(--color-surface-accent)', color: 'white', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                 {updateName.isPending ? 'Salvando...' : 'Salvar'}
               </button>
             </div>
           )}
 
           {/* Trocar Senha */}
-          <button
-            onClick={() => { setShowPasswordForm(!showPasswordForm); setShowNameForm(false); setShowPassword(false) }}
+          <button onClick={() => { setShowPasswordForm(!showPasswordForm); setShowNameForm(false); setShowPassword(false) }}
             className="w-full flex items-center justify-between px-5 py-4 rounded-3xl transition-all active:scale-[0.99]"
             style={{ background: 'var(--color-surface-primary)', height: 64 }}>
-            <p className="font-medium" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-              Trocar senha
-            </p>
+            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Trocar senha</p>
             <CaretRight size={20} weight="regular" color="var(--color-fg-secondary)" />
           </button>
 
           {showPasswordForm && (
             <div className="flex flex-col gap-3 px-1">
-              {/* Input com hide/show */}
               <div className="flex items-center gap-3 px-5"
                 style={{ background: 'var(--color-surface-primary)', borderRadius: 'var(--radius-pill)', height: 52 }}>
                 <input
@@ -137,8 +123,7 @@ export default function ProfilePage() {
                   className="flex-1 bg-transparent outline-none"
                   style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}
                 />
-                <button type="button" onClick={() => setShowPassword(!showPassword)}
-                  className="shrink-0 flex items-center justify-center">
+                <button type="button" onClick={() => setShowPassword(!showPassword)}>
                   {showPassword
                     ? <EyeSlash size={20} color="var(--color-fg-secondary)" />
                     : <Eye size={20} color="var(--color-fg-secondary)" />}
@@ -146,14 +131,13 @@ export default function ProfilePage() {
               </div>
               <button onClick={() => changePassword.mutate()} disabled={changePassword.isPending || newPassword.length < 6}
                 className="w-full py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-                style={{ background: 'var(--color-surface-accent)', color: 'white', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                 {changePassword.isPending ? 'Alterando...' : 'Confirmar'}
               </button>
             </div>
           )}
         </div>
 
-        {/* Sair */}
         <button onClick={signOut}
           className="w-full py-4 font-medium transition-all active:scale-95 text-left px-5"
           style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>

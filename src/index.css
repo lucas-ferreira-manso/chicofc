@@ -15,12 +15,20 @@
   --color-fg-secondary: #8e8e93;
   --color-fg-tertiary: #ffffff;
   --color-fg-accent: #082996;
+  --color-fg-accent-light: #082996;
   --color-fg-accent-yellow: #FFDC50;
 
   --color-border: #efefef;
   --color-success: #34c759;
   --color-warning: #ff9500;
   --color-danger: #ff3b30;
+
+  /* Button tokens */
+  --btn-primary-bg: #082996;
+  --btn-primary-fg: #ffffff;
+  --btn-secondary-bg: #e6f8ff;
+  --btn-secondary-fg: #082996;
+  --btn-secondary-border: transparent;
 
   --font-primary: 'Poppins', sans-serif;
   --font-size-11: 11px;
@@ -39,29 +47,40 @@
   --radius-pill: 99999px;
   --radius-card: 24px;
   --radius-tag: 16px;
+
+  /* Bottom nav height â€” usado para padding dos botÃµes fixos */
+  --bottom-nav-height: 80px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: #0f0f0f;
+    --color-bg: #3d3d3d;
     --color-surface-primary: #1a1a1a;
     --color-surface-secondary: #2a2a2a;
-    --color-surface-accent: #3d5afe;
+    --color-surface-accent: #082996;
     --color-surface-accent-light: #0d1f3c;
     --color-surface-accent-yellow: #FFDC50;
-    --color-surface-white: #1a1a1a;
-    --color-surface-quaternary: #1a3a4a;
+    --color-surface-white: #ffffff;
+    --color-surface-quaternary: #66d1ff;
 
-    --color-fg-primary: #f5f5f5;
-    --color-fg-secondary: #6e6e73;
+    --color-fg-primary: #ffffff;
+    --color-fg-secondary: #8e8e93;
     --color-fg-tertiary: #ffffff;
-    --color-fg-accent: #7b97ff;
+    --color-fg-accent: #66d1ff;
+    --color-fg-accent-light: #66d1ff;
     --color-fg-accent-yellow: #FFDC50;
 
     --color-border: #2a2a2a;
     --color-success: #30d158;
     --color-warning: #ff9f0a;
     --color-danger: #ff453a;
+
+    /* Button tokens dark */
+    --btn-primary-bg: #ffffff;
+    --btn-primary-fg: #1a1a1a;
+    --btn-secondary-bg: #1a1a1a;
+    --btn-secondary-fg: #ffffff;
+    --btn-secondary-border: #8e8e93;
   }
 }
 

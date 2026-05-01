@@ -299,19 +299,19 @@ export default function GamesPage() {
       {/* Dois botões sempre visíveis quando não confirmado nem na espera */}
       {!amConfirmed && !amInWaitlist && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
-          style={{ bottom: 90, background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
+          style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
           <button
             onClick={() => handleConfirm.mutate()}
             disabled={isPending}
             className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-            style={{ background: 'var(--color-surface-accent)', color: 'white', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
             {handleConfirm.isPending ? '...' : 'Bora Jogar'}
           </button>
           <button
             onClick={() => !amDeclined && handleDecline.mutate()}
             disabled={isPending || amDeclined}
             className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-            style={{ background: amDeclined ? 'var(--color-surface-secondary)' : 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+            style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500, opacity: amDeclined ? 0.5 : 1 }}>
             {handleDecline.isPending ? '...' : 'Muié não deixa'}
           </button>
         </div>
@@ -327,9 +327,9 @@ function PlayerRow({ attendance, index, isMe, waitlist = false }: {
   return (
     <div className="flex items-center gap-3 p-4 rounded-3xl"
       style={{
-        background: isMe ? 'var(--color-surface-accent-light)' : 'var(--color-surface-primary)',
+        background: 'var(--color-surface-primary)',
         opacity: waitlist ? 0.65 : 1,
-        border: isMe ? '1.5px solid var(--color-fg-accent)' : '1.5px solid transparent'
+        border: isMe ? '1.5px solid var(--color-fg-accent-light)' : '1.5px solid transparent'
       }}>
       <div className="w-8 h-8 rounded-full flex items-center justify-center font-semibold shrink-0"
         style={{ background: 'var(--color-surface-white)', border: '2px solid var(--color-surface-secondary)', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>

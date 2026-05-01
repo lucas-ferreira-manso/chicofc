@@ -205,10 +205,10 @@ export default function StatsPage() {
       {/* Botão fixo — só para admins */}
       {isAdmin && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3"
-          style={{ bottom: 90, background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
+          style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
           <button onClick={() => setShowSheet(true)}
             className="w-full py-4 font-medium transition-all active:scale-95"
-            style={{ background: 'var(--color-surface-accent)', color: 'white', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
             Adicionar Placar
           </button>
         </div>

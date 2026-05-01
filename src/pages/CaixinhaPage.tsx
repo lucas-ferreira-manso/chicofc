@@ -162,7 +162,7 @@ export default function CaixinhaPage() {
             value={editValue}
             onChange={e => setEditValue(e.target.value)}
             className="outline-none rounded-full px-3 py-1"
-            style={{ background: 'white', border: '1.5px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', color: 'var(--color-fg-primary)', width: 80 }}
+            style={{ background: 'var(--color-surface-secondary)', border: '1.5px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', color: 'var(--color-fg-primary)', width: 80 }}
           />
           <button
             onClick={() => saveField.mutate()}
@@ -198,7 +198,7 @@ export default function CaixinhaPage() {
             onClick={() => generateMonth.mutate()}
             disabled={generateMonth.isPending}
             className="px-4 py-2 rounded-full font-medium transition-all active:scale-95 disabled:opacity-40"
-            style={{ background: 'var(--color-surface-accent)', color: 'white', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
             {generateMonth.isPending ? '...' : 'Gerar mês'}
           </button>
         )}
@@ -296,10 +296,10 @@ export default function CaixinhaPage() {
                 <div className="flex gap-2">
                   <input type="number" value={editValue} onChange={e => setEditValue(e.target.value)}
                     className="outline-none rounded-full px-3 py-1.5"
-                    style={{ background: 'white', border: '1.5px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', color: 'var(--color-fg-primary)', width: 90 }} />
+                    style={{ background: 'var(--color-surface-secondary)', border: '1.5px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', color: 'var(--color-fg-primary)', width: 90 }} />
                   <button onClick={() => saveField.mutate()} disabled={saveField.isPending}
                     className="px-3 rounded-full font-medium text-sm disabled:opacity-40"
-                    style={{ background: 'var(--color-surface-accent)', color: 'white' }}>OK</button>
+                    style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)' }}>OK</button>
                 </div>
               ) : (
                 <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>
@@ -323,10 +323,10 @@ export default function CaixinhaPage() {
                 <div className="flex gap-2">
                   <input type="number" value={editValue} onChange={e => setEditValue(e.target.value)}
                     className="outline-none rounded-full px-3 py-1.5"
-                    style={{ background: 'white', border: '1.5px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', color: 'var(--color-fg-primary)', width: 90 }} />
+                    style={{ background: 'var(--color-surface-secondary)', border: '1.5px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', color: 'var(--color-fg-primary)', width: 90 }} />
                   <button onClick={() => saveField.mutate()} disabled={saveField.isPending}
                     className="px-3 rounded-full font-medium text-sm disabled:opacity-40"
-                    style={{ background: 'var(--color-surface-accent)', color: 'white' }}>OK</button>
+                    style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)' }}>OK</button>
                 </div>
               ) : (
                 <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>
@@ -340,7 +340,7 @@ export default function CaixinhaPage() {
           <button
             onClick={handleCopyPix}
             className="w-full py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
-            style={{ background: 'var(--color-surface-accent)', color: 'white', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
             {pixCopied ? <Check size={18} /> : <Copy size={18} />}
             {pixCopied ? 'Copiado!' : 'Copiar Código PIX'}
           </button>

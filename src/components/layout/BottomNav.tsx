@@ -17,16 +17,17 @@ export default function BottomNav() {
   return (
     <nav className="fixed bottom-0 inset-x-0 safe-bottom z-50"
       style={{
-        background: 'rgba(255,255,255,0.92)',
+        background: 'var(--color-surface-primary)',
         backdropFilter: 'blur(24px)',
         borderTop: '1px solid var(--color-border)',
-        boxShadow: '0px -0.33px 0px rgba(0,0,0,0.15)'
+        boxShadow: '0px -0.33px 0px rgba(0,0,0,0.3)'
       }}>
       <div className="flex px-4 pb-1">
         {tabs.map(({ to, icon: Icon, label }) => (
-          <NavLink key={to} to={to} className="flex-1 flex flex-col items-center justify-center py-3 gap-1.5 transition-colors"
+          <NavLink key={to} to={to}
+            className="flex-1 flex flex-col items-center justify-center py-3 gap-1.5 transition-colors"
             style={({ isActive }) => ({
-              color: isActive ? 'var(--color-fg-accent)' : 'var(--color-fg-secondary)',
+              color: isActive ? 'var(--color-fg-accent-light)' : 'var(--color-fg-secondary)',
               fontFamily: 'var(--font-primary)',
               fontSize: 'var(--font-size-12)',
               fontWeight: 600
