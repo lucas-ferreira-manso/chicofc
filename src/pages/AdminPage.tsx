@@ -188,7 +188,7 @@ export default function AdminPage() {
             <div key={player.id} className="flex items-center gap-3 p-4 rounded-3xl"
               style={{ background: 'var(--color-surface-primary)', opacity: player.active ? 1 : 0.5 }}>
               <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0"
-                style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent-light)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                style={{ background: 'var(--color-surface-quaternary)', color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                 {(player.name || player.email || '?')[0].toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
