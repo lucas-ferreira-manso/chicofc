@@ -54,7 +54,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: #3d3d3d;
+    --color-bg: #2d2d2d;
     --color-surface-primary: #1a1a1a;
     --color-surface-secondary: #2a2a2a;
     --color-surface-accent: #082996;
