@@ -34,7 +34,7 @@ export interface Payment {
   user_id: string
   amount: number
   month: string
-  type: 'mensalidade' | 'jogo'
+  type: 'mensalidade' | 'jogo' | 'despesa'
   game_id?: string
   paid: boolean
   paid_at?: string
