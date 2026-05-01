@@ -7,6 +7,7 @@ import { ptBR } from 'date-fns/locale'
 import { Crown, BellRinging, CheckCircle } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import type { Attendance } from '../types'
+import Header from '../components/layout/Header'
 
 const MAX_PLAYERS = 14
 
