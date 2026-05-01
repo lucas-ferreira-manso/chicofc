@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Header from '../components/layout/Header'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
@@ -105,15 +106,8 @@ export default function StatsPage() {
   return (
     <div className="flex flex-col min-h-full pb-28" style={{ background: 'var(--color-bg)' }}>
 
-      {/* Header */}
-      <div className="px-6 pt-12 pb-4">
-        <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px' }}>
-          Placar
-        </p>
-        <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-          {updatedStr ? `Atualizado ${updatedStr}` : 'Nenhuma atualização ainda'}
-        </p>
-      </div>
+      <Header title="Placar" subtitle={updatedStr ? `Atualizado ${updatedStr}` : 'Nenhuma atualização ainda'} />
+      <div style={{ height: 96 }} />
 
       {isLoading ? (
         <div className="flex justify-center py-8"><div className="text-4xl animate-spin">⚽</div></div>

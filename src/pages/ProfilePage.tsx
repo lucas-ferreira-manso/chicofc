@@ -6,6 +6,7 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
 import { CaretRight, Eye, EyeSlash } from '@phosphor-icons/react'
+import Header from '../components/layout/Header'
 
 const auth = getAuth()
 
@@ -48,11 +49,8 @@ export default function ProfilePage() {
 
   return (
     <div className="flex flex-col min-h-full pb-28" style={{ background: 'var(--color-bg)' }}>
-      <div className="px-6 pt-12 pb-4">
-        <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px' }}>
-          Atleta
-        </p>
-      </div>
+      <Header title="Atleta" />
+      <div style={{ height: 80 }} />
 
       <div className="px-6 flex flex-col gap-4">
         {/* Card avatar */}

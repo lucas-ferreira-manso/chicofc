@@ -7,6 +7,7 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { CheckCircle2, Circle } from 'lucide-react'
 import { Copy, Check, PencilSimple, X } from '@phosphor-icons/react'
+import Header from '../components/layout/Header'
 import { toast } from 'sonner'
 import type { Payment, Profile } from '../types'
 
@@ -183,17 +184,10 @@ export default function CaixinhaPage() {
   return (
     <div className="flex flex-col min-h-full pb-28" style={{ background: 'var(--color-bg)' }}>
 
-      {/* Header */}
-      <div className="px-6 pt-12 pb-4 flex items-end justify-between">
-        <div>
-          <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px' }}>
-            Caixinha
-          </p>
-          <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-            Total de usuários: {players.length}
-          </p>
-        </div>
-        {isAdmin && (
+      <Header
+        title="Caixinha"
+        subtitle={`Total de usuários: ${players.length}`}
+        rightContent={isAdmin ? (
           <button
             onClick={() => generateMonth.mutate()}
             disabled={generateMonth.isPending}
@@ -201,8 +195,9 @@ export default function CaixinhaPage() {
             style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
             {generateMonth.isPending ? '...' : 'Gerar mês'}
           </button>
-        )}
-      </div>
+        ) : undefined}
+      />
+      <div style={{ height: 96 }} />
 
       <div className="px-6 flex flex-col gap-4">
 

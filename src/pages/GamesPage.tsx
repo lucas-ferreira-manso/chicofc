@@ -156,22 +156,11 @@ export default function GamesPage() {
   return (
     <div className="flex flex-col min-h-full pb-40" style={{ background: 'var(--color-bg)' }}>
 
-      {/* Header */}
-      <div className="px-6 pt-12 pb-4 flex items-start justify-between">
-        <div>
-          <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px' }}>
-            Próximo Jogo
-          </p>
-          <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-            Dia: Quarta-feira, 21:30
-          </p>
-          <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-            Local: 9E10
-          </p>
-        </div>
-
-        {/* Botão Sair — aparece só quando está confirmado ou na espera */}
-        {(amConfirmed || amInWaitlist) && (
+      <Header
+        title="Próximo Jogo"
+        subtitle1="Dia: Quarta-feira, 21:30"
+        subtitle2="Local: 9E10"
+        rightContent={(amConfirmed || amInWaitlist) ? (
           <button
             onClick={() => handleDecline.mutate()}
             disabled={isPending}
@@ -184,14 +173,15 @@ export default function GamesPage() {
               fontSize: 'var(--font-size-14)',
               fontWeight: 500,
               padding: '8px 16px',
-              marginTop: 4,
-              flexShrink: 0
             }}
           >
             Sair
           </button>
-        )}
-      </div>
+        ) : undefined}
+      />
+
+      {/* Spacer para compensar o header fixo */}
+      <div style={{ height: 120 }} />
 
       {/* Counter + progress */}
       <div className="px-6 mb-4">

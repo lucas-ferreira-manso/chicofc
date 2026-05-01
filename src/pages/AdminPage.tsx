@@ -6,6 +6,7 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
 import { UserPlus, Shield, ToggleLeft, ToggleRight, Crown, X, Bell } from '@phosphor-icons/react'
+import Header from '../components/layout/Header'
 import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
 import type { Profile } from '../types'
 
@@ -114,26 +115,25 @@ export default function AdminPage() {
 
   return (
     <div className="flex flex-col min-h-full pb-28" style={{ background: 'var(--color-bg)' }}>
-      <div className="px-6 pt-12 pb-4 flex items-end justify-between">
-        <div>
-          <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', fontWeight: 600 }}>Admin</p>
-          <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-            {players.filter(p => p.active).length} ativos
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => { setShowNotifForm(!showNotifForm); setShowForm(false) }}
-            className="flex items-center gap-2 px-4 py-2 rounded-full font-medium transition-all active:scale-95"
-            style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent-light)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-            <Bell size={15} /> Notificar
-          </button>
-          <button onClick={() => { setShowForm(!showForm); setShowNotifForm(false) }}
-            className="flex items-center gap-2 px-4 py-2 rounded-full font-medium transition-all active:scale-95"
-            style={{ background: showForm ? 'var(--color-surface-secondary)' : 'var(--btn-primary-bg)', color: showForm ? 'var(--color-danger)' : 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-            {showForm ? <><X size={15} />Fechar</> : <><UserPlus size={15} />Adicionar</>}
-          </button>
-        </div>
-      </div>
+      <Header
+        title="Admin"
+        subtitle={`${players.filter(p => p.active).length} ativos`}
+        rightContent={
+          <div className="flex gap-2">
+            <button onClick={() => { setShowNotifForm(!showNotifForm); setShowForm(false) }}
+              className="flex items-center gap-2 px-4 py-2 rounded-full font-medium transition-all active:scale-95"
+              style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent-light)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+              <Bell size={15} /> Notificar
+            </button>
+            <button onClick={() => { setShowForm(!showForm); setShowNotifForm(false) }}
+              className="flex items-center gap-2 px-4 py-2 rounded-full font-medium transition-all active:scale-95"
+              style={{ background: showForm ? 'var(--color-surface-secondary)' : 'var(--btn-primary-bg)', color: showForm ? 'var(--color-danger)' : 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+              {showForm ? <><X size={15} />Fechar</> : <><UserPlus size={15} />Adicionar</>}
+            </button>
+          </div>
+        }
+      />
+      <div style={{ height: 96 }} />
 
       {showNotifForm && (
         <div className="mx-6 mb-4 p-5 rounded-3xl flex flex-col gap-3" style={{ background: 'var(--color-surface-primary)' }}>
