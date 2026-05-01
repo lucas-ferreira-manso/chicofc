@@ -159,7 +159,7 @@ export default function GamesPage() {
 
       <Header
         title="Próximo Jogo"
-        subtitle1="Dia: Quarta-feira, 21:30"
+        subtitle="Dia: Quarta-feira, 21:30"
         subtitle2="Local: 9E10"
         rightContent={(amConfirmed || amInWaitlist) ? (
           <button
