@@ -211,7 +211,7 @@ export default function GamesPage() {
           style={{ background: 'var(--color-info-bg)', borderRadius: 8, paddingTop: 10, paddingBottom: 10 }}>
           <BellRinging size={16} color="var(--color-info-fg)" weight="fill" style={{ flexShrink: 0 }} />
           <p style={{ color: 'var(--color-info-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', fontWeight: 600, whiteSpace: 'nowrap' }}>
-            Mensalistas terão prioridade até {deadlineStr}
+          PRIORIDADE MENSALISTA: até {deadlineStr}
           </p>
         </div>
       )}
