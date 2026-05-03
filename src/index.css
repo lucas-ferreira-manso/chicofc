@@ -51,6 +51,8 @@
   /* Bottom nav height â€” usado para padding dos botÃµes fixos */
   --bottom-nav-height: 80px;
   --color-number-bg: #efefef;
+  --color-avatar-bg: #66d1ff;
+  --color-avatar-fg: #082996;
   --color-number-fg: #1a1a1a;
   --color-number-border: #efefef;
   --color-info-bg: #e6f8ff;
@@ -77,6 +79,8 @@
 
     --color-border: #2a2a2a;
     --color-number-bg: #1a1a1a;
+    --color-avatar-bg: #66d1ff;
+    --color-avatar-fg: #082996;
     --color-number-fg: #ffffff;
     --color-number-border: #8e8e93;
     --color-info-bg: #1a1a1a;

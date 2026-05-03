@@ -223,8 +223,12 @@ export default function GamesPage() {
             background: amConfirmed ? '#f0fdf4' : amInWaitlist ? '#fffbeb' : '#fff1f0',
             border: `1px solid ${amConfirmed ? '#bbf7d0' : amInWaitlist ? '#fde68a' : '#fecaca'}`
           }}>
-          <span>{amConfirmed ? '✓' : amInWaitlist ? '⏳' : '😅'}</span>
-          <p style={{ color: amConfirmed ? '#166534' : amInWaitlist ? '#92400e' : '#991b1b', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+          {amConfirmed
+            ? <CheckCircle size={18} weight="fill" color="#089527" />
+            : amInWaitlist
+            ? <span>⏳</span>
+            : <span>😅</span>}
+          <p style={{ color: amConfirmed ? '#089527' : amInWaitlist ? '#92400e' : '#991b1b', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
             {amConfirmed ? 'Você está confirmado' : amInWaitlist ? 'Você está na lista de espera' : 'Muié não deixou'}
           </p>
         </div>
