@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom'
 import type { Attendance } from '../types'
 import Header from '../components/layout/Header'
 
-const MAX_PLAYERS = 14
+const MAX_PLAYERS = 16
 
 function getNextWednesday(): Date {
   const today = startOfDay(new Date())

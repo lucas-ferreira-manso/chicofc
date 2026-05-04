@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import type { Attendance, Profile } from '../types'
 
 const MIN_PLAYERS = 6
-const MAX_PLAYERS = 7
+const MAX_PLAYERS = 8
 
 function getNextWednesdayId(): string {
   const today = startOfDay(new Date())
