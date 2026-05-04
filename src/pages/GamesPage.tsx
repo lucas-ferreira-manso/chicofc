@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { collection, getDocs, query, where, doc, getDoc, writeBatch } from 'firebase/firestore'
 import { db } from '../lib/firebase'
@@ -6,6 +7,7 @@ import { format, isAfter, nextWednesday, isWednesday, startOfDay } from 'date-fn
 import { ptBR } from 'date-fns/locale'
 import { Crown, BellRinging, CheckCircle } from '@phosphor-icons/react'
 import { toast } from 'sonner'
+import { useNavigate } from 'react-router-dom'
 import type { Attendance } from '../types'
 import Header from '../components/layout/Header'
 
@@ -32,6 +34,12 @@ function isPriorityWindowOpen(gameDate: Date): boolean {
   return !isAfter(new Date(), getPriorityDeadline(gameDate))
 }
 
+async function fetchLineup(gameId: string): Promise<{ blue: string[]; black: string[] }> {
+  const snap = await getDoc(doc(db, 'lineups', gameId))
+  if (!snap.exists()) return { blue: [], black: [] }
+  return snap.data() as { blue: string[]; black: string[] }
+}
+
 async function fetchAttendances(gameId: string): Promise<Attendance[]> {
   const q = query(collection(db, 'attendances'), where('game_id', '==', gameId))
   const snap = await getDocs(q)
@@ -49,6 +57,8 @@ async function fetchAttendances(gameId: string): Promise<Attendance[]> {
 export default function GamesPage() {
   const user = useAuthStore(s => s.user)
   const qc = useQueryClient()
+  const navigate = useNavigate()
+  const [activeTeam, setActiveTeam] = useState<'blue' | 'black'>('blue')
 
   const gameDate = getNextWednesday()
   const gameId = getGameId(gameDate)
@@ -71,6 +81,21 @@ export default function GamesPage() {
   const amConfirmed = myAttendance?.status === 'confirmed'
   const amInWaitlist = myAttendance?.status === 'waitlist'
   const amDeclined = myAttendance?.status === 'declined'
+  const isAdmin = user?.role === 'admin'
+
+  // Lista fecha quarta às 17h
+  const closeTime = new Date(gameDate)
+  closeTime.setHours(17, 0, 0, 0)
+  const listaClosed = isAfter(new Date(), closeTime)
+
+  const { data: lineup = { blue: [], black: [] } } = useQuery({
+    queryKey: ['lineup', gameId],
+    queryFn: () => fetchLineup(gameId),
+    refetchInterval: 10000
+  })
+
+  const hasLineup = lineup.blue.length >= 6 && lineup.black.length >= 6
+  const myTeam = lineup.blue.includes(user?.id ?? '') ? 'blue' : lineup.black.includes(user?.id ?? '') ? 'black' : null
 
   // Confirmar presença
   const handleConfirm = useMutation({
@@ -211,7 +236,7 @@ export default function GamesPage() {
           style={{ background: 'var(--color-info-bg)', borderRadius: 8, paddingTop: 10, paddingBottom: 10 }}>
           <BellRinging size={16} color="var(--color-info-fg)" weight="fill" style={{ flexShrink: 0 }} />
           <p style={{ color: 'var(--color-info-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', fontWeight: 600, whiteSpace: 'nowrap' }}>
-          PRIORIDADE MENSALISTA: até {deadlineStr}
+            Mensalistas terão prioridade até {deadlineStr}
           </p>
         </div>
       )}
@@ -234,8 +259,59 @@ export default function GamesPage() {
         </div>
       )}
 
-      {/* Listas */}
-      {isLoading ? (
+      {/* Times escalados */}
+      {hasLineup && (
+        <>
+          {/* Banner "Você está no Time X" */}
+          {myTeam && (
+            <div className="mx-6 mb-3 px-4 py-2.5 flex items-center gap-2 rounded-lg"
+              style={{ background: 'var(--color-info-bg)' }}>
+              <BellRinging size={16} color="var(--color-info-fg)" weight="fill" style={{ flexShrink: 0 }} />
+              <p style={{ color: 'var(--color-info-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-11)', fontWeight: 400, whiteSpace: 'nowrap' }}>
+                Você está no {myTeam === 'blue' ? 'Time Azul' : 'Time Preto'}
+              </p>
+            </div>
+          )}
+
+          {/* Tabs times */}
+          <div className="mx-6 mb-3 p-2 flex gap-3 rounded-[20px]" style={{ background: 'var(--color-surface-secondary)' }}>
+            {([['blue', 'Time Azul', '/team-blue.png'], ['black', 'Time Preto', '/team-yellow.png']] as const).map(([team, label, img]) => {
+              const isActive = activeTeam === team
+              return (
+                <button key={team} onClick={() => setActiveTeam(team)}
+                  className="flex-1 flex items-center gap-2 px-4 py-2 rounded-2xl transition-all"
+                  style={{ background: isActive ? 'var(--color-surface-white)' : 'transparent', justifyContent: team === 'black' ? 'flex-end' : 'flex-start' }}>
+                  <img src={img} alt={label} width={24} height={24} style={{ objectFit: 'contain' }} />
+                  <span style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>{label}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Lista do time ativo */}
+          <div className="px-6 flex flex-col gap-2">
+            {(activeTeam === 'blue' ? lineup.blue : lineup.black).map((uid, i) => {
+              const att = confirmed.find(a => a.user_id === uid)
+              const name = att?.profile?.name || att?.profile?.email || uid
+              return (
+                <div key={uid} className="flex items-center gap-3 px-4 py-4 rounded-3xl"
+                  style={{ background: 'var(--color-surface-primary)' }}>
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center font-semibold shrink-0"
+                    style={{ background: 'var(--color-surface-white)', border: '2px solid var(--color-surface-secondary)', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                    {i + 1}
+                  </div>
+                  <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+                    {name}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Listas — apenas quando não tem lineup */}
+      {!hasLineup && (isLoading ? (
         <div className="flex justify-center py-8"><div className="text-4xl animate-spin">⚽</div></div>
       ) : (
         <div className="px-6 flex flex-col gap-2">
@@ -288,11 +364,22 @@ export default function GamesPage() {
             </>
           )}
         </div>
+      ))}
+
+      {/* Botão fixo — Escalar times (admin, lista fechada, sem lineup) ou Editar (admin, com lineup) */}
+      {isAdmin && listaClosed && (
+        <div className="fixed inset-x-0 px-6 pt-4 pb-3"
+          style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
+          <button onClick={() => navigate('/escalacao')}
+            className="w-full py-4 font-medium transition-all active:scale-95"
+            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+            {hasLineup ? 'Editar times' : 'Escalar times'}
+          </button>
+        </div>
       )}
 
-      {/* Botões fixos no rodapé — dois botões lado a lado quando não está na lista */}
-      {/* Dois botões sempre visíveis quando não confirmado nem na espera */}
-      {!amConfirmed && !amInWaitlist && (
+      {/* Botões fixos — Bora Jogar / Muié não deixa (lista aberta, não confirmado) */}
+      {!listaClosed && !amConfirmed && !amInWaitlist && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
           <button

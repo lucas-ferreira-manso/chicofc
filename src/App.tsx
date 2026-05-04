@@ -11,6 +11,7 @@ import StatsPage from './pages/StatsPage'
 import CaixinhaPage from './pages/CaixinhaPage'
 import ProfilePage from './pages/ProfilePage'
 import AdminPage from './pages/AdminPage'
+import EscalacaoPage from './pages/EscalacaoPage'
 
 export default function App() {
   const { user, loading, setLoading, fetchProfile } = useAuthStore()
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="/caixinha" element={<CaixinhaPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/escalacao" element={<EscalacaoPage />} />
           <Route path="*" element={<Navigate to="/games" replace />} />
         </Routes>
       </main>
