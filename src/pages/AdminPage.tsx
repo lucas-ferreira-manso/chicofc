@@ -31,7 +31,7 @@ export default function AdminPage() {
   const user = useAuthStore(s => s.user)
   const navigate = useNavigate()
 
-  const { data: pendingRequests = [] } = useQuery({
+  const { data: pendingCount = 0 } = useQuery<number>({
     queryKey: ['payment-requests-count'],
     queryFn: async () => {
       const q = query(collection(db, 'payment_requests'), where('status', '==', 'pending'))
@@ -148,11 +148,11 @@ export default function AdminPage() {
               className="w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95 relative"
               style={{ background: 'var(--color-surface-primary)' }}>
               <BellSimple size={20} color="var(--color-fg-primary)" />
-              {pendingRequests > 0 && (
+              {pendingCount > 0 && (
                 <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
                   style={{ background: 'var(--color-critical)', border: '2px solid var(--color-bg)' }}>
                   <span style={{ color: '#fff', fontSize: 9, fontWeight: 700, lineHeight: 1 }}>
-                    {pendingRequests > 9 ? '9+' : pendingRequests}
+                    {pendingCount > 9 ? '9+' : pendingRequests}
                   </span>
                 </div>
               )}
