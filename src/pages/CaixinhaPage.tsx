@@ -69,13 +69,13 @@ export default function CaixinhaPage() {
   const user = useAuthStore(s => s.user)
   const isAdmin = user?.role === 'admin'
 
-  const { data: payments = [] } = useQuery({ queryKey: ['payments'], queryFn: fetchPayments })
+  const { data: payments = [] } = useQuery({ queryKey: ['payments'], queryFn: fetchPayments, refetchInterval: 8000 })
   const { data: players = [] } = useQuery({ queryKey: ['players'], queryFn: fetchPlayers })
   const { data: config } = useQuery({ queryKey: ['caixinha-config'], queryFn: fetchConfig })
   const { data: pendingRequests = [] } = useQuery({
     queryKey: ['pending-requests'],
     queryFn: fetchPendingRequests,
-    refetchInterval: 10000
+    refetchInterval: 8000
   })
 
   const { data: myRequest } = useQuery({
