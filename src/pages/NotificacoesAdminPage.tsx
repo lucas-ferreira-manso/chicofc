@@ -48,14 +48,16 @@ export default function NotificacoesAdminPage() {
     mutationFn: async () => {
       const toApprove = requests.filter(r => checked.has(r.id))
       await Promise.all(toApprove.map(async r => {
-        // Atualiza status do request
-        await updateDoc(doc(db, 'payment_requests', r.id), { status: 'approved', approved_at: new Date().toISOString() })
-        // Marca pagamento como pago no payments
+        await updateDoc(doc(db, 'payment_requests', r.id), {
+          status: 'approved',
+          approved_at: new Date().toISOString()
+        })
         const month = r.month
+        const tipo = r.player_type === 'mensalista' ? 'mensalidade' : 'jogo'
         const q = query(collection(db, 'payments'),
           where('user_id', '==', r.user_id),
           where('month', '==', month),
-          where('type', '==', 'mensalidade')
+          where('type', '==', tipo)
         )
         const existing = await getDocs(q)
         if (!existing.empty) {
@@ -64,11 +66,10 @@ export default function NotificacoesAdminPage() {
             paid_at: new Date().toISOString()
           })
         } else {
-          // Cria o pagamento se não existir
           await addDoc(collection(db, 'payments'), {
             user_id: r.user_id,
             amount: r.amount,
-            type: r.player_type === 'mensalista' ? 'mensalidade' : 'jogo',
+            type: tipo,
             month,
             paid: true,
             paid_at: new Date().toISOString(),
@@ -87,30 +88,36 @@ export default function NotificacoesAdminPage() {
   })
 
   return (
-    <div className="flex flex-col min-h-full" style={{ background: 'var(--color-bg)' }}>
+    <div className="flex flex-col" style={{ minHeight: '100dvh', background: 'var(--color-bg)' }}>
 
       {/* Header */}
-      <div className="px-6 pt-12 pb-4 flex items-center justify-between" style={{ background: 'var(--color-bg)', borderBottom: '1px solid var(--color-border)' }}>
-        <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', fontWeight: 600 }}>Notificações</p>
-        <button onClick={() => navigate(-1)}>
+      <div className="px-6 pt-12 pb-4 flex items-center justify-between shrink-0"
+        style={{ background: 'var(--color-bg)', borderBottom: '1px solid var(--color-border)' }}>
+        <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', fontWeight: 600 }}>
+          Notificações
+        </p>
+        <button onClick={() => navigate(-1)} className="w-8 h-8 flex items-center justify-center">
           <X size={24} color="var(--color-fg-primary)" />
         </button>
       </div>
 
-      <div className="px-6 pt-4 pb-2">
-        <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+      {/* Subtítulo */}
+      <div className="px-6 pt-4 pb-2 shrink-0">
+        <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
           Confirmar pagamentos
         </p>
       </div>
 
-      {/* Lista */}
-      <div className="flex-1 px-6 flex flex-col gap-2 pb-32">
+      {/* Lista — cresce mas deixa espaço para o botão */}
+      <div className="flex-1 px-6 flex flex-col gap-2 pb-4" style={{ overflowY: 'auto' }}>
         {isLoading ? (
           <div className="flex justify-center py-8"><div className="text-4xl animate-spin">⚽</div></div>
         ) : requests.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-5xl mb-4">✅</div>
-            <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>Nenhum pagamento pendente</p>
+            <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+              Nenhum pagamento pendente
+            </p>
           </div>
         ) : requests.map(r => {
           const isChecked = checked.has(r.id)
@@ -119,11 +126,14 @@ export default function NotificacoesAdminPage() {
           return (
             <button key={r.id} onClick={() => toggleCheck(r.id)}
               className="w-full flex items-center gap-3 p-4 rounded-3xl transition-all active:scale-[0.99]"
-              style={{ background: isChecked ? 'var(--color-surface-accent-light)' : 'var(--color-surface-primary)', border: isChecked ? '1.5px solid var(--color-fg-accent-light)' : '1.5px solid transparent' }}>
-              {/* Checkbox */}
-              <div className="w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all"
+              style={{
+                background: isChecked ? 'var(--color-surface-accent-light)' : 'var(--color-surface-primary)',
+                border: isChecked ? '1.5px solid var(--color-fg-accent-light)' : '1.5px solid transparent'
+              }}>
+              {/* Radio */}
+              <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all"
                 style={{ borderColor: isChecked ? '#089527' : 'var(--color-fg-secondary)', background: isChecked ? '#089527' : 'transparent' }}>
-                {isChecked && <CheckCircle size={16} weight="fill" color="white" />}
+                {isChecked && <div className="w-2 h-2 rounded-full bg-white" />}
               </div>
               {/* Avatar */}
               <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0"
@@ -132,7 +142,9 @@ export default function NotificacoesAdminPage() {
               </div>
               {/* Info */}
               <div className="flex-1 text-left">
-                <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>{r.user_name}</p>
+                <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+                  {r.user_name}
+                </p>
                 <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', textTransform: 'capitalize' }}>
                   {r.player_type} · {monthLabel}
                 </p>
@@ -146,17 +158,28 @@ export default function NotificacoesAdminPage() {
         })}
       </div>
 
-      {/* Botão salvar */}
-      {requests.length > 0 && (
-        <div className="fixed inset-x-0 px-6 pt-4 pb-8"
-          style={{ bottom: 0, background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
-          <button onClick={() => approveAll.mutate()} disabled={checked.size === 0 || approveAll.isPending}
-            className="w-full py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-            style={{ background: checked.size > 0 ? 'var(--btn-primary-bg)' : 'var(--color-surface-secondary)', color: checked.size > 0 ? 'var(--btn-primary-fg)' : 'var(--color-fg-secondary)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
-            {approveAll.isPending ? 'Aprovando...' : checked.size > 0 ? `Aprovar ${checked.size} pagamento(s)` : 'Selecione pagamentos para aprovar'}
-          </button>
-        </div>
-      )}
+      {/* Botão Salvar — sempre visível no rodapé */}
+      <div className="shrink-0 px-6 pt-4 pb-8"
+        style={{ background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
+        <button
+          onClick={() => approveAll.mutate()}
+          disabled={checked.size === 0 || approveAll.isPending}
+          className="w-full py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
+          style={{
+            background: checked.size > 0 ? 'var(--btn-primary-bg)' : 'var(--color-surface-secondary)',
+            color: checked.size > 0 ? 'var(--btn-primary-fg)' : 'var(--color-fg-secondary)',
+            borderRadius: 'var(--radius-pill)',
+            fontFamily: 'var(--font-primary)',
+            fontSize: 'var(--font-size-16)',
+            fontWeight: 500
+          }}>
+          {approveAll.isPending
+            ? 'Aprovando...'
+            : checked.size > 0
+            ? `Salvar (${checked.size} pagamento${checked.size > 1 ? 's' : ''})`
+            : 'Salvar'}
+        </button>
+      </div>
     </div>
   )
 }

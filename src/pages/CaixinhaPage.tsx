@@ -48,6 +48,12 @@ async function fetchConfig(): Promise<CaixinhaConfig> {
   }
 }
 
+async function fetchPendingRequests(): Promise<any[]> {
+  const q = query(collection(db, 'payment_requests'), where('status', '==', 'pending'))
+  const snap = await getDocs(q)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
 async function fetchMyPaymentRequest(userId: string) {
   const month = format(new Date(), 'yyyy-MM')
   const q = query(collection(db, 'payment_requests'), where('user_id', '==', userId), where('month', '==', month))
@@ -66,6 +72,12 @@ export default function CaixinhaPage() {
   const { data: payments = [] } = useQuery({ queryKey: ['payments'], queryFn: fetchPayments })
   const { data: players = [] } = useQuery({ queryKey: ['players'], queryFn: fetchPlayers })
   const { data: config } = useQuery({ queryKey: ['caixinha-config'], queryFn: fetchConfig })
+  const { data: pendingRequests = [] } = useQuery({
+    queryKey: ['pending-requests'],
+    queryFn: fetchPendingRequests,
+    refetchInterval: 10000
+  })
+
   const { data: myRequest } = useQuery({
     queryKey: ['my-payment-request', user?.id],
     queryFn: () => fetchMyPaymentRequest(user!.id),
@@ -166,9 +178,14 @@ export default function CaixinhaPage() {
   const totalDespesas = despesaPayments.reduce((s, p) => s + p.amount, 0)
   const mensalidadePayments = payments.filter(p => p.type === 'mensalidade')
   const avulsoPaid = jogoPayments.filter(p => p.paid).reduce((s, p) => s + p.amount, 0)
-  const avulsoPending = jogoPayments.filter(p => !p.paid).reduce((s, p) => s + p.amount, 0)
+  const avulsoFromPayments = jogoPayments.filter(p => !p.paid).reduce((s, p) => s + p.amount, 0)
+  const avulsoFromRequests = pendingRequests.filter(r => r.player_type === 'avulso').reduce((s: number, r: any) => s + r.amount, 0)
+  const avulsoPending = avulsoFromPayments + avulsoFromRequests
   const mensalistaPaid = mensalidadePayments.filter(p => p.paid).reduce((s, p) => s + p.amount, 0)
-  const mensalistaPending = mensalidadePayments.filter(p => !p.paid).reduce((s, p) => s + p.amount, 0)
+  // Inclui payment_requests pendentes no cálculo de pendente
+  const mensalistaPendingFromPayments = mensalidadePayments.filter(p => !p.paid).reduce((s, p) => s + p.amount, 0)
+  const mensalistaPendingFromRequests = pendingRequests.filter(r => r.player_type === 'mensalista').reduce((s: number, r: any) => s + r.amount, 0)
+  const mensalistaPending = mensalistaPendingFromPayments + mensalistaPendingFromRequests
   const quadraCost = config?.quadraCost ?? 760
   const mensalistaValue = config?.mensalistaValue ?? 80
   const avulsoValue = config?.avulsoValue ?? 22
