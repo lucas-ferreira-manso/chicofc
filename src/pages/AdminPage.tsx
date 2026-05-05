@@ -5,9 +5,10 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword, getAuth, ge
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
-import { UserPlus, Shield, ToggleLeft, ToggleRight, Crown, X, Bell } from '@phosphor-icons/react'
+import { UserPlus, Shield, ToggleLeft, ToggleRight, Crown, X, Bell, BellSimple, UserSound } from '@phosphor-icons/react'
 import Header from '../components/layout/Header'
 import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
+import { useNavigate } from 'react-router-dom'
 import type { Profile } from '../types'
 
 const auth = getAuth()
