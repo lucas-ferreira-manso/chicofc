@@ -54,31 +54,58 @@ export default function NotificacoesAdminPage() {
         })
         const month = r.month
         const tipo = r.player_type === 'mensalista' ? 'mensalidade' : 'jogo'
-        // Busca qualquer pagamento do usuário neste mês (mensalidade ou jogo)
-        const q = query(collection(db, 'payments'),
-          where('user_id', '==', r.user_id),
-          where('month', '==', month)
-        )
-        const existing = await getDocs(q)
-        // Filtra por tipo correto
-        const correctDoc = existing.docs.find(d => d.data().type === tipo)
-        if (correctDoc) {
-          // Já existe — só marca como pago
-          await updateDoc(doc(db, 'payments', correctDoc.id), {
-            paid: true,
-            paid_at: new Date().toISOString()
-          })
+
+        if (tipo === 'jogo') {
+          // Avulso: payment foi criado com month = gameId (ex: 2025-05-07)
+          // Busca por user_id e type='jogo' sem filtrar month (formato diferente)
+          const q = query(collection(db, 'payments'),
+            where('user_id', '==', r.user_id),
+            where('type', '==', 'jogo'),
+            where('paid', '==', false)
+          )
+          const existing = await getDocs(q)
+          if (!existing.empty) {
+            // Atualiza o payment pendente existente
+            await updateDoc(doc(db, 'payments', existing.docs[0].id), {
+              paid: true,
+              paid_at: new Date().toISOString()
+            })
+          } else {
+            // Não existe nenhum jogo pendente — cria
+            await addDoc(collection(db, 'payments'), {
+              user_id: r.user_id,
+              amount: r.amount,
+              type: 'jogo',
+              month,
+              paid: true,
+              paid_at: new Date().toISOString(),
+              created_at: new Date().toISOString()
+            })
+          }
         } else {
-          // Não existe — cria novo (não duplica pois filtramos acima)
-          await addDoc(collection(db, 'payments'), {
-            user_id: r.user_id,
-            amount: r.amount,
-            type: tipo,
-            month,
-            paid: true,
-            paid_at: new Date().toISOString(),
-            created_at: new Date().toISOString()
-          })
+          // Mensalista: month no formato 'yyyy-MM'
+          const q = query(collection(db, 'payments'),
+            where('user_id', '==', r.user_id),
+            where('month', '==', month),
+            where('type', '==', 'mensalidade')
+          )
+          const existing = await getDocs(q)
+          if (!existing.empty) {
+            await updateDoc(doc(db, 'payments', existing.docs[0].id), {
+              paid: true,
+              paid_at: new Date().toISOString()
+            })
+          } else {
+            await addDoc(collection(db, 'payments'), {
+              user_id: r.user_id,
+              amount: r.amount,
+              type: 'mensalidade',
+              month,
+              paid: true,
+              paid_at: new Date().toISOString(),
+              created_at: new Date().toISOString()
+            })
+          }
         }
       }))
     },
