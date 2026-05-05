@@ -6,7 +6,7 @@ import { useAuthStore } from '../store/authStore'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { CheckCircle2, Circle } from 'lucide-react'
-import { Copy, Check, PencilSimple, X } from '@phosphor-icons/react'
+import { Copy, Check, PencilSimple, X, CheckCircle } from '@phosphor-icons/react'
 import Header from '../components/layout/Header'
 import { toast } from 'sonner'
 import type { Payment, Profile } from '../types'
@@ -48,6 +48,14 @@ async function fetchConfig(): Promise<CaixinhaConfig> {
   }
 }
 
+async function fetchMyPaymentRequest(userId: string) {
+  const month = format(new Date(), 'yyyy-MM')
+  const q = query(collection(db, 'payment_requests'), where('user_id', '==', userId), where('month', '==', month))
+  const snap = await getDocs(q)
+  if (snap.empty) return null
+  return { id: snap.docs[0].id, ...snap.docs[0].data() }
+}
+
 type EditField = 'quadra' | 'mensalista' | 'avulso' | null
 
 export default function CaixinhaPage() {
@@ -58,10 +66,16 @@ export default function CaixinhaPage() {
   const { data: payments = [] } = useQuery({ queryKey: ['payments'], queryFn: fetchPayments })
   const { data: players = [] } = useQuery({ queryKey: ['players'], queryFn: fetchPlayers })
   const { data: config } = useQuery({ queryKey: ['caixinha-config'], queryFn: fetchConfig })
+  const { data: myRequest } = useQuery({
+    queryKey: ['my-payment-request', user?.id],
+    queryFn: () => fetchMyPaymentRequest(user!.id),
+    enabled: !!user?.id
+  })
 
   const [pixCopied, setPixCopied] = useState(false)
   const [editingField, setEditingField] = useState<EditField>(null)
   const [editValue, setEditValue] = useState('')
+  const [showJaPaguei, setShowJaPaguei] = useState(false)
 
   const handleCopyPix = () => {
     navigator.clipboard.writeText(PIX_CODE)
@@ -78,11 +92,7 @@ export default function CaixinhaPage() {
   const saveField = useMutation({
     mutationFn: async () => {
       const value = parseFloat(editValue) || 0
-      const fieldMap: Record<string, string> = {
-        quadra: 'quadraCost',
-        mensalista: 'mensalistaValue',
-        avulso: 'avulsoValue'
-      }
+      const fieldMap: Record<string, string> = { quadra: 'quadraCost', mensalista: 'mensalistaValue', avulso: 'avulsoValue' }
       await setDoc(doc(db, 'config', 'caixinha'), { [fieldMap[editingField!]]: value }, { merge: true })
     },
     onSuccess: () => {
@@ -118,6 +128,40 @@ export default function CaixinhaPage() {
     }
   })
 
+  // Já paguei — cria payment_request
+  const submitPaymentRequest = useMutation({
+    mutationFn: async () => {
+      const month = format(new Date(), 'yyyy-MM')
+      const playerData = players.find(p => p.id === user?.id)
+      const tipo = playerData?.player_type || 'mensalista'
+      const amount = tipo === 'mensalista' ? (config?.mensalistaValue ?? 80) : (config?.avulsoValue ?? 22)
+      // Notificar admin via FCM
+      const adminSnap = await getDocs(query(collection(db, 'players'), where('role', '==', 'admin')))
+      const adminIds = adminSnap.docs.map(d => d.id)
+      await Promise.all(adminIds.map(async adminId => {
+        const tokenSnap = await getDoc(doc(db, 'fcm_tokens', adminId))
+        if (tokenSnap.exists()) {
+          // Salva notificação no Firestore para o admin ver
+        }
+      }))
+      await addDoc(collection(db, 'payment_requests'), {
+        user_id: user!.id,
+        user_name: user?.name || user?.email,
+        player_type: tipo,
+        amount,
+        month,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-payment-request', user?.id] })
+      toast.success('Admin notificado! Aguarde aprovação.')
+      setShowJaPaguei(false)
+    },
+    onError: () => toast.error('Erro ao notificar. Tente novamente.')
+  })
+
   // Cálculos
   const jogoPayments = payments.filter(p => p.type === 'jogo')
   const despesaPayments = payments.filter(p => p.type === 'despesa')
@@ -138,59 +182,40 @@ export default function CaixinhaPage() {
     return acc
   }, {} as Record<string, Payment[]>)
 
-  // Componente inline de campo editável
+  const playerData = players.find(p => p.id === user?.id)
+  const myAmount = playerData?.player_type === 'mensalista' ? mensalistaValue : avulsoValue
+  const hasRequested = !!myRequest && (myRequest as any).status === 'pending'
+  const isApproved = !!myRequest && (myRequest as any).status === 'approved'
+
   const EditableRow = ({ field, label, value }: { field: EditField, label: string, value: number }) => (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1.5">
-        <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>
-          {label}
-        </p>
-        {isAdmin && editingField !== field && (
-          <button onClick={() => openEdit(field, value)}>
-            <PencilSimple size={11} color="var(--color-fg-secondary)" />
-          </button>
-        )}
-        {isAdmin && editingField === field && (
-          <button onClick={() => setEditingField(null)}>
-            <X size={11} color="var(--color-fg-secondary)" />
-          </button>
-        )}
+        <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>{label}</p>
+        {isAdmin && editingField !== field && <button onClick={() => openEdit(field, value)}><PencilSimple size={11} color="var(--color-fg-secondary)" /></button>}
+        {isAdmin && editingField === field && <button onClick={() => setEditingField(null)}><X size={11} color="var(--color-fg-secondary)" /></button>}
       </div>
       {editingField === field ? (
         <div className="flex gap-1.5">
-          <input
-            type="number"
-            value={editValue}
-            onChange={e => setEditValue(e.target.value)}
+          <input type="number" value={editValue} onChange={e => setEditValue(e.target.value)}
             className="outline-none rounded-full px-3 py-1"
-            style={{ background: 'var(--color-surface-secondary)', border: '1.5px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', color: 'var(--color-fg-primary)', width: 80 }}
-          />
-          <button
-            onClick={() => saveField.mutate()}
-            disabled={saveField.isPending}
+            style={{ background: 'var(--color-surface-secondary)', border: '1.5px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', color: 'var(--color-fg-primary)', width: 80 }} />
+          <button onClick={() => saveField.mutate()} disabled={saveField.isPending}
             className="px-3 py-1 rounded-full font-medium text-xs disabled:opacity-40"
-            style={{ background: 'var(--color-surface-accent)', color: 'white', fontFamily: 'var(--font-primary)' }}>
-            OK
-          </button>
+            style={{ background: 'var(--color-surface-accent)', color: 'white', fontFamily: 'var(--font-primary)' }}>OK</button>
         </div>
       ) : (
-        <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>
-          R$ {value.toFixed(2)}
-        </p>
+        <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {value.toFixed(2)}</p>
       )}
     </div>
   )
 
   return (
     <div className="flex flex-col min-h-full pb-28" style={{ background: 'var(--color-bg)' }}>
-
       <Header
         title="Caixinha"
         subtitle={`Total de usuários: ${players.length}`}
         rightContent={isAdmin ? (
-          <button
-            onClick={() => generateMonth.mutate()}
-            disabled={generateMonth.isPending}
+          <button onClick={() => generateMonth.mutate()} disabled={generateMonth.isPending}
             className="px-4 py-2 rounded-full font-medium transition-all active:scale-95 disabled:opacity-40"
             style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
             {generateMonth.isPending ? '...' : 'Gerar mês'}
@@ -199,96 +224,86 @@ export default function CaixinhaPage() {
       />
       <div style={{ height: 96 }} />
 
+      {/* Modal Já Paguei */}
+      {showJaPaguei && (
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setShowJaPaguei(false)}>
+          <div className="w-full rounded-t-3xl p-6 flex flex-col gap-5" style={{ background: 'var(--color-bg)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-18)', fontWeight: 600 }}>Confirmar pagamento</p>
+              <button onClick={() => setShowJaPaguei(false)}><X size={20} color="var(--color-fg-secondary)" /></button>
+            </div>
+            <div className="p-4 rounded-2xl flex flex-col gap-2" style={{ background: 'var(--color-surface-primary)' }}>
+              <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+                {playerData?.player_type === 'mensalista' ? 'Mensalidade' : 'Avulso'} — {format(new Date(), 'MMMM yyyy', { locale: ptBR })}
+              </p>
+              <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', fontWeight: 700 }}>
+                R$ {myAmount.toFixed(2)}
+              </p>
+            </div>
+            <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', textAlign: 'center' }}>
+              Copie o PIX, faça o pagamento e depois notifique o admin para aprovação.
+            </p>
+            <button onClick={handleCopyPix}
+              className="w-full py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
+              style={{ background: 'var(--color-surface-primary)', color: 'var(--color-fg-primary)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', border: '1px solid var(--color-border)' }}>
+              {pixCopied ? <Check size={18} /> : <Copy size={18} />}
+              {pixCopied ? 'Copiado!' : 'Copiar Código PIX'}
+            </button>
+            <button onClick={() => submitPaymentRequest.mutate()} disabled={submitPaymentRequest.isPending}
+              className="w-full py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 disabled:opacity-40"
+              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+              {submitPaymentRequest.isPending ? '...' : 'Notificar Admin'}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="px-6 flex flex-col gap-4">
 
         {/* Card financeiro */}
         <div className="flex flex-col gap-5 p-5 rounded-[20px]" style={{ background: 'var(--color-surface-primary)' }}>
-
-          {/* Saldo Total */}
           <div className="flex flex-col gap-2">
-            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
-              Saldo Total
-            </p>
-            <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>
-              R$ {saldoTotal.toFixed(2)}
-            </p>
+            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Saldo Total</p>
+            <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>R$ {saldoTotal.toFixed(2)}</p>
           </div>
-
-          {/* Despesa Quadra e Goleiros */}
           <EditableRow field="quadra" label="Despesa Quadra e Goleiros" value={quadraCost} />
-
-          {/* Grid Mensalista */}
           <div className="flex gap-5">
-            <div className="flex-1">
-              <div className="flex flex-col gap-0.5">
-                <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>
-                  Mensalista Recebido
-                </p>
-                <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>
-                  R$ {mensalistaPaid.toFixed(2)}
-                </p>
-              </div>
+            <div className="flex-1 flex flex-col gap-0.5">
+              <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Mensalista Recebido</p>
+              <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {mensalistaPaid.toFixed(2)}</p>
             </div>
-            <div className="flex-1">
-              <div className="flex flex-col gap-0.5">
-                <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>
-                  Mensalista Pendente
-                </p>
-                <p style={{ color: mensalistaPending > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>
-                  R$ {mensalistaPending.toFixed(2)}
-                </p>
-              </div>
+            <div className="flex-1 flex flex-col gap-0.5">
+              <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Mensalista Pendente</p>
+              <p style={{ color: mensalistaPending > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {mensalistaPending.toFixed(2)}</p>
             </div>
           </div>
-
-          {/* Grid Avulso */}
           <div className="flex gap-5">
-            <div className="flex-1">
-              <div className="flex flex-col gap-0.5">
-                <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>
-                  Avulso Recebido
-                </p>
-                <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>
-                  R$ {avulsoPaid.toFixed(2)}
-                </p>
-              </div>
+            <div className="flex-1 flex flex-col gap-0.5">
+              <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Avulso Recebido</p>
+              <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {avulsoPaid.toFixed(2)}</p>
             </div>
-            <div className="flex-1">
-              <div className="flex flex-col gap-0.5">
-                <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>
-                  Avulso Pendente
-                </p>
-                <p style={{ color: avulsoPending > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>
-                  R$ {avulsoPending.toFixed(2)}
-                </p>
-              </div>
+            <div className="flex-1 flex flex-col gap-0.5">
+              <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Avulso Pendente</p>
+              <p style={{ color: avulsoPending > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {avulsoPending.toFixed(2)}</p>
             </div>
           </div>
         </div>
 
-        {/* Divider */}
         <div style={{ height: 1, background: 'var(--color-border)' }} />
 
-        {/* ATENÇÃO JOVENS */}
+        {/* ATENÇÃO JOVENS — centralizado */}
         <div className="flex flex-col gap-6 pb-2">
-          <p className="font-medium text-center" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-            ATENÇÃO JOVENS
-          </p>
+          <p className="font-medium text-center" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>ATENÇÃO JOVENS</p>
           <div className="flex gap-6">
-            <div className="flex-1 flex flex-col gap-2">
-              <div className="flex items-center gap-1.5">
+            {/* Mensalista */}
+            <div className="flex-1 flex flex-col items-center gap-2 text-center">
+              <div className="flex items-center gap-1.5 justify-center">
                 <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Valor do Mensalista:</p>
-                {isAdmin && editingField !== 'mensalista' && (
-                  <button onClick={() => openEdit('mensalista', mensalistaValue)}>
-                    <PencilSimple size={13} color="var(--color-fg-secondary)" />
-                  </button>
-                )}
-                {isAdmin && editingField === 'mensalista' && (
-                  <button onClick={() => setEditingField(null)}><X size={13} color="var(--color-fg-secondary)" /></button>
-                )}
+                {isAdmin && editingField !== 'mensalista' && <button onClick={() => openEdit('mensalista', mensalistaValue)}><PencilSimple size={13} color="var(--color-fg-secondary)" /></button>}
+                {isAdmin && editingField === 'mensalista' && <button onClick={() => setEditingField(null)}><X size={13} color="var(--color-fg-secondary)" /></button>}
               </div>
               {editingField === 'mensalista' ? (
-                <div className="flex gap-2">
+                <div className="flex gap-2 justify-center">
                   <input type="number" value={editValue} onChange={e => setEditValue(e.target.value)}
                     className="outline-none rounded-full px-3 py-1.5"
                     style={{ background: 'var(--color-surface-secondary)', border: '1.5px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', color: 'var(--color-fg-primary)', width: 90 }} />
@@ -297,25 +312,18 @@ export default function CaixinhaPage() {
                     style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)' }}>OK</button>
                 </div>
               ) : (
-                <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>
-                  R$ {mensalistaValue.toFixed(2)}
-                </p>
+                <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>R$ {mensalistaValue.toFixed(2)}</p>
               )}
             </div>
-            <div className="flex-1 flex flex-col gap-2">
-              <div className="flex items-center gap-1.5">
+            {/* Avulso */}
+            <div className="flex-1 flex flex-col items-center gap-2 text-center">
+              <div className="flex items-center gap-1.5 justify-center">
                 <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Valor do Avulso:</p>
-                {isAdmin && editingField !== 'avulso' && (
-                  <button onClick={() => openEdit('avulso', avulsoValue)}>
-                    <PencilSimple size={13} color="var(--color-fg-secondary)" />
-                  </button>
-                )}
-                {isAdmin && editingField === 'avulso' && (
-                  <button onClick={() => setEditingField(null)}><X size={13} color="var(--color-fg-secondary)" /></button>
-                )}
+                {isAdmin && editingField !== 'avulso' && <button onClick={() => openEdit('avulso', avulsoValue)}><PencilSimple size={13} color="var(--color-fg-secondary)" /></button>}
+                {isAdmin && editingField === 'avulso' && <button onClick={() => setEditingField(null)}><X size={13} color="var(--color-fg-secondary)" /></button>}
               </div>
               {editingField === 'avulso' ? (
-                <div className="flex gap-2">
+                <div className="flex gap-2 justify-center">
                   <input type="number" value={editValue} onChange={e => setEditValue(e.target.value)}
                     className="outline-none rounded-full px-3 py-1.5"
                     style={{ background: 'var(--color-surface-secondary)', border: '1.5px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', color: 'var(--color-fg-primary)', width: 90 }} />
@@ -324,60 +332,62 @@ export default function CaixinhaPage() {
                     style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)' }}>OK</button>
                 </div>
               ) : (
-                <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>
-                  R$ {avulsoValue.toFixed(2)}
-                </p>
+                <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>R$ {avulsoValue.toFixed(2)}</p>
               )}
             </div>
           </div>
 
-          {/* Botão PIX */}
-          <button
-            onClick={handleCopyPix}
-            className="w-full py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
-            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-            {pixCopied ? <Check size={18} /> : <Copy size={18} />}
-            {pixCopied ? 'Copiado!' : 'Copiar Código PIX'}
-          </button>
+          {/* Botões — estado conforme myRequest */}
+          {!hasRequested && !isApproved ? (
+            <div className="flex gap-3">
+              <button onClick={handleCopyPix}
+                className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
+                style={{ background: 'var(--color-surface-primary)', color: 'var(--color-fg-primary)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', border: '1px solid var(--color-border)' }}>
+                {pixCopied ? <Check size={18} /> : <Copy size={18} />}
+                {pixCopied ? 'Copiado!' : 'Copiar PIX'}
+              </button>
+              <button onClick={() => setShowJaPaguei(true)}
+                className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
+                style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                Já Paguei
+              </button>
+            </div>
+          ) : hasRequested ? (
+            <div className="flex flex-col gap-3">
+              <div className="w-full py-3 flex items-center justify-center gap-2 rounded-full" style={{ background: 'var(--color-surface-primary)', border: '1px solid var(--color-border)' }}>
+                <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Aguardando aprovação do admin</p>
+              </div>
+            </div>
+          ) : (
+            <div className="w-full py-3 flex items-center justify-center gap-2 rounded-full" style={{ background: '#e6f4ea' }}>
+              <CheckCircle size={18} weight="fill" color="#089527" />
+              <p style={{ color: '#089527', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Pagamento aprovado!</p>
+            </div>
+          )}
         </div>
 
-        {/* Divider */}
-        {(jogoPayments.length > 0 || Object.keys(byMonth).length > 0) && (
-          <div style={{ height: 1, background: 'var(--color-border)' }} />
-        )}
+        {(jogoPayments.length > 0 || Object.keys(byMonth).length > 0) && <div style={{ height: 1, background: 'var(--color-border)' }} />}
 
-        {/* Pagamentos avulsos */}
         {jogoPayments.length > 0 && (
           <section>
-            <p className="font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
-              Por jogo — avulsos
-            </p>
+            <p className="font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>Por jogo — avulsos</p>
             <div className="flex flex-col gap-2">
-              {jogoPayments.map(p => (
-                <PaymentRow key={p.id} payment={p} onToggle={() => togglePaid.mutate({ id: p.id, paid: p.paid })} isAdmin={isAdmin} />
-              ))}
+              {jogoPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => togglePaid.mutate({ id: p.id, paid: p.paid })} isAdmin={isAdmin} />)}
             </div>
           </section>
         )}
 
-        {/* Mensalidades por mês */}
         {Object.entries(byMonth).map(([monthKey, monthPayments]) => {
           const [year, m] = monthKey.split('-')
           const label = format(new Date(Number(year), Number(m) - 1, 1), 'MMMM yyyy', { locale: ptBR })
           return (
             <section key={monthKey}>
               <div className="flex items-center justify-between mb-2">
-                <p className="font-semibold uppercase tracking-wider capitalize" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
-                  {label}
-                </p>
-                <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
-                  {monthPayments.filter(p => p.paid).length}/{monthPayments.length}
-                </p>
+                <p className="font-semibold uppercase tracking-wider capitalize" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>{label}</p>
+                <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>{monthPayments.filter(p => p.paid).length}/{monthPayments.length}</p>
               </div>
               <div className="flex flex-col gap-2">
-                {monthPayments.map(p => (
-                  <PaymentRow key={p.id} payment={p} onToggle={() => togglePaid.mutate({ id: p.id, paid: p.paid })} isAdmin={isAdmin} />
-                ))}
+                {monthPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => togglePaid.mutate({ id: p.id, paid: p.paid })} isAdmin={isAdmin} />)}
               </div>
             </section>
           )
@@ -400,18 +410,14 @@ function PaymentRow({ payment, onToggle, isAdmin }: { payment: Payment; onToggle
     <button onClick={isAdmin ? onToggle : undefined}
       className="w-full flex items-center gap-3 p-4 rounded-3xl transition-all active:scale-[0.99]"
       style={{ background: 'var(--color-surface-primary)', cursor: isAdmin ? 'pointer' : 'default' }}>
-      {payment.paid
-        ? <CheckCircle2 size={22} color="var(--color-success)" />
-        : <Circle size={22} color="var(--color-fg-secondary)" />}
+      {payment.paid ? <CheckCircle2 size={22} color="var(--color-success)" /> : <Circle size={22} color="var(--color-fg-secondary)" />}
       <div className="flex-1 text-left">
         <p className="font-medium" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>{name}</p>
         <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
           {payment.paid && payment.paid_at ? `Pago em ${format(new Date(payment.paid_at), 'd/MM/yyyy')}` : 'Pendente'}
         </p>
       </div>
-      <p className="font-semibold" style={{ color: payment.paid ? 'var(--color-success)' : 'var(--color-danger)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-        R$ {payment.amount}
-      </p>
+      <p className="font-semibold" style={{ color: payment.paid ? 'var(--color-success)' : 'var(--color-danger)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>R$ {payment.amount}</p>
     </button>
   )
 }

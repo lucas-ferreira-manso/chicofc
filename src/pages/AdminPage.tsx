@@ -119,16 +119,21 @@ export default function AdminPage() {
         title="Admin"
         subtitle={`${players.filter(p => p.active).length} ativos`}
         rightContent={
-          <div className="flex gap-2">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate('/admin/notificacoes')}
+              className="w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95"
+              style={{ background: 'var(--color-surface-primary)' }}>
+              <BellSimple size={20} color="var(--color-fg-primary)" />
+            </button>
             <button onClick={() => { setShowNotifForm(!showNotifForm); setShowForm(false) }}
-              className="flex items-center gap-2 px-4 py-2 rounded-full font-medium transition-all active:scale-95"
-              style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent-light)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-              <Bell size={15} /> Notificar
+              className="w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95"
+              style={{ background: 'var(--color-surface-primary)' }}>
+              <UserSound size={20} color="var(--color-fg-primary)" />
             </button>
             <button onClick={() => { setShowForm(!showForm); setShowNotifForm(false) }}
-              className="flex items-center gap-2 px-4 py-2 rounded-full font-medium transition-all active:scale-95"
-              style={{ background: showForm ? 'var(--color-surface-secondary)' : 'var(--btn-primary-bg)', color: showForm ? 'var(--color-danger)' : 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-              {showForm ? <><X size={15} />Fechar</> : <><UserPlus size={15} />Adicionar</>}
+              className="w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95"
+              style={{ background: showForm ? 'var(--color-surface-secondary)' : 'var(--btn-primary-bg)' }}>
+              {showForm ? <X size={20} color="var(--color-danger)" /> : <UserPlus size={20} color="var(--btn-primary-fg)" />}
             </button>
           </div>
         }
