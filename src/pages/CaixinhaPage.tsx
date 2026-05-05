@@ -353,7 +353,7 @@ export default function CaixinhaPage() {
           <section>
             <p className="font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>Por jogo — avulsos</p>
             <div className="flex flex-col gap-2">
-              {jogoPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => togglePaid.mutate({ id: p.id, paid: p.paid })} isAdmin={isAdmin} />)}
+              {jogoPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => {}} isAdmin={false} />)}
             </div>
           </section>
         )}
@@ -368,7 +368,7 @@ export default function CaixinhaPage() {
                 <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>{monthPayments.filter(p => p.paid).length}/{monthPayments.length}</p>
               </div>
               <div className="flex flex-col gap-2">
-                {monthPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => togglePaid.mutate({ id: p.id, paid: p.paid })} isAdmin={isAdmin} />)}
+                {monthPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => {}} isAdmin={false} />)}
               </div>
             </section>
           )
