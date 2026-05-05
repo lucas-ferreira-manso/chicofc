@@ -152,7 +152,7 @@ export default function AdminPage() {
                 <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
                   style={{ background: 'var(--color-critical)', border: '2px solid var(--color-bg)' }}>
                   <span style={{ color: '#fff', fontSize: 9, fontWeight: 700, lineHeight: 1 }}>
-                    {pendingCount > 9 ? '9+' : pendingRequests}
+                    {pendingCount > 9 ? "9+" : pendingCount}
                   </span>
                 </div>
               )}
