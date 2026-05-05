@@ -29,6 +29,7 @@ async function fetchPlayers(): Promise<Profile[]> {
 export default function AdminPage() {
   const qc = useQueryClient()
   const user = useAuthStore(s => s.user)
+  const navigate = useNavigate()
   const isAdmin = user?.role === 'admin'
 
   const { data: players = [], isLoading } = useQuery({ queryKey: ['players'], queryFn: fetchPlayers })
