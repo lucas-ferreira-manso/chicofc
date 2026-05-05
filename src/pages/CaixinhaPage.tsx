@@ -156,7 +156,6 @@ export default function CaixinhaPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-payment-request', user?.id] })
       toast.success('Admin notificado! Aguarde aprovação.')
-      setShowJaPaguei(false)
     },
     onError: () => toast.error('Erro ao notificar. Tente novamente.')
   })
