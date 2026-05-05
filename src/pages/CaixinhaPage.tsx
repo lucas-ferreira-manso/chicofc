@@ -75,7 +75,6 @@ export default function CaixinhaPage() {
   const [pixCopied, setPixCopied] = useState(false)
   const [editingField, setEditingField] = useState<EditField>(null)
   const [editValue, setEditValue] = useState('')
-  const [showJaPaguei, setShowJaPaguei] = useState(false)
 
   const handleCopyPix = () => {
     navigator.clipboard.writeText(PIX_CODE)
@@ -224,41 +223,7 @@ export default function CaixinhaPage() {
       />
       <div style={{ height: 96 }} />
 
-      {/* Modal Já Paguei */}
-      {showJaPaguei && (
-        <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setShowJaPaguei(false)}>
-          <div className="w-full rounded-t-3xl p-6 flex flex-col gap-5" style={{ background: 'var(--color-bg)' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-18)', fontWeight: 600 }}>Confirmar pagamento</p>
-              <button onClick={() => setShowJaPaguei(false)}><X size={20} color="var(--color-fg-secondary)" /></button>
-            </div>
-            <div className="p-4 rounded-2xl flex flex-col gap-2" style={{ background: 'var(--color-surface-primary)' }}>
-              <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-                {playerData?.player_type === 'mensalista' ? 'Mensalidade' : 'Avulso'} — {format(new Date(), 'MMMM yyyy', { locale: ptBR })}
-              </p>
-              <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', fontWeight: 700 }}>
-                R$ {myAmount.toFixed(2)}
-              </p>
-            </div>
-            <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', textAlign: 'center' }}>
-              Copie o PIX, faça o pagamento e depois notifique o admin para aprovação.
-            </p>
-            <button onClick={handleCopyPix}
-              className="w-full py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
-              style={{ background: 'var(--color-surface-primary)', color: 'var(--color-fg-primary)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', border: '1px solid var(--color-border)' }}>
-              {pixCopied ? <Check size={18} /> : <Copy size={18} />}
-              {pixCopied ? 'Copiado!' : 'Copiar Código PIX'}
-            </button>
-            <button onClick={() => submitPaymentRequest.mutate()} disabled={submitPaymentRequest.isPending}
-              className="w-full py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 disabled:opacity-40"
-              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-              {submitPaymentRequest.isPending ? '...' : 'Notificar Admin'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="px-6 flex flex-col gap-4">
+            <div className="px-6 flex flex-col gap-4">
 
         {/* Card financeiro */}
         <div className="flex flex-col gap-5 p-5 rounded-[20px]" style={{ background: 'var(--color-surface-primary)' }}>
@@ -340,16 +305,16 @@ export default function CaixinhaPage() {
           {/* Botões — estado conforme myRequest */}
           {!hasRequested && !isApproved ? (
             <div className="flex gap-3">
-              <button onClick={() => setShowJaPaguei(true)}
-                className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
-                style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-                Já Paguei
-              </button>
               <button onClick={handleCopyPix}
                 className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
                 style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                 {pixCopied ? <Check size={18} /> : <Copy size={18} />}
-                {pixCopied ? 'Copiado!' : 'Código PIX'}
+                {pixCopied ? 'Copiado!' : 'Copiar PIX'}
+              </button>
+              <button onClick={() => submitPaymentRequest.mutate()} disabled={submitPaymentRequest.isPending}
+                className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 disabled:opacity-40"
+                style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                {submitPaymentRequest.isPending ? '...' : 'Já Paguei'}
               </button>
             </div>
           ) : hasRequested ? (
