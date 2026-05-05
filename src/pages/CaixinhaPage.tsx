@@ -340,16 +340,16 @@ export default function CaixinhaPage() {
           {/* Botões — estado conforme myRequest */}
           {!hasRequested && !isApproved ? (
             <div className="flex gap-3">
-              <button onClick={handleCopyPix}
-                className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
-                style={{ background: 'var(--color-surface-primary)', color: 'var(--color-fg-primary)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', border: '1px solid var(--color-border)' }}>
-                {pixCopied ? <Check size={18} /> : <Copy size={18} />}
-                {pixCopied ? 'Copiado!' : 'Copiar PIX'}
-              </button>
               <button onClick={() => setShowJaPaguei(true)}
                 className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
-                style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                 Já Paguei
+              </button>
+              <button onClick={handleCopyPix}
+                className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
+                style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                {pixCopied ? <Check size={18} /> : <Copy size={18} />}
+                {pixCopied ? 'Copiado!' : 'Código PIX'}
               </button>
             </div>
           ) : hasRequested ? (
