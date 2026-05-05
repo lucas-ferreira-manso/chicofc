@@ -179,7 +179,11 @@ export default function CaixinhaPage() {
   const mensalidadePayments = payments.filter(p => p.type === 'mensalidade')
   const avulsoPaid = jogoPayments.filter(p => p.paid).reduce((s, p) => s + p.amount, 0)
   const avulsoFromPayments = jogoPayments.filter(p => !p.paid).reduce((s, p) => s + p.amount, 0)
-  const avulsoFromRequests = pendingRequests.filter(r => r.player_type === 'avulso').reduce((s: number, r: any) => s + r.amount, 0)
+  // Só soma requests de avulsos que NÃO têm jogoPayment pendente (evita dupla contagem)
+  const userIdsComJogoPendente = new Set(jogoPayments.filter(p => !p.paid).map(p => p.user_id))
+  const avulsoFromRequests = pendingRequests
+    .filter((r: any) => r.player_type === 'avulso' && !userIdsComJogoPendente.has(r.user_id))
+    .reduce((s: number, r: any) => s + r.amount, 0)
   const avulsoPending = avulsoFromPayments + avulsoFromRequests
   const mensalistaPaid = mensalidadePayments.filter(p => p.paid).reduce((s, p) => s + p.amount, 0)
   // Inclui payment_requests pendentes no cálculo de pendente

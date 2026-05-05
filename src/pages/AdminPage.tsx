@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore'
+import { collection, getDocs, doc, updateDoc, setDoc, query, where } from 'firebase/firestore'
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, getAuth, getIdToken } from 'firebase/auth'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
@@ -30,12 +30,23 @@ export default function AdminPage() {
   const qc = useQueryClient()
   const user = useAuthStore(s => s.user)
   const navigate = useNavigate()
+
+  const { data: pendingRequests = [] } = useQuery({
+    queryKey: ['payment-requests-count'],
+    queryFn: async () => {
+      const q = query(collection(db, 'payment_requests'), where('status', '==', 'pending'))
+      const snap = await getDocs(q)
+      return snap.docs.length
+    },
+    refetchInterval: 10000
+  })
   const isAdmin = user?.role === 'admin'
 
   const { data: players = [], isLoading } = useQuery({ queryKey: ['players'], queryFn: fetchPlayers })
   const [showForm, setShowForm] = useState(false)
   const [showNotifForm, setShowNotifForm] = useState(false)
   const [notifMessage, setNotifMessage] = useState('')
+  const [notifType, setNotifType] = useState<'presenca' | 'cobranca'>('presenca')
   const [form, setForm] = useState({
     name: '', email: '', password: '',
     player_type: 'mensalista' as 'mensalista' | 'avulso',
@@ -79,19 +90,30 @@ export default function AdminPage() {
       const currentUser = auth.currentUser
       if (!currentUser) throw new Error('Não autenticado')
       const token = await getIdToken(currentUser)
-      const gameId = getNextWednesdayId()
-      const res = await fetch(`${SERVER_URL}/notify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ gameId, message: notifMessage || 'Você ainda não confirmou presença no jogo de quarta!' })
-      })
-      if (!res.ok) throw new Error('Erro no servidor')
-      return res.json()
+      if (notifType === 'presenca') {
+        const gameId = getNextWednesdayId()
+        const res = await fetch(`${SERVER_URL}/notify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ gameId, message: notifMessage || 'Você ainda não confirmou presença no jogo de quarta!' })
+        })
+        if (!res.ok) throw new Error('Erro no servidor')
+        return res.json()
+      } else {
+        const res = await fetch(`${SERVER_URL}/notify-cobranca`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ message: notifMessage || 'Você ainda tem mensalidade/avulso pendente. Por favor, efetue o pagamento!' })
+        })
+        if (!res.ok) throw new Error('Erro no servidor')
+        return res.json()
+      }
     },
     onSuccess: (data) => {
       toast.success(`Notificação enviada para ${data.sent} jogador${data.sent !== 1 ? 'es' : ''}!`)
       setShowNotifForm(false)
       setNotifMessage('')
+      setNotifType('presenca')
     },
     onError: (e: any) => toast.error(`Erro: ${e.message}`)
   })
@@ -123,9 +145,17 @@ export default function AdminPage() {
         rightContent={
           <div className="flex items-center gap-3">
             <button onClick={() => navigate('/admin/notificacoes')}
-              className="w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95"
+              className="w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95 relative"
               style={{ background: 'var(--color-surface-primary)' }}>
               <BellSimple size={20} color="var(--color-fg-primary)" />
+              {pendingRequests > 0 && (
+                <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
+                  style={{ background: 'var(--color-critical)', border: '2px solid var(--color-bg)' }}>
+                  <span style={{ color: '#fff', fontSize: 9, fontWeight: 700, lineHeight: 1 }}>
+                    {pendingRequests > 9 ? '9+' : pendingRequests}
+                  </span>
+                </div>
+              )}
             </button>
             <button onClick={() => { setShowNotifForm(!showNotifForm); setShowForm(false) }}
               className="w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95"
@@ -145,12 +175,31 @@ export default function AdminPage() {
       {showNotifForm && (
         <div className="mx-6 mb-4 p-5 rounded-3xl flex flex-col gap-3" style={{ background: 'var(--color-surface-primary)' }}>
           <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>
-            Notificar quem não confirmou
+            Enviar notificação
           </p>
-          <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-            Enviado para quem ainda não respondeu ao jogo desta quarta.
-          </p>
-          <input type="text" placeholder="Mensagem (opcional)" value={notifMessage}
+
+          {/* Seletor de tipo */}
+          <div className="flex flex-col gap-2">
+            {([
+              ['presenca', 'Confirmar presença', 'Para quem ainda não respondeu ao jogo desta quarta'],
+              ['cobranca', 'Cobrar mensalidade/avulso', 'Para quem ainda não pagou este mês'],
+            ] as const).map(([type, label, desc]) => (
+              <button key={type} onClick={() => setNotifType(type)}
+                className="flex items-start gap-3 p-3 rounded-2xl text-left transition-all"
+                style={{ background: notifType === type ? 'var(--color-surface-accent-light)' : 'var(--color-surface-secondary)', border: notifType === type ? '1.5px solid var(--color-fg-accent-light)' : '1.5px solid transparent' }}>
+                <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
+                  style={{ borderColor: notifType === type ? 'var(--color-fg-accent)' : 'var(--color-fg-secondary)', background: notifType === type ? 'var(--color-fg-accent)' : 'transparent' }}>
+                  {notifType === type && <div className="w-2 h-2 rounded-full bg-white" />}
+                </div>
+                <div>
+                  <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>{label}</p>
+                  <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>{desc}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <input type="text" placeholder="Mensagem personalizada (opcional)" value={notifMessage}
             onChange={e => setNotifMessage(e.target.value)} style={inputStyle} />
           <button onClick={() => sendNotification.mutate()} disabled={sendNotification.isPending}
             className="w-full py-4 font-medium transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2"
