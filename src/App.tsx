@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from './lib/firebase'
 import { useAuthStore } from './store/authStore'
@@ -44,6 +44,9 @@ export default function App() {
 
   if (!user) return <LoginPage />
 
+  const location = useLocation()
+  const hideNav = ['/escalacao', '/admin/notificacoes'].includes(location.pathname)
+
   return (
     <div className="flex flex-col flex-1">
       <main className="flex-1 overflow-y-auto">
@@ -59,7 +62,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/games" replace />} />
         </Routes>
       </main>
-      <BottomNav />
+      {!hideNav && <BottomNav />}
     </div>
   )
 }
