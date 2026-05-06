@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import type { Attendance, Profile } from '../types'
 
 const MIN_PLAYERS = 6
-const MAX_PLAYERS = 7
+const MAX_PLAYERS = 8
 
 function getNextWednesdayId(): string {
   const today = startOfDay(new Date())
@@ -198,7 +198,7 @@ export default function EscalacaoPage() {
             return (
               <button key={team} onClick={() => setActiveTeam(team)}
                 className="flex-1 flex items-center gap-2 px-4 py-2 rounded-2xl transition-all"
-                style={{ background: isActive ? 'var(--color-surface-white)' : 'transparent', justifyContent: team === 'black' ? 'flex-end' : 'flex-start' }}>
+                style={{ background: isActive ? 'var(--color-tab-selected-bg)' : 'transparent', justifyContent: team === 'black' ? 'flex-end' : 'flex-start' }}>
                 <img src={img} alt={label} width={24} height={24} style={{ objectFit: 'contain' }} />
                 <span style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>{label}</span>
               </button>
@@ -225,7 +225,7 @@ export default function EscalacaoPage() {
             <button key={p.id} onClick={() => togglePlayer(p.id)} disabled={inOtherTeam}
               className="w-full flex items-center gap-3 px-6 py-4 rounded-3xl transition-all active:scale-[0.99]"
               style={{
-                background: isSelected ? 'var(--color-surface-accent-light)' : 'var(--color-surface-primary)',
+                background: isSelected ? 'var(--color-surface-accent-light)' : 'var(--color-item-bg)',
                 border: isSelected ? '1.5px solid var(--color-fg-accent-light)' : '1.5px solid transparent',
                 opacity: inOtherTeam ? 0.4 : 1,
                 cursor: canToggle ? 'pointer' : 'default'

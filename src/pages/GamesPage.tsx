@@ -308,7 +308,7 @@ export default function GamesPage() {
               return (
                 <button key={team} onClick={() => setActiveTeam(team)}
                   className="flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-2xl transition-all"
-                  style={{ background: isActive ? 'var(--color-surface-white)' : 'transparent' }}>
+                  style={{ background: isActive ? 'var(--color-tab-selected-bg)' : 'transparent' }}>
                   <img src={img} alt={label} width={24} height={24} style={{ objectFit: 'contain' }} />
                   <span style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>{label}</span>
                 </button>
@@ -328,7 +328,7 @@ export default function GamesPage() {
                     style={{ background: 'var(--color-surface-white)', border: '2px solid var(--color-surface-secondary)', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                     {i + 1}
                   </div>
-                  <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+                  <p style={{ color: 'var(--color-item-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
                     {name}
                   </p>
                 </div>

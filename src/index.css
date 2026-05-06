@@ -48,11 +48,17 @@
   --radius-card: 24px;
   --radius-tag: 16px;
 
-  /* Bottom nav height â€” usado para padding dos botÃµes fixos */
+  /* Bottom nav height — usado para padding dos botões fixos */
   --bottom-nav-height: 80px;
   --color-number-bg: #efefef;
   --color-avatar-bg: #66d1ff;
   --color-avatar-fg: #082996;
+  --color-item-bg: #f8f8f8;
+  --color-tab-selected-bg: #ffffff;
+  --color-item-number-bg: #ffffff;
+  --color-item-number-border: #efefef;
+  --color-item-number-fg: #1a1a1a;
+  --color-item-fg: #1a1a1a;
   --color-number-fg: #1a1a1a;
   --color-number-border: #efefef;
   --color-info-bg: #e6f8ff;
@@ -81,6 +87,12 @@
     --color-number-bg: #1a1a1a;
     --color-avatar-bg: #66d1ff;
     --color-avatar-fg: #082996;
+    --color-item-bg: #1a1a1a;
+    --color-tab-selected-bg: #2a2a2a;
+    --color-item-number-bg: #1a1a1a;
+    --color-item-number-border: #8e8e93;
+    --color-item-number-fg: #ffffff;
+    --color-item-fg: #ffffff;
     --color-number-fg: #ffffff;
     --color-number-border: #8e8e93;
     --color-info-bg: #1a1a1a;
