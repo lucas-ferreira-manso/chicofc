@@ -4,13 +4,14 @@ import { collection, getDocs, query, where, doc, setDoc, getDoc } from 'firebase
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { useNavigate } from 'react-router-dom'
-import { CaretLeft } from '@phosphor-icons/react'
+import { CaretLeft, ShareNetwork, DownloadSimple } from '@phosphor-icons/react'
+import { useRef } from 'react'
 import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
 import { toast } from 'sonner'
 import type { Attendance, Profile } from '../types'
 
 const MIN_PLAYERS = 6
-const MAX_PLAYERS = 8
+const MAX_PLAYERS = 7
 
 function getNextWednesdayId(): string {
   const today = startOfDay(new Date())
@@ -41,26 +42,30 @@ export default function EscalacaoPage() {
   const user = useAuthStore(s => s.user)
   const qc = useQueryClient()
   const gameId = getNextWednesdayId()
+  const isAdmin = user?.role === 'admin'
   const [activeTeam, setActiveTeam] = useState<'blue' | 'black'>('blue')
   const [blueIds, setBlueIds] = useState<string[]>([])
   const [blackIds, setBlackIds] = useState<string[]>([])
   const [loaded, setLoaded] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const shareCardRef = useRef<HTMLDivElement>(null)
 
   const { data: players = [] } = useQuery({
     queryKey: ['confirmed', gameId],
     queryFn: () => fetchConfirmed(gameId)
   })
 
-  useQuery({
+  const { data: existingLineup } = useQuery({
     queryKey: ['lineup', gameId],
     queryFn: () => fetchLineup(gameId),
-    enabled: !loaded,
-    onSuccess: (data: { blue: string[]; black: string[] }) => {
-      setBlueIds(data.blue)
-      setBlackIds(data.black)
-      setLoaded(true)
-    }
-  } as any)
+  })
+
+  // Popula quando carrega pela primeira vez
+  if (existingLineup && !loaded) {
+    setBlueIds(existingLineup.blue || [])
+    setBlackIds(existingLineup.black || [])
+    setLoaded(true)
+  }
 
   const activeIds = activeTeam === 'blue' ? blueIds : blackIds
   const setActiveIds = (ids: string[]) => activeTeam === 'blue' ? setBlueIds(ids) : setBlackIds(ids)
@@ -82,7 +87,7 @@ export default function EscalacaoPage() {
     }
   }
 
-  const canSave = blueIds.length >= MIN_PLAYERS && blackIds.length >= MIN_PLAYERS
+  const canSave = isAdmin && blueIds.length >= MIN_PLAYERS && blackIds.length >= MIN_PLAYERS
 
   const saveLineup = useMutation({
     mutationFn: async () => {
@@ -100,6 +105,40 @@ export default function EscalacaoPage() {
     onError: () => toast.error('Erro ao salvar times')
   })
 
+  const handleShare = async () => {
+    if (!shareCardRef.current) return
+    setSharing(true)
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(shareCardRef.current, {
+        backgroundColor: null,
+        scale: 2,
+        useCORS: true,
+        logging: false
+      })
+      canvas.toBlob(async (blob) => {
+        if (!blob) return
+        const file = new File([blob], 'escalacao-chicofc.png', { type: 'image/png' })
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'Escalação ChicoFC ⚽' })
+        } else {
+          // Fallback: download direto
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = 'escalacao-chicofc.png'
+          a.click()
+          URL.revokeObjectURL(url)
+          toast.success('Imagem salva!')
+        }
+      }, 'image/png')
+    } catch (e) {
+      toast.error('Erro ao gerar imagem')
+    } finally {
+      setSharing(false)
+    }
+  }
+
   return (
     <div className="flex flex-col min-h-full pb-32" style={{ background: 'var(--color-bg)' }}>
 
@@ -109,9 +148,46 @@ export default function EscalacaoPage() {
         <button onClick={() => navigate('/games')} className="shrink-0">
           <CaretLeft size={24} color="var(--color-fg-primary)" />
         </button>
-        <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', fontWeight: 600, lineHeight: '28px' }}>
-          Escalar times
+        <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', fontWeight: 600, lineHeight: '28px', flex: 1 }}>
+          {isAdmin ? 'Escalar times' : 'Times escalados'}
         </p>
+        {canSave && (
+          <button onClick={handleShare} disabled={sharing} className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95"
+            style={{ background: 'var(--color-surface-primary)' }}>
+            {sharing ? <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--color-fg-accent)' }} /> : <ShareNetwork size={20} color="var(--color-fg-primary)" />}
+          </button>
+        )}
+      </div>
+
+      {/* Card compartilhável — capturado como imagem */}
+      <div ref={shareCardRef} style={{ position: 'absolute', left: '-9999px', top: 0, width: 390, padding: '24px', background: 'var(--color-bg)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+          <img src="/logo.png" alt="ChicoFC" width={32} height={32} style={{ borderRadius: 8 }} />
+          <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 20, fontWeight: 700 }}>ChicoFC ⚽</p>
+        </div>
+        {(['blue', 'black'] as const).map(team => {
+          const ids = team === 'blue' ? blueIds : blackIds
+          const label = team === 'blue' ? 'Time Azul' : 'Time Preto'
+          const img = team === 'blue' ? '/team-blue.png' : '/team-yellow.png'
+          return (
+            <div key={team} style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <img src={img} alt={label} width={20} height={20} />
+                <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 14, fontWeight: 600 }}>{label}</p>
+              </div>
+              {ids.map((uid, i) => {
+                const p = players.find(pl => pl.id === uid)
+                return (
+                  <div key={uid} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', marginBottom: 4, borderRadius: 12, background: 'var(--color-surface-primary)' }}>
+                    <span style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 13, width: 18 }}>{i + 1}</span>
+                    <span style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 14, fontWeight: 500 }}>{p?.name || p?.email || uid}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })}
+        <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 11, textAlign: 'center', marginTop: 12 }}>chicofc.vercel.app</p>
       </div>
 
       {/* Tabs */}
@@ -143,6 +219,7 @@ export default function EscalacaoPage() {
       <div className="px-6 flex flex-col gap-2 pb-4">
         {players.map(p => {
           const isSelected = activeIds.includes(p.id)
+          const canToggle = isAdmin
           const inOtherTeam = (activeTeam === 'blue' ? blackIds : blueIds).includes(p.id)
           return (
             <button key={p.id} onClick={() => togglePlayer(p.id)} disabled={inOtherTeam}
@@ -150,24 +227,28 @@ export default function EscalacaoPage() {
               style={{
                 background: isSelected ? 'var(--color-surface-accent-light)' : 'var(--color-surface-primary)',
                 border: isSelected ? '1.5px solid var(--color-fg-accent-light)' : '1.5px solid transparent',
-                opacity: inOtherTeam ? 0.4 : 1
+                opacity: inOtherTeam ? 0.4 : 1,
+                cursor: canToggle ? 'pointer' : 'default'
               }}>
               <div className="flex-1 text-left">
                 <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
                   {p.name || p.email}
                 </p>
               </div>
-              {/* Radio */}
-              <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all"
-                style={{ borderColor: isSelected ? 'var(--color-fg-accent-light)' : 'var(--color-fg-secondary)', background: isSelected ? 'var(--color-fg-accent-light)' : 'transparent' }}>
-                {isSelected && <div className="w-2 h-2 rounded-full" style={{ background: 'white' }} />}
-              </div>
+              {/* Radio — só para admin */}
+              {isAdmin && (
+                <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all"
+                  style={{ borderColor: isSelected ? 'var(--color-fg-accent-light)' : 'var(--color-fg-secondary)', background: isSelected ? 'var(--color-fg-accent-light)' : 'transparent' }}>
+                  {isSelected && <div className="w-2 h-2 rounded-full" style={{ background: 'white' }} />}
+                </div>
+              )}
             </button>
           )
         })}
       </div>
 
-      {/* Botão salvar */}
+      {/* Botão salvar — só admin */}
+      {isAdmin && (
       <div className="fixed inset-x-0 px-6 pt-4 pb-8"
         style={{ bottom: 0, background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
         <button onClick={() => saveLineup.mutate()} disabled={!canSave || saveLineup.isPending}
@@ -183,6 +264,7 @@ export default function EscalacaoPage() {
           {saveLineup.isPending ? 'Salvando...' : 'Salvar'}
         </button>
       </div>
+      )}
     </div>
   )
 }

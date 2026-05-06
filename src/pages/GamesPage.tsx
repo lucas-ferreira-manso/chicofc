@@ -5,7 +5,8 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { format, isAfter, nextWednesday, isWednesday, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Crown, BellRinging, CheckCircle } from '@phosphor-icons/react'
+import { Crown, BellRinging, CheckCircle, ShareNetwork } from '@phosphor-icons/react'
+import { useRef } from 'react'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 import type { Attendance } from '../types'
@@ -59,6 +60,33 @@ export default function GamesPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const [activeTeam, setActiveTeam] = useState<'blue' | 'black'>('blue')
+  const [sharing, setSharing] = useState(false)
+  const shareCardRef = useRef<HTMLDivElement>(null)
+
+  const handleShare = async () => {
+    if (!shareCardRef.current) return
+    setSharing(true)
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(shareCardRef.current, {
+        backgroundColor: '#ffffff', scale: 2, useCORS: true, logging: false
+      })
+      canvas.toBlob(async (blob) => {
+        if (!blob) return
+        const file = new File([blob], 'escalacao-chicofc.png', { type: 'image/png' })
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'Escalação ChicoFC ⚽' })
+        } else {
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url; a.download = 'escalacao-chicofc.png'; a.click()
+          URL.revokeObjectURL(url)
+          toast.success('Imagem salva!')
+        }
+      }, 'image/png')
+    } catch { toast.error('Erro ao gerar imagem') }
+    finally { setSharing(false) }
+  }
 
   const gameDate = getNextWednesday()
   const gameId = getGameId(gameDate)
@@ -274,13 +302,13 @@ export default function GamesPage() {
           )}
 
           {/* Tabs times */}
-          <div className="mx-6 mb-3 p-2 flex gap-3 rounded-[20px]" style={{ background: 'var(--color-surface-secondary)' }}>
+          <div className="mx-6 mb-3 p-2 flex gap-4 rounded-[20px]" style={{ background: 'var(--color-surface-secondary)' }}>
             {([['blue', 'Time Azul', '/team-blue.png'], ['black', 'Time Preto', '/team-yellow.png']] as const).map(([team, label, img]) => {
               const isActive = activeTeam === team
               return (
                 <button key={team} onClick={() => setActiveTeam(team)}
-                  className="flex-1 flex items-center gap-2 px-4 py-2 rounded-2xl transition-all"
-                  style={{ background: isActive ? 'var(--color-surface-white)' : 'transparent', justifyContent: team === 'black' ? 'flex-end' : 'flex-start' }}>
+                  className="flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-2xl transition-all"
+                  style={{ background: isActive ? 'var(--color-surface-white)' : 'transparent' }}>
                   <img src={img} alt={label} width={24} height={24} style={{ objectFit: 'contain' }} />
                   <span style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>{label}</span>
                 </button>
@@ -366,20 +394,62 @@ export default function GamesPage() {
         </div>
       ))}
 
-      {/* Botão fixo — Escalar times (admin, lista fechada, sem lineup) ou Editar (admin, com lineup) */}
-      {isAdmin && listaClosed && (
-        <div className="fixed inset-x-0 px-6 pt-4 pb-3"
-          style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
-          <button onClick={() => navigate('/escalacao')}
-            className="w-full py-4 font-medium transition-all active:scale-95"
-            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
-            {hasLineup ? 'Editar times' : 'Escalar times'}
-          </button>
+      {/* Card oculto para compartilhar */}
+      {hasLineup && (
+        <div ref={shareCardRef} style={{ position: 'absolute', left: '-9999px', top: 0, width: 390, padding: '24px', background: '#ffffff' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+            <img src="/logo.png" alt="ChicoFC" width={32} height={32} style={{ borderRadius: 8 }} />
+            <p style={{ fontFamily: 'var(--font-primary)', fontSize: 20, fontWeight: 700, color: '#1a1a1a' }}>ChicoFC ⚽</p>
+          </div>
+          {(['blue', 'black'] as const).map(team => {
+            const ids = team === 'blue' ? lineup.blue : lineup.black
+            const label = team === 'blue' ? 'Time Azul' : 'Time Preto'
+            const img = team === 'blue' ? '/team-blue.png' : '/team-yellow.png'
+            return (
+              <div key={team} style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <img src={img} alt={label} width={20} height={20} />
+                  <p style={{ fontFamily: 'var(--font-primary)', fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>{label}</p>
+                </div>
+                {ids.map((uid, i) => {
+                  const att = confirmed.find(a => a.user_id === uid)
+                  const name = (att as any)?.profile?.name || (att as any)?.profile?.email || uid
+                  return (
+                    <div key={uid} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', marginBottom: 4, borderRadius: 12, background: '#f8f8f8' }}>
+                      <span style={{ fontFamily: 'var(--font-primary)', fontSize: 13, color: '#8e8e93', width: 18 }}>{i + 1}</span>
+                      <span style={{ fontFamily: 'var(--font-primary)', fontSize: 14, fontWeight: 500, color: '#1a1a1a' }}>{name}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+          <p style={{ fontFamily: 'var(--font-primary)', fontSize: 11, color: '#8e8e93', textAlign: 'center', marginTop: 12 }}>chicofc.vercel.app</p>
         </div>
       )}
 
-      {/* Botões fixos — Bora Jogar / Muié não deixa (lista aberta, não confirmado) */}
-      {!listaClosed && !amConfirmed && !amInWaitlist && (
+      {/* Botões fixos — Escalar / Editar + Compartilhar */}
+      {isAdmin && (isFull || listaClosed || hasLineup) && (
+        <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
+          style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
+          <button onClick={() => navigate('/escalacao')}
+            className="flex-1 py-4 font-medium transition-all active:scale-95"
+            style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+            {hasLineup ? 'Editar Times' : 'Escalar Times'}
+          </button>
+          {hasLineup && (
+            <button onClick={handleShare} disabled={sharing}
+              className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2"
+              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+              {sharing ? <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'white' }} /> : <ShareNetwork size={18} />}
+              {sharing ? 'Gerando...' : 'Compartilhar'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Botões fixos — Bora Jogar / Muié não deixa (lista aberta, não cheia, não confirmado) */}
+      {!listaClosed && !isFull && !amConfirmed && !amInWaitlist && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
           <button

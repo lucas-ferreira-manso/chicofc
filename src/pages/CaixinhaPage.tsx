@@ -5,8 +5,7 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { CheckCircle2, Circle } from 'lucide-react'
-import { Copy, Check, PencilSimple, X, CheckCircle } from '@phosphor-icons/react'
+import { Copy, Check, PencilSimple, X, CheckCircle, Circle } from '@phosphor-icons/react'
 import Header from '../components/layout/Header'
 import { toast } from 'sonner'
 import type { Payment, Profile } from '../types'
@@ -395,7 +394,7 @@ function PaymentRow({ payment, onToggle, isAdmin }: { payment: Payment; onToggle
     <button onClick={isAdmin ? onToggle : undefined}
       className="w-full flex items-center gap-3 p-4 rounded-3xl transition-all active:scale-[0.99]"
       style={{ background: 'var(--color-surface-primary)', cursor: isAdmin ? 'pointer' : 'default' }}>
-      {payment.paid ? <CheckCircle2 size={22} color="var(--color-success)" /> : <Circle size={22} color="var(--color-fg-secondary)" />}
+      {payment.paid ? <CheckCircle size={22} weight="fill" color="var(--color-success)" /> : <Circle size={22} color="var(--color-fg-secondary)" />}
       <div className="flex-1 text-left">
         <p className="font-medium" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>{name}</p>
         <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
