@@ -23,10 +23,12 @@ export default function ProfilePage() {
   const [name, setName] = useState(user?.name ?? '')
   const [newPassword, setNewPassword] = useState('')
   const [uploading, setUploading] = useState(false)
+  // Estado local só para forçar re-render imediato da foto
+  const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Lê sempre do store — nunca perde após navegação
-  const avatarUrl = user?.photoURL ?? null
+  // Prioriza o estado local (recém feito upload), senão usa o do store
+  const avatarUrl = localAvatarUrl ?? user?.photoURL ?? null
 
   const initials = (user?.name || user?.email || '?')
     .split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
@@ -51,7 +53,6 @@ export default function ProfilePage() {
       )
 
       const data = await response.json()
-      console.log('Cloudinary response:', data)
 
       if (!response.ok) {
         throw new Error(data.error?.message || 'Falha no upload')
@@ -59,11 +60,14 @@ export default function ProfilePage() {
 
       const url = data.secure_url
 
+      // Atualiza imediatamente na tela
+      setLocalAvatarUrl(url)
+
       // Salva no Firestore
       await updateDoc(doc(db, 'players', user.id), { photoURL: url })
 
-      // Atualiza o store — a UI reage automaticamente
-      setUser({ ...user, photoURL: url })
+      // Atualiza o store com objeto novo (força re-render)
+      setUser(Object.assign({}, user, { photoURL: url }))
 
       toast.success('Foto atualizada!')
     } catch (e) {
@@ -78,7 +82,7 @@ export default function ProfilePage() {
   const updateName = useMutation({
     mutationFn: async () => { await updateDoc(doc(db, 'players', user!.id), { name }) },
     onSuccess: () => {
-      setUser({ ...user!, name })
+      setUser(Object.assign({}, user, { name }))
       toast.success('Nome atualizado!')
       setShowNameForm(false)
     }
