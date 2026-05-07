@@ -20,6 +20,32 @@ function getNextWednesdayId(): string {
   return format(wed, 'yyyy-MM-dd')
 }
 
+function getInitials(name: string): string {
+  return name
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(n => n[0].toUpperCase())
+    .join('')
+}
+
+function Avatar({ name, photoURL }: { name: string; photoURL?: string }) {
+  const initials = getInitials(name)
+  return (
+    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden"
+      style={{ background: photoURL ? 'transparent' : 'var(--color-avatar-bg)' }}>
+      {photoURL ? (
+        <img src={photoURL} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      ) : (
+        <span style={{ color: 'var(--color-avatar-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 700 }}>
+          {initials}
+        </span>
+      )}
+    </div>
+  )
+}
+
 async function fetchPlayers(): Promise<Profile[]> {
   const snap = await getDocs(collection(db, 'players'))
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as Profile))
@@ -177,8 +203,6 @@ export default function AdminPage() {
           <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>
             Enviar notificação
           </p>
-
-          {/* Seletor de tipo */}
           <div className="flex flex-col gap-2">
             {([
               ['presenca', 'Confirmar presença', 'Para quem ainda não respondeu ao jogo desta quarta'],
@@ -198,7 +222,6 @@ export default function AdminPage() {
               </button>
             ))}
           </div>
-
           <input type="text" placeholder="Mensagem personalizada (opcional)" value={notifMessage}
             onChange={e => setNotifMessage(e.target.value)} style={inputStyle} />
           <button onClick={() => sendNotification.mutate()} disabled={sendNotification.isPending}
@@ -240,32 +263,38 @@ export default function AdminPage() {
         <div className="flex justify-center py-8"><div className="text-4xl animate-spin">⚽</div></div>
       ) : (
         <div className="px-6 flex flex-col gap-2">
-          {players.map(player => (
-            <div key={player.id} className="flex items-center gap-3 p-4 rounded-3xl"
-              style={{ background: 'var(--color-surface-primary)', opacity: player.active ? 1 : 0.5 }}>
-              <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0"
-                style={{ background: 'var(--color-avatar-bg)', color: 'var(--color-avatar-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-                {(player.name || player.email || '?')[0].toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <p className="font-medium truncate" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>{player.name || 'Sem nome'}</p>
-                  {player.role === 'admin' && <Crown size={12} color="#f59e0b" />}
+          {players.map(player => {
+            const name = player.name || player.email || '?'
+            const photoURL = (player as any).photoURL
+            return (
+              <div key={player.id} className="flex items-center gap-3 p-4 rounded-3xl"
+                style={{ background: 'var(--color-surface-primary)', opacity: player.active ? 1 : 0.5 }}>
+
+                <Avatar name={name} photoURL={photoURL} />
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-medium truncate" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                      {player.name || 'Sem nome'}
+                    </p>
+                    {player.role === 'admin' && <Crown size={12} color="#f59e0b" />}
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="px-2 py-0.5 rounded-full text-xs"
+                      style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent-light)', fontFamily: 'var(--font-primary)' }}>
+                      {player.player_type}
+                    </span>
+                    <p className="text-xs truncate" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)' }}>{player.email}</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="px-2 py-0.5 rounded-full text-xs"
-                    style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent-light)', fontFamily: 'var(--font-primary)' }}>
-                    {player.player_type}
-                  </span>
-                  <p className="text-xs truncate" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)' }}>{player.email}</p>
-                </div>
+
+                <button onClick={() => toggleActive.mutate({ id: player.id, active: player.active })}
+                  style={{ color: player.active ? 'var(--color-success)' : 'var(--color-fg-secondary)' }}>
+                  {player.active ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
+                </button>
               </div>
-              <button onClick={() => toggleActive.mutate({ id: player.id, active: player.active })}
-                style={{ color: player.active ? 'var(--color-success)' : 'var(--color-fg-secondary)' }}>
-                {player.active ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
-              </button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
