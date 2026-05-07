@@ -41,23 +41,22 @@ export default function ProfilePage() {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
-      formData.append('public_id', `avatars/${user.id}`)
-      formData.append('overwrite', 'true')
+      // sem subpasta no public_id — alguns presets unsigned bloqueiam "/"
+      formData.append('public_id', `avatar_${user.id}`)
 
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
         { method: 'POST', body: formData }
       )
 
+      const data = await response.json()
+      console.log('Cloudinary response:', data)
+
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error('Cloudinary error:', errorData)
-        throw new Error(errorData.error?.message || 'Falha no upload')
+        throw new Error(data.error?.message || 'Falha no upload')
       }
 
-      const data = await response.json()
       const url = data.secure_url
-
       await updateDoc(doc(db, 'players', user.id), { photoURL: url })
       setAvatarUrl(url)
       if (setUser) setUser({ ...user, photoURL: url })
