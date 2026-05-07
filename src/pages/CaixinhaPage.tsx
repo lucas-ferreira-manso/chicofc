@@ -33,15 +33,17 @@ async function fetchPayments(): Promise<Payment[]> {
 
 interface CaixinhaConfig {
   quadraCost: number
+  extrasCost: number
   mensalistaValue: number
   avulsoValue: number
 }
 
 async function fetchConfig(): Promise<CaixinhaConfig> {
   const snap = await getDoc(doc(db, 'config', 'caixinha'))
-  if (!snap.exists()) return { quadraCost: 760, mensalistaValue: 80, avulsoValue: 22 }
+  if (!snap.exists()) return { quadraCost: 760, extrasCost: 0, mensalistaValue: 80, avulsoValue: 22 }
   return {
     quadraCost: snap.data().quadraCost ?? 760,
+    extrasCost: snap.data().extrasCost ?? 0,
     mensalistaValue: snap.data().mensalistaValue ?? 80,
     avulsoValue: snap.data().avulsoValue ?? 22
   }
@@ -61,7 +63,7 @@ async function fetchMyPaymentRequest(userId: string) {
   return { id: snap.docs[0].id, ...snap.docs[0].data() }
 }
 
-type EditField = 'quadra' | 'mensalista' | 'avulso' | null
+type EditField = 'quadra' | 'extras' | 'mensalista' | 'avulso' | null
 
 export default function CaixinhaPage() {
   const qc = useQueryClient()
@@ -102,7 +104,7 @@ export default function CaixinhaPage() {
   const saveField = useMutation({
     mutationFn: async () => {
       const value = parseFloat(editValue) || 0
-      const fieldMap: Record<string, string> = { quadra: 'quadraCost', mensalista: 'mensalistaValue', avulso: 'avulsoValue' }
+      const fieldMap: Record<string, string> = { quadra: 'quadraCost', extras: 'extrasCost', mensalista: 'mensalistaValue', avulso: 'avulsoValue' }
       await setDoc(doc(db, 'config', 'caixinha'), { [fieldMap[editingField!]]: value }, { merge: true })
     },
     onSuccess: () => {
@@ -190,9 +192,10 @@ export default function CaixinhaPage() {
   const mensalistaPendingFromRequests = pendingRequests.filter(r => r.player_type === 'mensalista').reduce((s: number, r: any) => s + r.amount, 0)
   const mensalistaPending = mensalistaPendingFromPayments + mensalistaPendingFromRequests
   const quadraCost = config?.quadraCost ?? 760
+  const extrasCost = config?.extrasCost ?? 0
   const mensalistaValue = config?.mensalistaValue ?? 80
   const avulsoValue = config?.avulsoValue ?? 22
-  const saldoTotal = SALDO_INICIAL + avulsoPaid + mensalistaPaid - totalDespesas
+  const saldoTotal = SALDO_INICIAL + avulsoPaid + mensalistaPaid - totalDespesas - extrasCost
 
   const byMonth = mensalidadePayments.reduce((acc, p) => {
     if (!acc[p.month]) acc[p.month] = []
@@ -250,7 +253,8 @@ export default function CaixinhaPage() {
             <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Saldo Total</p>
             <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>R$ {saldoTotal.toFixed(2)}</p>
           </div>
-          <EditableRow field="quadra" label="Despesa Quadra e Goleiros" value={quadraCost} />
+          <EditableRow field="quadra" label="Despesa Quadra" value={quadraCost} />
+          <EditableRow field="extras" label="Despesas Extras" value={extrasCost} />
           <div className="flex gap-5">
             <div className="flex-1 flex flex-col gap-0.5">
               <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Mensalista Recebido</p>
@@ -352,7 +356,7 @@ export default function CaixinhaPage() {
 
         {(jogoPayments.length > 0 || Object.keys(byMonth).length > 0) && <div style={{ height: 1, background: 'var(--color-border)' }} />}
 
-        {jogoPayments.length > 0 && (
+        {jogoPayments.length > 0 && !playerData?.player_type?.includes('avulso') && (
           <section>
             <p className="font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>Por jogo — avulsos</p>
             <div className="flex flex-col gap-2">
@@ -361,7 +365,7 @@ export default function CaixinhaPage() {
           </section>
         )}
 
-        {Object.entries(byMonth).map(([monthKey, monthPayments]) => {
+        {playerData?.player_type !== 'avulso' && Object.entries(byMonth).map(([monthKey, monthPayments]) => {
           const [year, m] = monthKey.split('-')
           const label = format(new Date(Number(year), Number(m) - 1, 1), 'MMMM yyyy', { locale: ptBR })
           return (
