@@ -8,7 +8,7 @@ import { CaretLeft, ShareNetwork } from '@phosphor-icons/react'
 import { useRef } from 'react'
 import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
 import { toast } from 'sonner'
-import type { Attendance, Profile } from '../types'
+import type { Profile } from '../types'
 
 const MIN_PLAYERS = 6
 const MAX_PLAYERS = 8
@@ -27,6 +27,32 @@ function getInitials(name: string): string {
     .slice(0, 2)
     .map(n => n[0].toUpperCase())
     .join('')
+}
+
+function Avatar({ name, photoURL, bgSelected = false }: {
+  name: string
+  photoURL?: string
+  bgSelected?: boolean
+}) {
+  const initials = getInitials(name)
+  return (
+    <div
+      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden"
+      style={{ background: photoURL ? 'transparent' : bgSelected ? 'var(--color-fg-accent-light)' : 'var(--color-surface-quaternary)' }}>
+      {photoURL ? (
+        <img src={photoURL} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      ) : (
+        <span style={{
+          color: bgSelected ? 'white' : 'var(--color-fg-primary)',
+          fontFamily: 'var(--font-primary)',
+          fontSize: 14,
+          fontWeight: 500
+        }}>
+          {initials}
+        </span>
+      )}
+    </div>
+  )
 }
 
 async function fetchConfirmed(gameId: string): Promise<Profile[]> {
@@ -233,7 +259,7 @@ export default function EscalacaoPage() {
           const isSelected = activeIds.includes(p.id)
           const inOtherTeam = (activeTeam === 'blue' ? blackIds : blueIds).includes(p.id)
           const name = p.name || p.email || 'Jogador'
-          const initials = getInitials(name)
+          const photoURL = (p as any).photoURL
 
           return (
             <button key={p.id} onClick={() => togglePlayer(p.id)} disabled={inOtherTeam}
@@ -245,18 +271,7 @@ export default function EscalacaoPage() {
                 cursor: isAdmin ? 'pointer' : 'default'
               }}>
 
-              {/* Avatar */}
-              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden"
-                style={{ background: isSelected ? 'var(--color-fg-accent-light)' : 'var(--color-surface-quaternary)' }}>
-                <span style={{
-                  color: isSelected ? 'white' : 'var(--color-fg-primary)',
-                  fontFamily: 'var(--font-primary)',
-                  fontSize: 'var(--font-size-14)',
-                  fontWeight: 500
-                }}>
-                  {initials}
-                </span>
-              </div>
+              <Avatar name={name} photoURL={photoURL} bgSelected={isSelected} />
 
               <p className="flex-1 text-left" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
                 {name}

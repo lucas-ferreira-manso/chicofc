@@ -45,6 +45,32 @@ function getInitials(name: string): string {
     .join('')
 }
 
+function Avatar({ name, photoURL, bgSelected = false }: {
+  name: string
+  photoURL?: string
+  bgSelected?: boolean
+}) {
+  const initials = getInitials(name)
+  return (
+    <div
+      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden"
+      style={{ background: photoURL ? 'transparent' : bgSelected ? 'var(--color-fg-accent-light)' : 'var(--color-surface-quaternary)' }}>
+      {photoURL ? (
+        <img src={photoURL} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      ) : (
+        <span style={{
+          color: bgSelected ? 'white' : 'var(--color-fg-primary)',
+          fontFamily: 'var(--font-primary)',
+          fontSize: 14,
+          fontWeight: 500
+        }}>
+          {initials}
+        </span>
+      )}
+    </div>
+  )
+}
+
 async function fetchLineup(gameId: string): Promise<{ blue: string[]; black: string[] }> {
   const snap = await getDoc(doc(db, 'lineups', gameId))
   if (!snap.exists()) return { blue: [], black: [] }
@@ -322,16 +348,11 @@ export default function GamesPage() {
             {(activeTeam === 'blue' ? lineup.blue : lineup.black).map((uid) => {
               const att = confirmed.find(a => a.user_id === uid)
               const name = att?.profile?.name || att?.profile?.email || uid
-              const initials = getInitials(name)
+              const photoURL = (att?.profile as any)?.photoURL
               return (
                 <div key={uid} className="flex items-center gap-3 px-4 py-4 rounded-3xl"
                   style={{ background: 'var(--color-surface-primary)' }}>
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden"
-                    style={{ background: 'var(--color-surface-quaternary)' }}>
-                    <span style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
-                      {initials}
-                    </span>
-                  </div>
+                  <Avatar name={name} photoURL={photoURL} />
                   <p style={{ color: 'var(--color-item-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
                     {name}
                   </p>
@@ -480,7 +501,7 @@ function PlayerRow({ attendance, index, isMe, waitlist = false }: {
   attendance: Attendance; index: number; isMe: boolean; waitlist?: boolean
 }) {
   const name = (attendance.profile as any)?.name || (attendance.profile as any)?.email || 'Jogador'
-  const initials = getInitials(name)
+  const photoURL = (attendance.profile as any)?.photoURL
 
   return (
     <div className="flex items-center gap-3 p-4 rounded-3xl"
@@ -490,16 +511,14 @@ function PlayerRow({ attendance, index, isMe, waitlist = false }: {
         border: isMe ? '1.5px solid var(--color-fg-accent-light)' : '1.5px solid transparent'
       }}>
 
-      {/* Avatar com iniciais */}
-      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden"
-        style={{ background: waitlist ? 'var(--color-surface-secondary)' : 'var(--color-surface-quaternary)' }}>
-        {waitlist
-          ? <span style={{ fontSize: 14 }}>⏳</span>
-          : <span style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
-              {initials}
-            </span>
-        }
-      </div>
+      {waitlist ? (
+        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+          style={{ background: 'var(--color-surface-secondary)' }}>
+          <span style={{ fontSize: 14 }}>⏳</span>
+        </div>
+      ) : (
+        <Avatar name={name} photoURL={photoURL} />
+      )}
 
       <p className="flex-1 font-medium truncate"
         style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
