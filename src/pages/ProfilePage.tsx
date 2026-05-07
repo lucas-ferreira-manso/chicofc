@@ -38,7 +38,6 @@ export default function ProfilePage() {
 
     setUploading(true)
     try {
-      // Upload para Cloudinary
       const formData = new FormData()
       formData.append('file', file)
       formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
@@ -50,12 +49,15 @@ export default function ProfilePage() {
         { method: 'POST', body: formData }
       )
 
-      if (!response.ok) throw new Error('Falha no upload')
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('Cloudinary error:', errorData)
+        throw new Error(errorData.error?.message || 'Falha no upload')
+      }
 
       const data = await response.json()
       const url = data.secure_url
 
-      // Salva URL no Firestore
       await updateDoc(doc(db, 'players', user.id), { photoURL: url })
       setAvatarUrl(url)
       if (setUser) setUser({ ...user, photoURL: url })
@@ -99,7 +101,6 @@ export default function ProfilePage() {
       <Header title="Atleta" />
       <div style={{ height: 80 }} />
 
-      {/* Input oculto para upload */}
       <input
         ref={fileInputRef}
         type="file"
@@ -113,7 +114,6 @@ export default function ProfilePage() {
         <div className="flex flex-col items-center gap-4 px-5 py-6 rounded-[20px]"
           style={{ background: 'var(--color-surface-primary)' }}>
 
-          {/* Avatar */}
           <div className="relative w-[98px] h-[98px]">
             <div className="w-[98px] h-[98px] rounded-full flex items-center justify-center overflow-hidden"
               style={{ background: 'var(--color-avatar-bg)' }}>
@@ -134,7 +134,6 @@ export default function ProfilePage() {
             )}
           </div>
 
-          {/* Editar foto */}
           <button onClick={handleAvatarTap} disabled={uploading}
             className="flex items-center gap-2 transition-all active:scale-95 disabled:opacity-40">
             <PencilSimple size={16} color="var(--color-fg-primary)" />
@@ -143,12 +142,10 @@ export default function ProfilePage() {
             </p>
           </button>
 
-          {/* Nome */}
           <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', fontWeight: 600, lineHeight: '28px', textAlign: 'center', width: '100%' }}>
             {user?.name || 'Sem nome'}
           </p>
 
-          {/* Tags */}
           <div className="flex items-center gap-2.5">
             <span className="px-4 py-2 rounded-full font-semibold"
               style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent-light)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
@@ -166,7 +163,6 @@ export default function ProfilePage() {
         <div style={{ height: 1, background: 'var(--color-border)' }} />
 
         <div className="flex flex-col gap-2 py-2">
-          {/* Trocar Nome */}
           <button onClick={() => { setShowNameForm(!showNameForm); setShowPasswordForm(false) }}
             className="w-full flex items-center justify-between px-5 py-4 rounded-3xl transition-all active:scale-[0.99]"
             style={{ background: 'var(--color-surface-primary)', height: 64 }}>
@@ -185,7 +181,6 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Trocar Senha */}
           <button onClick={() => { setShowPasswordForm(!showPasswordForm); setShowNameForm(false); setShowPassword(false) }}
             className="w-full flex items-center justify-between px-5 py-4 rounded-3xl transition-all active:scale-[0.99]"
             style={{ background: 'var(--color-surface-primary)', height: 64 }}>
