@@ -2,14 +2,16 @@ import { useState, useRef } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { doc, updateDoc } from 'firebase/firestore'
 import { updatePassword, getAuth } from 'firebase/auth'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage } from '../lib/firebase'
+import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
 import { CaretRight, Eye, EyeSlash, PencilSimple } from '@phosphor-icons/react'
 import Header from '../components/layout/Header'
 
 const auth = getAuth()
+
+const CLOUDINARY_CLOUD_NAME = 'drbxsij7y'
+const CLOUDINARY_UPLOAD_PRESET = 'chico-preset'
 
 export default function ProfilePage() {
   const user = useAuthStore(s => s.user)
@@ -36,14 +38,30 @@ export default function ProfilePage() {
 
     setUploading(true)
     try {
-      const storageRef = ref(storage, `avatars/${user.id}`)
-      await uploadBytes(storageRef, file)
-      const url = await getDownloadURL(storageRef)
+      // Upload para Cloudinary
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
+      formData.append('public_id', `avatars/${user.id}`)
+      formData.append('overwrite', 'true')
+
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        { method: 'POST', body: formData }
+      )
+
+      if (!response.ok) throw new Error('Falha no upload')
+
+      const data = await response.json()
+      const url = data.secure_url
+
+      // Salva URL no Firestore
       await updateDoc(doc(db, 'players', user.id), { photoURL: url })
       setAvatarUrl(url)
       if (setUser) setUser({ ...user, photoURL: url })
       toast.success('Foto atualizada!')
     } catch (e) {
+      console.error('Erro upload avatar:', e)
       toast.error('Erro ao enviar foto. Tente novamente.')
     } finally {
       setUploading(false)
