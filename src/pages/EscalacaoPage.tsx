@@ -4,7 +4,7 @@ import { collection, getDocs, query, where, doc, setDoc, getDoc } from 'firebase
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { useNavigate } from 'react-router-dom'
-import { CaretLeft, ShareNetwork, DownloadSimple } from '@phosphor-icons/react'
+import { CaretLeft, ShareNetwork } from '@phosphor-icons/react'
 import { useRef } from 'react'
 import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
 import { toast } from 'sonner'
@@ -17,6 +17,16 @@ function getNextWednesdayId(): string {
   const today = startOfDay(new Date())
   const wed = isWednesday(today) ? today : nextWednesday(today)
   return format(wed, 'yyyy-MM-dd')
+}
+
+function getInitials(name: string): string {
+  return name
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(n => n[0].toUpperCase())
+    .join('')
 }
 
 async function fetchConfirmed(gameId: string): Promise<Profile[]> {
@@ -60,7 +70,6 @@ export default function EscalacaoPage() {
     queryFn: () => fetchLineup(gameId),
   })
 
-  // Popula quando carrega pela primeira vez
   if (existingLineup && !loaded) {
     setBlueIds(existingLineup.blue || [])
     setBlackIds(existingLineup.black || [])
@@ -122,7 +131,6 @@ export default function EscalacaoPage() {
         if (navigator.share && navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file], title: 'Escalação ChicoFC ⚽' })
         } else {
-          // Fallback: download direto
           const url = URL.createObjectURL(blob)
           const a = document.createElement('a')
           a.href = url
@@ -152,14 +160,17 @@ export default function EscalacaoPage() {
           {isAdmin ? 'Escalar times' : 'Times escalados'}
         </p>
         {canSave && (
-          <button onClick={handleShare} disabled={sharing} className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95"
+          <button onClick={handleShare} disabled={sharing}
+            className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95"
             style={{ background: 'var(--color-surface-primary)' }}>
-            {sharing ? <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--color-fg-accent)' }} /> : <ShareNetwork size={20} color="var(--color-fg-primary)" />}
+            {sharing
+              ? <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--color-fg-accent)' }} />
+              : <ShareNetwork size={20} color="var(--color-fg-primary)" />}
           </button>
         )}
       </div>
 
-      {/* Card compartilhável — capturado como imagem */}
+      {/* Card compartilhável oculto */}
       <div ref={shareCardRef} style={{ position: 'absolute', left: '-9999px', top: 0, width: 390, padding: '24px', background: 'var(--color-bg)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
           <img src="/logo.png" alt="ChicoFC" width={32} height={32} style={{ borderRadius: 8 }} />
@@ -177,10 +188,11 @@ export default function EscalacaoPage() {
               </div>
               {ids.map((uid, i) => {
                 const p = players.find(pl => pl.id === uid)
+                const name = p?.name || p?.email || uid
                 return (
                   <div key={uid} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', marginBottom: 4, borderRadius: 12, background: 'var(--color-surface-primary)' }}>
                     <span style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 13, width: 18 }}>{i + 1}</span>
-                    <span style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 14, fontWeight: 500 }}>{p?.name || p?.email || uid}</span>
+                    <span style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 14, fontWeight: 500 }}>{name}</span>
                   </div>
                 )
               })}
@@ -219,26 +231,44 @@ export default function EscalacaoPage() {
       <div className="px-6 flex flex-col gap-2 pb-4">
         {players.map(p => {
           const isSelected = activeIds.includes(p.id)
-          const canToggle = isAdmin
           const inOtherTeam = (activeTeam === 'blue' ? blackIds : blueIds).includes(p.id)
+          const name = p.name || p.email || 'Jogador'
+          const initials = getInitials(name)
+
           return (
             <button key={p.id} onClick={() => togglePlayer(p.id)} disabled={inOtherTeam}
-              className="w-full flex items-center gap-3 px-6 py-4 rounded-3xl transition-all active:scale-[0.99]"
+              className="w-full flex items-center gap-3 px-4 py-4 rounded-3xl transition-all active:scale-[0.99]"
               style={{
-                background: isSelected ? 'var(--color-surface-accent-light)' : 'var(--color-item-bg)',
+                background: isSelected ? 'var(--color-surface-accent-light)' : 'var(--color-surface-primary)',
                 border: isSelected ? '1.5px solid var(--color-fg-accent-light)' : '1.5px solid transparent',
                 opacity: inOtherTeam ? 0.4 : 1,
-                cursor: canToggle ? 'pointer' : 'default'
+                cursor: isAdmin ? 'pointer' : 'default'
               }}>
-              <div className="flex-1 text-left">
-                <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
-                  {p.name || p.email}
-                </p>
+
+              {/* Avatar */}
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden"
+                style={{ background: isSelected ? 'var(--color-fg-accent-light)' : 'var(--color-surface-quaternary)' }}>
+                <span style={{
+                  color: isSelected ? 'white' : 'var(--color-fg-primary)',
+                  fontFamily: 'var(--font-primary)',
+                  fontSize: 'var(--font-size-14)',
+                  fontWeight: 500
+                }}>
+                  {initials}
+                </span>
               </div>
+
+              <p className="flex-1 text-left" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+                {name}
+              </p>
+
               {/* Radio — só para admin */}
               {isAdmin && (
                 <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all"
-                  style={{ borderColor: isSelected ? 'var(--color-fg-accent-light)' : 'var(--color-fg-secondary)', background: isSelected ? 'var(--color-fg-accent-light)' : 'transparent' }}>
+                  style={{
+                    borderColor: isSelected ? 'var(--color-fg-accent-light)' : 'var(--color-fg-secondary)',
+                    background: isSelected ? 'var(--color-fg-accent-light)' : 'transparent'
+                  }}>
                   {isSelected && <div className="w-2 h-2 rounded-full" style={{ background: 'white' }} />}
                 </div>
               )}
@@ -249,21 +279,21 @@ export default function EscalacaoPage() {
 
       {/* Botão salvar — só admin */}
       {isAdmin && (
-      <div className="fixed inset-x-0 px-6 pt-4 pb-8"
-        style={{ bottom: 0, background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
-        <button onClick={() => saveLineup.mutate()} disabled={!canSave || saveLineup.isPending}
-          className="w-full py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-          style={{
-            background: canSave ? 'var(--btn-primary-bg)' : 'var(--color-surface-secondary)',
-            color: canSave ? 'var(--btn-primary-fg)' : 'var(--color-fg-secondary)',
-            borderRadius: 'var(--radius-pill)',
-            fontFamily: 'var(--font-primary)',
-            fontSize: 'var(--font-size-16)',
-            fontWeight: 500
-          }}>
-          {saveLineup.isPending ? 'Salvando...' : 'Salvar'}
-        </button>
-      </div>
+        <div className="fixed inset-x-0 px-6 pt-4 pb-8"
+          style={{ bottom: 0, background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
+          <button onClick={() => saveLineup.mutate()} disabled={!canSave || saveLineup.isPending}
+            className="w-full py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
+            style={{
+              background: canSave ? 'var(--btn-primary-bg)' : 'var(--color-surface-secondary)',
+              color: canSave ? 'var(--btn-primary-fg)' : 'var(--color-fg-secondary)',
+              borderRadius: 'var(--radius-pill)',
+              fontFamily: 'var(--font-primary)',
+              fontSize: 'var(--font-size-16)',
+              fontWeight: 500
+            }}>
+            {saveLineup.isPending ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
       )}
     </div>
   )
