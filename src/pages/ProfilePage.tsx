@@ -1,23 +1,55 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { doc, updateDoc } from 'firebase/firestore'
 import { updatePassword, getAuth } from 'firebase/auth'
-import { db } from '../lib/firebase'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db, storage } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
-import { CaretRight, Eye, EyeSlash } from '@phosphor-icons/react'
+import { CaretRight, Eye, EyeSlash, PencilSimple } from '@phosphor-icons/react'
 import Header from '../components/layout/Header'
 
 const auth = getAuth()
 
 export default function ProfilePage() {
   const user = useAuthStore(s => s.user)
+  const setUser = useAuthStore(s => s.setUser)
   const signOut = useAuthStore(s => s.signOut)
   const [showNameForm, setShowNameForm] = useState(false)
   const [showPasswordForm, setShowPasswordForm] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [name, setName] = useState(user?.name ?? '')
   const [newPassword, setNewPassword] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.photoURL ?? null)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const initials = (user?.name || user?.email || '?')
+    .split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
+
+  const handleAvatarTap = () => fileInputRef.current?.click()
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user?.id) return
+    if (file.size > 5 * 1024 * 1024) { toast.error('Foto muito grande. Máximo 5MB.'); return }
+
+    setUploading(true)
+    try {
+      const storageRef = ref(storage, `avatars/${user.id}`)
+      await uploadBytes(storageRef, file)
+      const url = await getDownloadURL(storageRef)
+      await updateDoc(doc(db, 'players', user.id), { photoURL: url })
+      setAvatarUrl(url)
+      if (setUser) setUser({ ...user, photoURL: url })
+      toast.success('Foto atualizada!')
+    } catch (e) {
+      toast.error('Erro ao enviar foto. Tente novamente.')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
 
   const updateName = useMutation({
     mutationFn: async () => { await updateDoc(doc(db, 'players', user!.id), { name }) },
@@ -32,9 +64,6 @@ export default function ProfilePage() {
     onSuccess: () => { toast.success('Senha alterada!'); setNewPassword(''); setShowPasswordForm(false) },
     onError: () => toast.error('Erro ao alterar. Faça login novamente.')
   })
-
-  const initials = (user?.name || user?.email || '?')
-    .split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
 
   const inputStyle: React.CSSProperties = {
     background: 'var(--color-surface-primary)',
@@ -52,19 +81,56 @@ export default function ProfilePage() {
       <Header title="Atleta" />
       <div style={{ height: 80 }} />
 
+      {/* Input oculto para upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+
       <div className="px-6 flex flex-col gap-4">
         {/* Card avatar */}
-        <div className="flex flex-col items-center gap-5 px-5 py-6 rounded-[20px]"
+        <div className="flex flex-col items-center gap-4 px-5 py-6 rounded-[20px]"
           style={{ background: 'var(--color-surface-primary)' }}>
-          <div className="w-[98px] h-[98px] rounded-full flex items-center justify-center"
-            style={{ background: 'var(--color-avatar-bg)' }}>
-            <p style={{ color: 'var(--color-avatar-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)', fontWeight: 700 }}>
-              {initials}
-            </p>
+
+          {/* Avatar */}
+          <div className="relative w-[98px] h-[98px]">
+            <div className="w-[98px] h-[98px] rounded-full flex items-center justify-center overflow-hidden"
+              style={{ background: 'var(--color-avatar-bg)' }}>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <p style={{ color: 'var(--color-avatar-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)', fontWeight: 700 }}>
+                  {initials}
+                </p>
+              )}
+            </div>
+            {uploading && (
+              <div className="absolute inset-0 rounded-full flex items-center justify-center"
+                style={{ background: 'rgba(0,0,0,0.4)' }}>
+                <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin"
+                  style={{ borderColor: 'white' }} />
+              </div>
+            )}
           </div>
+
+          {/* Editar foto */}
+          <button onClick={handleAvatarTap} disabled={uploading}
+            className="flex items-center gap-2 transition-all active:scale-95 disabled:opacity-40">
+            <PencilSimple size={16} color="var(--color-fg-primary)" />
+            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
+              Editar foto
+            </p>
+          </button>
+
+          {/* Nome */}
           <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', fontWeight: 600, lineHeight: '28px', textAlign: 'center', width: '100%' }}>
             {user?.name || 'Sem nome'}
           </p>
+
+          {/* Tags */}
           <div className="flex items-center gap-2.5">
             <span className="px-4 py-2 rounded-full font-semibold"
               style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent-light)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
