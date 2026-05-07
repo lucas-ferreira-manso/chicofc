@@ -22,9 +22,11 @@ export default function ProfilePage() {
   const [showPassword, setShowPassword] = useState(false)
   const [name, setName] = useState(user?.name ?? '')
   const [newPassword, setNewPassword] = useState('')
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.photoURL ?? null)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Lê sempre do store — nunca perde após navegação
+  const avatarUrl = user?.photoURL ?? null
 
   const initials = (user?.name || user?.email || '?')
     .split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
@@ -41,7 +43,6 @@ export default function ProfilePage() {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
-      // sem subpasta no public_id — alguns presets unsigned bloqueiam "/"
       formData.append('public_id', `avatar_${user.id}`)
 
       const response = await fetch(
@@ -57,9 +58,13 @@ export default function ProfilePage() {
       }
 
       const url = data.secure_url
+
+      // Salva no Firestore
       await updateDoc(doc(db, 'players', user.id), { photoURL: url })
-      setAvatarUrl(url)
-      if (setUser) setUser({ ...user, photoURL: url })
+
+      // Atualiza o store — a UI reage automaticamente
+      setUser({ ...user, photoURL: url })
+
       toast.success('Foto atualizada!')
     } catch (e) {
       console.error('Erro upload avatar:', e)
@@ -72,7 +77,11 @@ export default function ProfilePage() {
 
   const updateName = useMutation({
     mutationFn: async () => { await updateDoc(doc(db, 'players', user!.id), { name }) },
-    onSuccess: () => { toast.success('Nome atualizado!'); setShowNameForm(false) }
+    onSuccess: () => {
+      setUser({ ...user!, name })
+      toast.success('Nome atualizado!')
+      setShowNameForm(false)
+    }
   })
 
   const changePassword = useMutation({
