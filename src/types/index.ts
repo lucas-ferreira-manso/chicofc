@@ -6,6 +6,7 @@ export interface Profile {
   role: 'admin' | 'player'
   active: boolean
   created_at: string
+  photoURL?: string
 }
 
 export interface Game {

@@ -35,6 +35,16 @@ function isPriorityWindowOpen(gameDate: Date): boolean {
   return !isAfter(new Date(), getPriorityDeadline(gameDate))
 }
 
+function getInitials(name: string): string {
+  return name
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(n => n[0].toUpperCase())
+    .join('')
+}
+
 async function fetchLineup(gameId: string): Promise<{ blue: string[]; black: string[] }> {
   const snap = await getDoc(doc(db, 'lineups', gameId))
   if (!snap.exists()) return { blue: [], black: [] }
@@ -111,7 +121,6 @@ export default function GamesPage() {
   const amDeclined = myAttendance?.status === 'declined'
   const isAdmin = user?.role === 'admin'
 
-  // Lista fecha quarta às 17h
   const closeTime = new Date(gameDate)
   closeTime.setHours(17, 0, 0, 0)
   const listaClosed = isAfter(new Date(), closeTime)
@@ -125,13 +134,10 @@ export default function GamesPage() {
   const hasLineup = lineup.blue.length >= 6 && lineup.black.length >= 6
   const myTeam = lineup.blue.includes(user?.id ?? '') ? 'blue' : lineup.black.includes(user?.id ?? '') ? 'black' : null
 
-  // Confirmar presença
   const handleConfirm = useMutation({
     mutationFn: async () => {
       const batch = writeBatch(db)
-
       if (myAttendance) {
-        // Atualiza status existente
         batch.update(doc(db, 'attendances', myAttendance.id), { status: 'confirmed' })
       } else {
         const playerType = user!.player_type ?? 'avulso'
@@ -166,13 +172,10 @@ export default function GamesPage() {
     onError: () => toast.error('Erro ao confirmar presença')
   })
 
-  // Recusar / "Muié não deixa"
   const handleDecline = useMutation({
     mutationFn: async () => {
       const batch = writeBatch(db)
-
       if (myAttendance) {
-        // Se estava confirmado, promove próximo da espera
         if (myAttendance.status === 'confirmed' && waitlist.length > 0) {
           const next = waitlist[0]
           batch.update(doc(db, 'attendances', next.id), { status: 'confirmed' })
@@ -234,7 +237,6 @@ export default function GamesPage() {
         ) : undefined}
       />
 
-      {/* Spacer para compensar o header fixo */}
       <div style={{ height: 120 }} />
 
       {/* Counter + progress */}
@@ -258,7 +260,7 @@ export default function GamesPage() {
         </div>
       </div>
 
-      {/* Aviso prazo */}
+      {/* Aviso prazo mensalistas */}
       {priorityOpen && (
         <div className="mx-6 mb-4 px-4 flex items-center gap-2"
           style={{ background: 'var(--color-info-bg)', borderRadius: 8, paddingTop: 10, paddingBottom: 10 }}>
@@ -269,7 +271,7 @@ export default function GamesPage() {
         </div>
       )}
 
-      {/* Status */}
+      {/* Status do usuário */}
       {(amConfirmed || amInWaitlist || amDeclined) && (
         <div className="mx-6 mb-4 px-4 py-3 rounded-2xl flex items-center gap-2"
           style={{
@@ -290,7 +292,6 @@ export default function GamesPage() {
       {/* Times escalados */}
       {hasLineup && (
         <>
-          {/* Banner "Você está no Time X" */}
           {myTeam && (
             <div className="mx-6 mb-3 px-4 py-2.5 flex items-center gap-2 rounded-lg"
               style={{ background: 'var(--color-info-bg)' }}>
@@ -318,15 +319,18 @@ export default function GamesPage() {
 
           {/* Lista do time ativo */}
           <div className="px-6 flex flex-col gap-2">
-            {(activeTeam === 'blue' ? lineup.blue : lineup.black).map((uid, i) => {
+            {(activeTeam === 'blue' ? lineup.blue : lineup.black).map((uid) => {
               const att = confirmed.find(a => a.user_id === uid)
               const name = att?.profile?.name || att?.profile?.email || uid
+              const initials = getInitials(name)
               return (
                 <div key={uid} className="flex items-center gap-3 px-4 py-4 rounded-3xl"
                   style={{ background: 'var(--color-surface-primary)' }}>
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center font-semibold shrink-0"
-                    style={{ background: 'var(--color-surface-white)', border: '2px solid var(--color-surface-secondary)', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-                    {i + 1}
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden"
+                    style={{ background: 'var(--color-surface-quaternary)' }}>
+                    <span style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
+                      {initials}
+                    </span>
                   </div>
                   <p style={{ color: 'var(--color-item-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
                     {name}
@@ -428,7 +432,7 @@ export default function GamesPage() {
         </div>
       )}
 
-      {/* Botões fixos — Escalar / Editar + Compartilhar */}
+      {/* Botões fixos — Admin: Escalar / Compartilhar */}
       {isAdmin && (isFull || listaClosed || hasLineup) && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
@@ -448,7 +452,7 @@ export default function GamesPage() {
         </div>
       )}
 
-      {/* Botões fixos — Bora Jogar / Muié não deixa (lista aberta, não cheia, não confirmado) */}
+      {/* Botões fixos — Bora Jogar / Muié não deixa */}
       {!listaClosed && !isFull && !amConfirmed && !amInWaitlist && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
@@ -476,6 +480,8 @@ function PlayerRow({ attendance, index, isMe, waitlist = false }: {
   attendance: Attendance; index: number; isMe: boolean; waitlist?: boolean
 }) {
   const name = (attendance.profile as any)?.name || (attendance.profile as any)?.email || 'Jogador'
+  const initials = getInitials(name)
+
   return (
     <div className="flex items-center gap-3 p-4 rounded-3xl"
       style={{
@@ -483,17 +489,27 @@ function PlayerRow({ attendance, index, isMe, waitlist = false }: {
         opacity: waitlist ? 0.65 : 1,
         border: isMe ? '1.5px solid var(--color-fg-accent-light)' : '1.5px solid transparent'
       }}>
-      <div className="w-8 h-8 rounded-full flex items-center justify-center font-semibold shrink-0"
-        style={{ background: 'var(--color-number-bg)', border: '2px solid var(--color-number-border)', color: 'var(--color-number-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-        {waitlist ? '⏳' : index}
+
+      {/* Avatar com iniciais */}
+      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden"
+        style={{ background: waitlist ? 'var(--color-surface-secondary)' : 'var(--color-surface-quaternary)' }}>
+        {waitlist
+          ? <span style={{ fontSize: 14 }}>⏳</span>
+          : <span style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
+              {initials}
+            </span>
+        }
       </div>
-      <p className="flex-1 font-medium truncate" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+
+      <p className="flex-1 font-medium truncate"
+        style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
         {name}
         {isMe && <span className="ml-1" style={{ color: 'var(--color-fg-secondary)', fontSize: 'var(--font-size-14)' }}>(você)</span>}
       </p>
+
       {attendance.player_type === 'avulso' && !waitlist && (
         <span className="px-2 py-0.5 rounded-full text-xs font-medium"
-          style={{ background: '#e6f4ea', color: '#166534', fontFamily: 'var(--font-primary)' }}>
+          style={{ background: '#e6f4ea', color: '#166634', fontFamily: 'var(--font-primary)' }}>
           R$22
         </span>
       )}
