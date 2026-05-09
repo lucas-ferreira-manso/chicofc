@@ -111,6 +111,19 @@ export default function AdminPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['players'] }); toast.success('Atualizado!') }
   })
 
+  const togglePlayerType = useMutation({
+    mutationFn: async ({ id, current }: { id: string; current: 'mensalista' | 'avulso' }) => {
+      const next = current === 'mensalista' ? 'avulso' : 'mensalista'
+      await updateDoc(doc(db, 'players', id), { player_type: next })
+      return next
+    },
+    onSuccess: (next) => {
+      qc.invalidateQueries({ queryKey: ['players'] })
+      toast.success(`Tipo alterado para ${next}!`)
+    },
+    onError: () => toast.error('Erro ao alterar tipo.')
+  })
+
   const sendNotification = useMutation({
     mutationFn: async () => {
       const currentUser = auth.currentUser
@@ -280,10 +293,13 @@ export default function AdminPage() {
                     {player.role === 'admin' && <Crown size={12} color="#f59e0b" />}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="px-2 py-0.5 rounded-full text-xs"
-                      style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent-light)', fontFamily: 'var(--font-primary)' }}>
-                      {player.player_type}
-                    </span>
+                    <button
+                      onClick={() => togglePlayerType.mutate({ id: player.id, current: player.player_type })}
+                      disabled={togglePlayerType.isPending}
+                      className="px-2 py-0.5 rounded-full text-xs transition-all active:scale-95 disabled:opacity-40"
+                      style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent-light)', fontFamily: 'var(--font-primary)', border: 'none', cursor: 'pointer' }}>
+                      {player.player_type === 'mensalista' ? 'Mensalista' : 'Avulso'}
+                    </button>
                     <p className="text-xs truncate" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)' }}>{player.email}</p>
                   </div>
                 </div>
