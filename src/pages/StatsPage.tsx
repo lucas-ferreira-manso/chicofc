@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import BadgeRanking from '../components/BadgeRanking'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -731,7 +731,18 @@ export default function StatsPage() {
   const isAdmin = user?.role === 'admin'
   const qc = useQueryClient()
 
-  const [activeTab, setActiveTab] = useState<'placar' | 'jogador' | 'ranking'>('placar')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const TABS = ['placar', 'jogador', 'ranking'] as const
+  type Tab = typeof TABS[number]
+  const tabParam = searchParams.get('tab') as Tab | null
+  const [activeTab, setActiveTab] = useState<Tab>(
+    tabParam && TABS.includes(tabParam) ? tabParam : 'placar'
+  )
+
+  function handleTabChange(tab: Tab) {
+    setActiveTab(tab)
+    setSearchParams({ tab }, { replace: true })
+  }
   const [showSheet, setShowSheet] = useState(false)
   const [blueGoals, setBlueGoals] = useState('')
   const [yellowGoals, setYellowGoals] = useState('')
@@ -814,7 +825,7 @@ export default function StatsPage() {
           {(['placar', 'jogador', 'ranking'] as const).map(tab => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => handleTabChange(tab)}
               style={{
                 flex: 1, padding: '8px 12px',
                 borderRadius: 16, border: 'none',

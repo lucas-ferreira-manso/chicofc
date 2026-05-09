@@ -104,14 +104,14 @@ export async function fetchLastGamePlayers(): Promise<PlayerPresenceStats[]> {
 
   if (confirmedLastGame.size === 0) return []
 
-  // Agrega presenças a partir do D0 (primeiro jogo real)
+  // Agrega presenças entre D0 (primeiro jogo real) e hoje
   const D0 = '2026-05-06'
   const byPlayer = new Map<string, PresenceRecord[]>()
   attendancesSnap.docs.forEach(d => {
     const data = d.data()
     const userId = data.user_id as string
     if (!confirmedLastGame.has(userId)) return
-    if (data.game_id < D0) return
+    if (data.game_id < D0 || data.game_id > today) return
     if (!byPlayer.has(userId)) byPlayer.set(userId, [])
     byPlayer.get(userId)!.push({
       gameId: data.game_id,
