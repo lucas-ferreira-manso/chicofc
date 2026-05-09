@@ -264,7 +264,7 @@ function VotingSheet({ type, players, onClose, onVote }: VotingSheetProps) {
   const [selected, setSelected] = useState<string | null>(null)
   const isMurcha = type === 'bolaMurcha'
   const title = isMurcha ? 'Vote no Bola Murcha' : 'Vote no Bola Cheia'
-  const accentColor = isMurcha ? '#ed0000' : '#082996'
+  const accentColor = isMurcha ? '#ed0000' : 'var(--color-fg-accent)'
 
   return (
     <div
@@ -276,7 +276,7 @@ function VotingSheet({ type, players, onClose, onVote }: VotingSheetProps) {
       onClick={onClose}>
       <div
         style={{
-          width: '100%', background: 'white',
+          width: '100%', background: 'var(--color-bg)',
           borderRadius: '24px 24px 0 0',
           padding: '24px 24px 40px',
           maxHeight: '82vh',
