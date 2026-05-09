@@ -58,7 +58,9 @@ export default function ProfilePage() {
         throw new Error(data.error?.message || 'Falha no upload')
       }
 
-      const url = data.secure_url
+      // Append cache-buster so browser always fetches the new image,
+      // even when Cloudinary reuses the same public_id URL on overwrite.
+      const url = `${data.secure_url}?v=${Date.now()}`
 
       // Atualiza imediatamente na tela
       setLocalAvatarUrl(url)
