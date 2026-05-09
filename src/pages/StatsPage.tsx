@@ -34,6 +34,13 @@ function getLastWednesdayId(): string {
   return format(d, 'yyyy-MM-dd')
 }
 
+// Votação aberta de quarta (dia do jogo) até domingo; encerrada toda segunda-feira.
+// Dias: 0=dom 1=seg 2=ter 3=qua 4=qui 5=sex 6=sáb
+function isVotingOpen(): boolean {
+  const day = new Date().getDay()
+  return day !== 1 && day !== 2 // seg e ter = fechado
+}
+
 function getInitials(name: string): string {
   return name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
 }
@@ -421,6 +428,7 @@ function JogadorTab() {
   const myVote = votacao?.votos?.[user!.id]
   const hasVoted = !!myVote
   const userWasConfirmed = players.some(p => p.id === user!.id)
+  const votingOpen = isVotingOpen()
 
   // Vencedores calculados por pluralidade
   const cheiaWinnerId = votacao ? computeWinner(votacao.votos, 'bolaCheia') : null
@@ -436,6 +444,56 @@ function JogadorTab() {
   // Jogadores votáveis (sem o próprio usuário, sem o já selecionado no outro tipo)
   const votableForCheia = players.filter(p => p.id !== user!.id && p.id !== pendingMurcha)
   const votableForMurcha = players.filter(p => p.id !== user!.id && p.id !== pendingCheia)
+
+  // ── Estado: votação encerrada (toda segunda-feira) ────────────────────────
+  if (!votingOpen) {
+    if (cheiaWinnerId || murchaWinnerId) {
+      return (
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: 10,
+          padding: 16, background: 'var(--color-surface-primary)', borderRadius: 24
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
+            <p style={{
+              fontFamily: 'var(--font-primary)', fontWeight: 600,
+              fontSize: 24, lineHeight: '28px', color: '#082996'
+            }}>
+              Parabéns aos envolvidos!
+            </p>
+            <p style={{
+              fontFamily: 'var(--font-primary)', fontWeight: 500,
+              fontSize: 16, color: 'var(--color-fg-secondary)'
+            }}>
+              Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!
+            </p>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 8px' }}>
+            <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled />
+            <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled />
+          </div>
+          <button
+            onClick={handleShare}
+            style={{
+              width: '100%', height: 56, borderRadius: 9999,
+              background: 'transparent', border: '2px solid #082996',
+              color: '#082996', fontFamily: 'var(--font-primary)',
+              fontWeight: 500, fontSize: 16, cursor: 'pointer'
+            }}>
+            Compartilhar
+          </button>
+        </div>
+      )
+    }
+    return (
+      <p style={{
+        textAlign: 'center', padding: '32px 0',
+        fontFamily: 'var(--font-primary)', fontSize: 16,
+        color: 'var(--color-fg-secondary)'
+      }}>
+        Votação encerrada. Volte na quarta após o jogo!
+      </p>
+    )
+  }
 
   // ── Estado: usuário já votou ──────────────────────────────────────────────
   if (hasVoted) {
