@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Header from '../components/layout/Header'
+import BadgeRanking from '../components/BadgeRanking'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   doc, getDoc, setDoc, collection, query, where, getDocs
@@ -10,6 +12,7 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { X, TrashSimple } from '@phosphor-icons/react'
 import { toast } from 'sonner'
+import { fetchPresenceStats, fetchVotingRanking } from '../lib/playerStats'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -633,6 +636,89 @@ function JogadorTab() {
   )
 }
 
+// ─── Aba Ranking ──────────────────────────────────────────────────────────────
+
+function RankingTab() {
+  const navigate = useNavigate()
+
+  const { data: presenca = [], isLoading: loadingPresenca } = useQuery({
+    queryKey: ['presence-stats'],
+    queryFn: fetchPresenceStats,
+    staleTime: 5 * 60_000
+  })
+
+  const { data: votacao = [], isLoading: loadingVotacao } = useQuery({
+    queryKey: ['voting-ranking'],
+    queryFn: fetchVotingRanking,
+    staleTime: 5 * 60_000
+  })
+
+  const loading = loadingPresenca || loadingVotacao
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '32px 0' }}>
+        <div className="text-4xl animate-spin">⚽</div>
+      </div>
+    )
+  }
+
+  // Podium: 2º esquerda, 1º centro, 3º direita
+  const top3Presenca = presenca.slice(0, 3)
+  const podiumPresenca = [top3Presenca[1] ?? null, top3Presenca[0] ?? null, top3Presenca[2] ?? null]
+
+  const cheiaRanking = [...votacao].sort((a, b) => b.bolaCheiaWins - a.bolaCheiaWins).filter(p => p.bolaCheiaWins > 0)
+  const top3Cheia = cheiaRanking.slice(0, 3)
+  const podiumCheia = [top3Cheia[1] ?? null, top3Cheia[0] ?? null, top3Cheia[2] ?? null]
+
+  const SectionHeader = ({ title, onVerTodos }: { title: string; onVerTodos: () => void }) => (
+    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+      <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 'var(--font-size-16)', color: 'var(--color-fg-primary)' }}>
+        {title}
+      </p>
+      <button onClick={onVerTodos} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+        <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 'var(--font-size-14)', color: 'var(--color-fg-accent)' }}>
+          Ver todos
+        </p>
+      </button>
+    </div>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+      {/* Top 3 mais presentes */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 8 }}>
+        <SectionHeader title="Top 3 mais presentes" onVerTodos={() => navigate('/presenca')} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <BadgeRanking player={podiumPresenca[0]} rank={2} />
+          <BadgeRanking player={podiumPresenca[1]} rank={1} />
+          <BadgeRanking player={podiumPresenca[2]} rank={3} />
+        </div>
+      </div>
+
+      <div style={{ height: 1, background: 'var(--color-border)' }} />
+
+      {/* Top 3 Bola Cheia */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 8 }}>
+        <SectionHeader title="Top 3 Bola Cheia" onVerTodos={() => navigate('/ranking-votacao')} />
+        {cheiaRanking.length === 0 ? (
+          <p style={{ textAlign: 'center', color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', padding: '16px 0' }}>
+            Nenhuma votação registrada ainda.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <BadgeRanking player={podiumCheia[0]} rank={2} />
+            <BadgeRanking player={podiumCheia[1]} rank={1} />
+            <BadgeRanking player={podiumCheia[2]} rank={3} />
+          </div>
+        )}
+      </div>
+
+    </div>
+  )
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function StatsPage() {
@@ -640,7 +726,7 @@ export default function StatsPage() {
   const isAdmin = user?.role === 'admin'
   const qc = useQueryClient()
 
-  const [activeTab, setActiveTab] = useState<'placar' | 'jogador'>('placar')
+  const [activeTab, setActiveTab] = useState<'placar' | 'jogador' | 'ranking'>('placar')
   const [showSheet, setShowSheet] = useState(false)
   const [blueGoals, setBlueGoals] = useState('')
   const [yellowGoals, setYellowGoals] = useState('')
@@ -703,7 +789,9 @@ export default function StatsPage() {
 
   const subtitle = activeTab === 'placar'
     ? (updatedStr ? `Atualizado ${updatedStr}` : 'Nenhuma atualização ainda')
-    : `Jogo de ${gameDate}`
+    : activeTab === 'jogador'
+    ? `Jogo de ${gameDate}`
+    : 'Histórico do grupo'
 
   return (
     <div className="flex flex-col min-h-full pb-28" style={{ background: 'var(--color-bg)' }}>
@@ -718,12 +806,12 @@ export default function StatsPage() {
           background: 'var(--color-surface-secondary)',
           borderRadius: 20
         }}>
-          {(['placar', 'jogador'] as const).map(tab => (
+          {(['placar', 'jogador', 'ranking'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               style={{
-                flex: 1, padding: '8px 20px',
+                flex: 1, padding: '8px 12px',
                 borderRadius: 16, border: 'none',
                 background: activeTab === tab ? 'white' : 'transparent',
                 color: activeTab === tab ? '#1a1a1a' : 'var(--color-fg-primary)',
@@ -732,7 +820,7 @@ export default function StatsPage() {
                 transition: 'background 0.15s',
                 boxShadow: activeTab === tab ? '0 1px 4px rgba(0,0,0,0.08)' : 'none'
               }}>
-              {tab === 'placar' ? 'Placar' : 'Jogador'}
+              {tab === 'placar' ? 'Placar' : tab === 'jogador' ? 'Jogador' : 'Ranking'}
             </button>
           ))}
         </div>
@@ -856,6 +944,9 @@ export default function StatsPage() {
 
         {/* ── Aba Jogador ── */}
         {activeTab === 'jogador' && <JogadorTab />}
+
+        {/* ── Aba Ranking ── */}
+        {activeTab === 'ranking' && <RankingTab />}
       </div>
 
       {/* Botão fixo Adicionar Placar — só na aba Placar para admins */}
