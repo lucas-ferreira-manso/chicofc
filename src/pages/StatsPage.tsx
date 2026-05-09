@@ -585,7 +585,7 @@ function JogadorTab() {
         display: 'flex', flexDirection: 'column', gap: 10,
         padding: 16, background: 'var(--color-surface-primary)', borderRadius: 24
       }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8, textAlign: 'center' }}>
           <p style={{
             fontFamily: 'var(--font-primary)', fontWeight: 600,
             fontSize: 24, lineHeight: '28px', color: '#082996'
