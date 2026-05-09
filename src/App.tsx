@@ -13,6 +13,8 @@ import ProfilePage from './pages/ProfilePage'
 import AdminPage from './pages/AdminPage'
 import EscalacaoPage from './pages/EscalacaoPage'
 import NotificacoesAdminPage from './pages/NotificacoesAdminPage'
+import PresencaPage from './pages/PresencaPage'
+import RankingVotacaoPage from './pages/RankingVotacaoPage'
 
 export default function App() {
   const { user, loading, setLoading, fetchProfile } = useAuthStore()
@@ -59,6 +61,8 @@ export default function App() {
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/escalacao" element={<EscalacaoPage />} />
           <Route path="/admin/notificacoes" element={<NotificacoesAdminPage />} />
+          <Route path="/presenca" element={<PresencaPage />} />
+          <Route path="/ranking-votacao" element={<RankingVotacaoPage />} />
           <Route path="*" element={<Navigate to="/games" replace />} />
         </Routes>
       </main>
