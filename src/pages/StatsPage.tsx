@@ -663,7 +663,8 @@ function RankingTab() {
     )
   }
 
-  const previewPresenca = presenca.slice(0, 4)
+  const top3Presenca = presenca.slice(0, 3)
+  const podiumPresenca = [top3Presenca[1] ?? null, top3Presenca[0] ?? null, top3Presenca[2] ?? null]
 
   const cheiaRanking = [...votacao].sort((a, b) => b.bolaCheiaWins - a.bolaCheiaWins).filter(p => p.bolaCheiaWins > 0)
   const top3Cheia = cheiaRanking.slice(0, 3)
@@ -685,36 +686,18 @@ function RankingTab() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
-      {/* Presentes no último jogo */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 8 }}>
-        <SectionHeader title="Presentes no último jogo" onVerTodos={() => navigate('/presenca')} />
+      {/* Top 3 mais presentes */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 8 }}>
+        <SectionHeader title="Top 3 mais presentes" onVerTodos={() => navigate('/presenca')} />
         {presenca.length === 0 ? (
-          <p style={{ textAlign: 'center', color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', padding: '8px 0' }}>
+          <p style={{ textAlign: 'center', color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', padding: '16px 0' }}>
             Nenhuma presença registrada ainda.
           </p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {previewPresenca.map(player => (
-              <div key={player.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 16, background: 'var(--color-surface-primary)' }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: 'var(--color-avatar-bg)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {player.photoURL ? (
-                    <img src={player.photoURL} alt={player.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 11, color: 'var(--color-avatar-fg)' }}>
-                      {player.name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()}
-                    </span>
-                  )}
-                </div>
-                <p style={{ flex: 1, fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 'var(--font-size-14)', color: 'var(--color-fg-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {player.name}
-                </p>
-              </div>
-            ))}
-            {presenca.length > 4 && (
-              <p style={{ textAlign: 'center', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', color: 'var(--color-fg-secondary)' }}>
-                +{presenca.length - 4} jogadores
-              </p>
-            )}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <BadgeRanking player={podiumPresenca[0]} rank={2} count={podiumPresenca[0]?.confirmed} />
+            <BadgeRanking player={podiumPresenca[1]} rank={1} count={podiumPresenca[1]?.confirmed} />
+            <BadgeRanking player={podiumPresenca[2]} rank={3} count={podiumPresenca[2]?.confirmed} />
           </div>
         )}
       </div>

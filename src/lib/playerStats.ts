@@ -79,8 +79,8 @@ async function fetchAllPlayers(): Promise<Map<string, PlayerInfo>> {
 }
 
 /**
- * Retorna os jogadores que estiveram confirmados no último jogo,
- * ordenados alfabeticamente.
+ * Retorna os jogadores confirmados no último jogo, ordenados pelo total
+ * de presenças confirmadas em todos os jogos (decrescente).
  */
 export async function fetchLastGamePlayers(): Promise<PlayerPresenceStats[]> {
   const [attendancesSnap, playersMap] = await Promise.all([
@@ -88,30 +88,53 @@ export async function fetchLastGamePlayers(): Promise<PlayerPresenceStats[]> {
     fetchAllPlayers()
   ])
 
+  // Descobre o game_id mais recente
   const allGameIds = [...new Set(attendancesSnap.docs.map(d => d.data().game_id as string))]
-  const sorted = allGameIds.sort()
-  const lastGameId = sorted[sorted.length - 1]
+  const sortedIds = allGameIds.sort()
+  const lastGameId = sortedIds[sortedIds.length - 1]
   if (!lastGameId) return []
 
-  const players: PlayerPresenceStats[] = []
+  // Quem confirmou no último jogo
+  const confirmedLastGame = new Set(
+    attendancesSnap.docs
+      .filter(d => d.data().game_id === lastGameId && d.data().status === 'confirmed')
+      .map(d => d.data().user_id as string)
+  )
 
-  attendancesSnap.docs
-    .filter(d => d.data().game_id === lastGameId && d.data().status === 'confirmed')
-    .forEach(d => {
-      const player = playersMap.get(d.data().user_id as string)
-      if (!player) return
-      players.push({
-        ...player,
-        totalGames: 1,
-        confirmed: 1,
-        declined: 0,
-        waitlist: 0,
-        presenceRate: 1,
-        records: [{ gameId: lastGameId, date: lastGameId, status: 'confirmed' }]
-      })
+  if (confirmedLastGame.size === 0) return []
+
+  // Agrega todas as presenças históricas para esses jogadores
+  const byPlayer = new Map<string, PresenceRecord[]>()
+  attendancesSnap.docs.forEach(d => {
+    const data = d.data()
+    const userId = data.user_id as string
+    if (!confirmedLastGame.has(userId)) return
+    if (!byPlayer.has(userId)) byPlayer.set(userId, [])
+    byPlayer.get(userId)!.push({
+      gameId: data.game_id,
+      date: data.game_id,
+      status: data.status as PresenceRecord['status']
     })
+  })
 
-  return players.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+  const stats: PlayerPresenceStats[] = []
+  byPlayer.forEach((records, playerId) => {
+    const player = playersMap.get(playerId)
+    if (!player) return
+    const confirmed = records.filter(r => r.status === 'confirmed').length
+    stats.push({
+      ...player,
+      totalGames: records.length,
+      confirmed,
+      declined: records.filter(r => r.status === 'declined').length,
+      waitlist: records.filter(r => r.status === 'waitlist').length,
+      presenceRate: records.length > 0 ? confirmed / records.length : 0,
+      records: records.sort((a, b) => b.gameId.localeCompare(a.gameId))
+    })
+  })
+
+  // Ordena por total de confirmações (maior primeiro)
+  return stats.sort((a, b) => b.confirmed - a.confirmed)
 }
 
 /**

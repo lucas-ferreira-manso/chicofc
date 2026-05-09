@@ -5,6 +5,7 @@ type RankingPlayer = Pick<PlayerPresenceStats | PlayerVotingStats, 'id' | 'name'
 interface BadgeRankingProps {
   player: RankingPlayer | null
   rank: 1 | 2 | 3
+  count?: number
 }
 
 const MEDAL = {
@@ -13,7 +14,7 @@ const MEDAL = {
   3: { bg: 'var(--color-surface-bronze)', fg: '#ffffff', label: '3º' },
 } as const
 
-export default function BadgeRanking({ player, rank }: BadgeRankingProps) {
+export default function BadgeRanking({ player, rank, count }: BadgeRankingProps) {
   const medal = MEDAL[rank]
   const initials = player
     ? player.name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
@@ -49,14 +50,25 @@ export default function BadgeRanking({ player, rank }: BadgeRankingProps) {
         )}
       </div>
 
-      {/* Nome */}
-      <p style={{
-        fontFamily: 'var(--font-primary)', fontWeight: 500,
-        fontSize: 'var(--font-size-14)', color: 'var(--color-fg-primary)',
-        textAlign: 'center', width: '100%'
-      }}>
-        {player?.name ?? '—'}
-      </p>
+      {/* Nome + count */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: '100%' }}>
+        <p style={{
+          fontFamily: 'var(--font-primary)', fontWeight: 500,
+          fontSize: 'var(--font-size-14)', color: 'var(--color-fg-primary)',
+          textAlign: 'center', width: '100%'
+        }}>
+          {player?.name ?? '—'}
+        </p>
+        {count !== undefined && (
+          <span style={{
+            fontFamily: 'var(--font-primary)', fontWeight: 400,
+            fontSize: 'var(--font-size-11)', color: 'var(--color-fg-secondary)',
+            textAlign: 'center'
+          }}>
+            {count}x
+          </span>
+        )}
+      </div>
 
       {/* Medalha — sobrepõe foto e nome */}
       <div style={{
