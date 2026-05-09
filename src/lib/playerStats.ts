@@ -88,10 +88,11 @@ export async function fetchLastGamePlayers(): Promise<PlayerPresenceStats[]> {
     fetchAllPlayers()
   ])
 
-  // Descobre o game_id mais recente
+  // Descobre o game_id mais recente já ocorrido (ignora jogos futuros)
+  const today = new Date().toISOString().slice(0, 10)
   const allGameIds = [...new Set(attendancesSnap.docs.map(d => d.data().game_id as string))]
-  const sortedIds = allGameIds.sort()
-  const lastGameId = sortedIds[sortedIds.length - 1]
+  const pastIds = allGameIds.filter(id => id <= today).sort()
+  const lastGameId = pastIds[pastIds.length - 1]
   if (!lastGameId) return []
 
   // Quem confirmou no último jogo
