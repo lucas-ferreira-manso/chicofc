@@ -181,7 +181,9 @@ interface BadgeProps {
 
 function BadgeVotacao({ type, player, onClick, disabled }: BadgeProps) {
   const isMurcha = type === 'bolaMurcha'
-  const accentColor = isMurcha ? '#ed0000' : '#082996'
+  // Bola Cheia usa var(--color-fg-accent) para adaptar ao dark mode (#082996 light / #66d1ff dark)
+  // Bola Murcha usa vermelho fixo — legível em ambos os modos
+  const accentColor = isMurcha ? '#ed0000' : 'var(--color-fg-accent)'
   const label = isMurcha ? 'Bola Murcha' : 'Bola Cheia'
 
   return (
@@ -212,7 +214,7 @@ function BadgeVotacao({ type, player, onClick, disabled }: BadgeProps) {
           ) : (
             <span style={{
               fontFamily: 'var(--font-primary)', fontWeight: 700,
-              fontSize: 48, color: accentColor, opacity: 0.25
+              fontSize: 48, color: accentColor, opacity: 0.4
             }}>
               {getInitials(player.name)}
             </span>
@@ -456,7 +458,7 @@ function JogadorTab() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
             <p style={{
               fontFamily: 'var(--font-primary)', fontWeight: 600,
-              fontSize: 24, lineHeight: '28px', color: '#082996'
+              fontSize: 24, lineHeight: '28px', color: 'var(--color-fg-accent)'
             }}>
               Parabéns aos envolvidos!
             </p>
@@ -475,8 +477,8 @@ function JogadorTab() {
             onClick={handleShare}
             style={{
               width: '100%', height: 56, borderRadius: 9999,
-              background: 'transparent', border: '2px solid #082996',
-              color: '#082996', fontFamily: 'var(--font-primary)',
+              background: 'transparent', border: '2px solid var(--color-fg-accent)',
+              color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)',
               fontWeight: 500, fontSize: 16, cursor: 'pointer'
             }}>
             Compartilhar
@@ -495,7 +497,8 @@ function JogadorTab() {
     )
   }
 
-  // ── Estado: usuário já votou ──────────────────────────────────────────────
+  // ── Estado: usuário já votou (votação ainda aberta) ───────────────────────
+  // Compartilhar não aparece aqui — só após encerramento (segunda-feira)
   if (hasVoted) {
     return (
       <div style={{
@@ -505,7 +508,7 @@ function JogadorTab() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
           <p style={{
             fontFamily: 'var(--font-primary)', fontWeight: 600,
-            fontSize: 24, lineHeight: '28px', color: '#082996'
+            fontSize: 24, lineHeight: '28px', color: 'var(--color-fg-accent)'
           }}>
             Parabéns aos envolvidos!
           </p>
@@ -516,22 +519,10 @@ function JogadorTab() {
             Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!
           </p>
         </div>
-
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 8px' }}>
           <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled />
           <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled />
         </div>
-
-        <button
-          onClick={handleShare}
-          style={{
-            width: '100%', height: 56, borderRadius: 9999,
-            background: 'transparent', border: '2px solid #082996',
-            color: '#082996', fontFamily: 'var(--font-primary)',
-            fontWeight: 500, fontSize: 16, cursor: 'pointer'
-          }}>
-          Compartilhar
-        </button>
       </div>
     )
   }
@@ -548,7 +539,7 @@ function JogadorTab() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
             <p style={{
               fontFamily: 'var(--font-primary)', fontWeight: 600,
-              fontSize: 24, lineHeight: '28px', color: '#082996'
+              fontSize: 24, lineHeight: '28px', color: 'var(--color-fg-accent)'
             }}>
               Parabéns aos envolvidos!
             </p>
@@ -588,7 +579,7 @@ function JogadorTab() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8, textAlign: 'center' }}>
           <p style={{
             fontFamily: 'var(--font-primary)', fontWeight: 600,
-            fontSize: 24, lineHeight: '28px', color: '#082996'
+            fontSize: 24, lineHeight: '28px', color: 'var(--color-fg-accent)'
           }}>
             Chegou a hora de julgar!
           </p>
@@ -735,7 +726,7 @@ export default function StatsPage() {
                 flex: 1, padding: '8px 20px',
                 borderRadius: 16, border: 'none',
                 background: activeTab === tab ? 'white' : 'transparent',
-                color: 'var(--color-fg-primary)',
+                color: activeTab === tab ? '#1a1a1a' : 'var(--color-fg-primary)',
                 fontFamily: 'var(--font-primary)', fontWeight: 500,
                 fontSize: 16, cursor: 'pointer',
                 transition: 'background 0.15s',
