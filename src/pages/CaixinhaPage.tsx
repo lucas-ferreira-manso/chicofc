@@ -40,10 +40,10 @@ interface CaixinhaConfig {
 
 async function fetchConfig(): Promise<CaixinhaConfig> {
   const snap = await getDoc(doc(db, 'config', 'caixinha'))
-  if (!snap.exists()) return { quadraCost: 760, extrasCost: 0, mensalistaValue: 80, avulsoValue: 22 }
+  if (!snap.exists()) return { quadraCost: 760, extrasCost: 320, mensalistaValue: 80, avulsoValue: 22 }
   return {
     quadraCost: snap.data().quadraCost ?? 760,
-    extrasCost: snap.data().extrasCost ?? 0,
+    extrasCost: snap.data().extrasCost ?? 320,
     mensalistaValue: snap.data().mensalistaValue ?? 80,
     avulsoValue: snap.data().avulsoValue ?? 22
   }
@@ -253,8 +253,10 @@ export default function CaixinhaPage() {
             <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Saldo Total</p>
             <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>R$ {saldoTotal.toFixed(2)}</p>
           </div>
-          <EditableRow field="quadra" label="Despesa Quadra" value={quadraCost} />
-          <EditableRow field="extras" label="Despesas Extras" value={extrasCost} />
+          <div className="flex gap-5">
+            <div className="flex-1"><EditableRow field="quadra" label="Despesa Quadra" value={quadraCost} /></div>
+            <div className="flex-1"><EditableRow field="extras" label="Despesas Extras" value={extrasCost} /></div>
+          </div>
           <div className="flex gap-5">
             <div className="flex-1 flex flex-col gap-0.5">
               <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Mensalista Recebido</p>
