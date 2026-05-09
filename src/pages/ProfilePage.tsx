@@ -25,6 +25,9 @@ export default function ProfilePage() {
   const [uploading, setUploading] = useState(false)
   // Estado local só para forçar re-render imediato da foto
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null)
+  // Incrementado após cada upload para forçar re-montagem do input e garantir
+  // que onChange dispara novamente mesmo no mesmo browser/mobile
+  const [inputKey, setInputKey] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Prioriza o estado local (recém feito upload), senão usa o do store
@@ -45,7 +48,8 @@ export default function ProfilePage() {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
-      formData.append('public_id', `avatar_${user.id}`)
+      // Unique public_id per upload avoids Cloudinary overwrite restrictions
+      formData.append('public_id', `avatar_${user.id}_${Date.now()}`)
 
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
@@ -58,9 +62,7 @@ export default function ProfilePage() {
         throw new Error(data.error?.message || 'Falha no upload')
       }
 
-      // Append cache-buster so browser always fetches the new image,
-      // even when Cloudinary reuses the same public_id URL on overwrite.
-      const url = `${data.secure_url}?v=${Date.now()}`
+      const url = data.secure_url
 
       // Atualiza imediatamente na tela
       setLocalAvatarUrl(url)
@@ -77,7 +79,7 @@ export default function ProfilePage() {
       toast.error('Erro ao enviar foto. Tente novamente.')
     } finally {
       setUploading(false)
-      e.target.value = ''
+      setInputKey(k => k + 1)
     }
   }
 
@@ -116,6 +118,7 @@ export default function ProfilePage() {
       <div style={{ height: 80 }} />
 
       <input
+        key={inputKey}
         ref={fileInputRef}
         type="file"
         accept="image/*"
