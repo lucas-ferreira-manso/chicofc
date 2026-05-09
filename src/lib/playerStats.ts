@@ -40,6 +40,15 @@ export interface PlayerVotingStats extends PlayerInfo {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/** yyyy-MM-dd da última segunda-feira (inclusive hoje se hoje for segunda) */
+function lastMondayDate(): string {
+  const d = new Date()
+  const day = d.getDay() // 0=Dom, 1=Seg, …
+  const daysSince = day === 0 ? 6 : day - 1
+  d.setDate(d.getDate() - daysSince)
+  return d.toISOString().slice(0, 10)
+}
+
 function pluralityWinner(
   votos: Record<string, { bolaCheia: string; bolaMurcha: string }>,
   type: 'bolaCheia' | 'bolaMurcha'
@@ -67,6 +76,42 @@ async function fetchAllPlayers(): Promise<Map<string, PlayerInfo>> {
     })
   })
   return map
+}
+
+/**
+ * Retorna os jogadores que estiveram confirmados no último jogo,
+ * ordenados alfabeticamente.
+ */
+export async function fetchLastGamePlayers(): Promise<PlayerPresenceStats[]> {
+  const [attendancesSnap, playersMap] = await Promise.all([
+    getDocs(collection(db, 'attendances')),
+    fetchAllPlayers()
+  ])
+
+  const allGameIds = [...new Set(attendancesSnap.docs.map(d => d.data().game_id as string))]
+  const sorted = allGameIds.sort()
+  const lastGameId = sorted[sorted.length - 1]
+  if (!lastGameId) return []
+
+  const players: PlayerPresenceStats[] = []
+
+  attendancesSnap.docs
+    .filter(d => d.data().game_id === lastGameId && d.data().status === 'confirmed')
+    .forEach(d => {
+      const player = playersMap.get(d.data().user_id as string)
+      if (!player) return
+      players.push({
+        ...player,
+        totalGames: 1,
+        confirmed: 1,
+        declined: 0,
+        waitlist: 0,
+        presenceRate: 1,
+        records: [{ gameId: lastGameId, date: lastGameId, status: 'confirmed' }]
+      })
+    })
+
+  return players.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 }
 
 /**
@@ -125,7 +170,10 @@ export async function fetchPresenceStats(): Promise<PlayerPresenceStats[]> {
 export async function fetchVotingRanking(): Promise<PlayerVotingStats[]> {
   // game_ids vêm de attendances — fonte de verdade de quais jogos aconteceram
   const attendancesSnap = await getDocs(collection(db, 'attendances'))
+  // Só conta jogos cujo ciclo de votação já encerrou (antes da última segunda-feira)
+  const cutoff = lastMondayDate()
   const gameIds = [...new Set(attendancesSnap.docs.map(d => d.data().game_id as string))]
+    .filter(id => id < cutoff)
 
   const [playersMap, votacaoDocs] = await Promise.all([
     fetchAllPlayers(),
