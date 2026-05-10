@@ -285,9 +285,9 @@ export default function AdminPage() {
       {showNotifSheet && (
         <>
           <div onClick={() => setShowNotifSheet(false)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 40 }} />
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 60 }} />
           <div style={{
-            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
+            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70,
             background: 'var(--color-bg)', borderRadius: '24px 24px 0 0',
             padding: '24px 24px 40px', display: 'flex', flexDirection: 'column', gap: 16
           }}>
@@ -348,9 +348,9 @@ export default function AdminPage() {
       {showAddSheet && (
         <>
           <div onClick={() => setShowAddSheet(false)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 40 }} />
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 60 }} />
           <div style={{
-            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
+            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70,
             background: 'var(--color-bg)', borderRadius: '24px 24px 0 0',
             padding: '24px 24px 40px', display: 'flex', flexDirection: 'column', gap: 12
           }}>
