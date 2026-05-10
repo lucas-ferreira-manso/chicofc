@@ -197,7 +197,7 @@ export default function AdminPage() {
   const avulsos = activePlayers.filter(p => p.player_type === 'avulso')
 
   return (
-    <div className="flex flex-col min-h-full" style={{ background: 'var(--color-bg)', paddingBottom: 160 }}>
+    <div className="flex flex-col min-h-full" style={{ background: 'var(--color-bg)', paddingBottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 96px)' }}>
       <Header
         title="Admin"
         subtitle={`${activePlayers.length} ativos`}
@@ -264,8 +264,9 @@ export default function AdminPage() {
 
       {/* Botão fixo Enviar Notificação */}
       <div style={{
-        position: 'fixed', bottom: 'calc(var(--bottom-nav-height) + 16px)',
-        left: 24, right: 24, zIndex: 30
+        position: 'fixed',
+        bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 16px)',
+        left: 24, right: 24, zIndex: 49
       }}>
         <button onClick={() => { setShowNotifSheet(true); setShowAddSheet(false) }}
           className="w-full transition-all active:scale-95"
