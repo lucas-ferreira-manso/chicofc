@@ -11,6 +11,8 @@ import StatsPage from './pages/StatsPage'
 import CaixinhaPage from './pages/CaixinhaPage'
 import ProfilePage from './pages/ProfilePage'
 import AdminPage from './pages/AdminPage'
+import AdminPlayersPage from './pages/AdminPlayersPage'
+import AdminPlayerDetailPage from './pages/AdminPlayerDetailPage'
 import EscalacaoPage from './pages/EscalacaoPage'
 import NotificacoesAdminPage from './pages/NotificacoesAdminPage'
 import PresencaPage from './pages/PresencaPage'
@@ -47,7 +49,10 @@ export default function App() {
   if (!user) return <LoginPage />
 
   const location = useLocation()
-  const hideNav = ['/escalacao', '/admin/notificacoes'].includes(location.pathname)
+  const hideNav = location.pathname === '/escalacao'
+    || location.pathname === '/admin/notificacoes'
+    || location.pathname.startsWith('/admin/jogadores/')
+    || location.pathname.startsWith('/admin/jogador/')
 
   return (
     <div className="flex flex-col flex-1">
@@ -59,6 +64,8 @@ export default function App() {
           <Route path="/caixinha" element={<CaixinhaPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/admin/jogadores/:type" element={<AdminPlayersPage />} />
+          <Route path="/admin/jogador/:id" element={<AdminPlayerDetailPage />} />
           <Route path="/escalacao" element={<EscalacaoPage />} />
           <Route path="/admin/notificacoes" element={<NotificacoesAdminPage />} />
           <Route path="/presenca" element={<PresencaPage />} />
