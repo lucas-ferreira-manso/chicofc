@@ -2,11 +2,15 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { doc, updateDoc } from 'firebase/firestore'
+import { getAuth, getIdToken } from 'firebase/auth'
 import { db } from '../lib/firebase'
 import { toast } from 'sonner'
 import { CaretLeft, TrashSimple, CaretDown, X } from '@phosphor-icons/react'
 import Toggle from '../components/Toggle'
 import { fetchPlayers } from './AdminPage'
+
+const auth = getAuth()
+const SERVER_URL = 'https://chicofc-server.onrender.com'
 
 function getInitials(name: string): string {
   return name.trim().split(' ').filter(Boolean).slice(0, 2).map(n => n[0].toUpperCase()).join('')
@@ -60,6 +64,27 @@ export default function AdminPlayerDetailPage() {
       navigate(-1)
     },
     onError: () => toast.error('Erro ao remover jogador.')
+  })
+
+  const cobrar = useMutation({
+    mutationFn: async () => {
+      const currentUser = auth.currentUser
+      if (!currentUser) throw new Error('Não autenticado')
+      const token = await getIdToken(currentUser)
+      const isMens = player?.player_type === 'mensalista'
+      const message = isMens
+        ? 'Você ainda tem mensalidade pendente. Por favor, efetue o pagamento!'
+        : 'Você ainda tem pagamento de jogo pendente. Por favor, efetue o pagamento!'
+      const res = await fetch(`${SERVER_URL}/notify-cobranca`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ userId: player?.id, message })
+      })
+      if (!res.ok) throw new Error('Erro no servidor')
+      return res.json()
+    },
+    onSuccess: () => toast.success('Cobrança enviada!'),
+    onError: (e: any) => toast.error(`Erro: ${e.message}`)
   })
 
   if (!player) return (
@@ -209,17 +234,20 @@ export default function AdminPlayerDetailPage() {
           </div>
         )}
 
-        {/* Botão Cobrar Mensalidade */}
+        {/* Botão Cobrar */}
         <div style={{ marginTop: 'auto', paddingTop: 24 }}>
           <button
+            onClick={() => cobrar.mutate()}
+            disabled={cobrar.isPending}
+            className="w-full transition-all active:scale-95 disabled:opacity-40"
             style={{
-              width: '100%', background: 'var(--color-surface-accent-light)',
+              background: 'var(--color-surface-accent-light)',
               border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)',
               padding: '16px 24px',
               fontFamily: 'var(--font-primary)', fontWeight: 500,
               fontSize: 'var(--font-size-16)', color: 'var(--color-fg-accent)'
             }}>
-            Cobrar Mensalidade
+            {cobrar.isPending ? 'Enviando...' : isMensalista ? 'Cobrar Mensalidade' : 'Cobrar Jogo'}
           </button>
         </div>
       </div>
