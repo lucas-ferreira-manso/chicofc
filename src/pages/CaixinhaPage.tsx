@@ -55,12 +55,35 @@ async function fetchPendingRequests(): Promise<any[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }))
 }
 
-async function fetchMyPaymentRequest(userId: string) {
+async function fetchMyPaymentRequest(userId: string, playerType?: string) {
+  if (playerType === 'avulso') {
+    // Avulsos: só retorna requests PENDENTES (não aprovadas) — evita bloquear botões após aprovação anterior
+    const q = query(
+      collection(db, 'payment_requests'),
+      where('user_id', '==', userId),
+      where('status', '==', 'pending')
+    )
+    const snap = await getDocs(q)
+    if (snap.empty) return null
+    return { id: snap.docs[0].id, ...snap.docs[0].data() }
+  }
+  // Mensalistas: verifica por mês atual
   const month = format(new Date(), 'yyyy-MM')
   const q = query(collection(db, 'payment_requests'), where('user_id', '==', userId), where('month', '==', month))
   const snap = await getDocs(q)
   if (snap.empty) return null
   return { id: snap.docs[0].id, ...snap.docs[0].data() }
+}
+
+async function fetchMyUnpaidJogoPayments(userId: string): Promise<any[]> {
+  const q = query(
+    collection(db, 'payments'),
+    where('user_id', '==', userId),
+    where('type', '==', 'jogo'),
+    where('paid', '==', false)
+  )
+  const snap = await getDocs(q)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
 }
 
 type EditField = 'quadra' | 'extras' | 'mensalista' | 'avulso' | null
@@ -80,9 +103,17 @@ export default function CaixinhaPage() {
   })
 
   const { data: myRequest } = useQuery({
-    queryKey: ['my-payment-request', user?.id],
-    queryFn: () => fetchMyPaymentRequest(user!.id),
-    enabled: !!user?.id
+    queryKey: ['my-payment-request', user?.id, user?.player_type],
+    queryFn: () => fetchMyPaymentRequest(user!.id, user?.player_type),
+    enabled: !!user?.id,
+    refetchInterval: 8000
+  })
+
+  const { data: myUnpaidJogoPayments = [] } = useQuery({
+    queryKey: ['my-unpaid-jogo', user?.id],
+    queryFn: () => fetchMyUnpaidJogoPayments(user!.id),
+    enabled: !!user?.id && user?.player_type === 'avulso',
+    refetchInterval: 8000
   })
 
   const [pixCopied, setPixCopied] = useState(false)
@@ -204,9 +235,13 @@ export default function CaixinhaPage() {
   }, {} as Record<string, Payment[]>)
 
   const playerData = players.find(p => p.id === user?.id)
-  const myAmount = playerData?.player_type === 'mensalista' ? mensalistaValue : avulsoValue
+  const isAvulso = user?.player_type === 'avulso'
+  const myAmount = isAvulso ? avulsoValue : mensalistaValue
+  // Para avulsos, fetchMyPaymentRequest só retorna pendentes; para mensalistas inclui aprovados
   const hasRequested = !!myRequest && (myRequest as any).status === 'pending'
-  const isApproved = !!myRequest && (myRequest as any).status === 'approved'
+  const isApproved = !isAvulso && !!myRequest && (myRequest as any).status === 'approved'
+  // Avulsos veem botões de pagamento apenas quando têm jogo(s) pendente(s) de pagamento
+  const avulsoNeedsPay = isAvulso && myUnpaidJogoPayments.length > 0
 
   const EditableRow = ({ field, label, value }: { field: EditField, label: string, value: number }) => (
     <div className="flex flex-col gap-1">
@@ -327,32 +362,36 @@ export default function CaixinhaPage() {
             </div>
           </div>
 
-          {/* Botões — estado conforme myRequest */}
-          {!hasRequested && !isApproved ? (
-            <div className="flex gap-3">
-              <button onClick={handleCopyPix}
-                className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
-                style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-                {pixCopied ? <Check size={18} /> : <Copy size={18} />}
-                {pixCopied ? 'Copiado!' : 'Copiar PIX'}
-              </button>
-              <button onClick={() => submitPaymentRequest.mutate()} disabled={submitPaymentRequest.isPending}
-                className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 disabled:opacity-40"
-                style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-                {submitPaymentRequest.isPending ? '...' : 'Já Paguei'}
-              </button>
-            </div>
-          ) : hasRequested ? (
-            <div className="flex flex-col gap-3">
-              <div className="w-full py-3 flex items-center justify-center gap-2 rounded-full" style={{ background: 'var(--color-surface-primary)', border: '1px solid var(--color-border)' }}>
-                <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Aguardando aprovação do admin</p>
+          {/* Botões — estado conforme myRequest
+              Mensalistas: sempre exibe (pending/approved/default)
+              Avulsos: só exibe quando há jogo(s) com pagamento pendente */}
+          {(!isAvulso || avulsoNeedsPay) && (
+            !hasRequested && !isApproved ? (
+              <div className="flex gap-3">
+                <button onClick={handleCopyPix}
+                  className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
+                  style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                  {pixCopied ? <Check size={18} /> : <Copy size={18} />}
+                  {pixCopied ? 'Copiado!' : 'Copiar PIX'}
+                </button>
+                <button onClick={() => submitPaymentRequest.mutate()} disabled={submitPaymentRequest.isPending}
+                  className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 disabled:opacity-40"
+                  style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                  {submitPaymentRequest.isPending ? '...' : 'Já Paguei'}
+                </button>
               </div>
-            </div>
-          ) : (
-            <div className="w-full py-3 flex items-center justify-center gap-2 rounded-full" style={{ background: '#e6f4ea' }}>
-              <CheckCircle size={18} weight="fill" color="#089527" />
-              <p style={{ color: '#089527', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Pagamento aprovado!</p>
-            </div>
+            ) : hasRequested ? (
+              <div className="flex flex-col gap-3">
+                <div className="w-full py-3 flex items-center justify-center gap-2 rounded-full" style={{ background: 'var(--color-surface-primary)', border: '1px solid var(--color-border)' }}>
+                  <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Aguardando aprovação do admin</p>
+                </div>
+              </div>
+            ) : isApproved ? (
+              <div className="w-full py-3 flex items-center justify-center gap-2 rounded-full" style={{ background: '#e6f4ea' }}>
+                <CheckCircle size={18} weight="fill" color="#089527" />
+                <p style={{ color: '#089527', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Pagamento aprovado!</p>
+              </div>
+            ) : null
           )}
         </div>
 

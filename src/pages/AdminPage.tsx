@@ -167,13 +167,65 @@ export default function AdminPage() {
         if (!res.ok) throw new Error('Erro no servidor')
         return res.json()
       } else {
-        const res = await fetch(`${SERVER_URL}/notify-cobranca`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ message: notifMessage || 'Você ainda tem mensalidade/avulso pendente.' })
-        })
-        if (!res.ok) throw new Error('Erro no servidor')
-        return res.json()
+        const month = format(new Date(), 'yyyy-MM')
+        // Busca quem já pagou ou submeteu pedido de pagamento — para não notificar
+        const [paidSnap, requestsSnap, unpaidJogoSnap, pendingJogoSnap] = await Promise.all([
+          getDocs(query(collection(db, 'payments'),
+            where('month', '==', month),
+            where('type', '==', 'mensalidade'),
+            where('paid', '==', true)
+          )),
+          getDocs(query(collection(db, 'payment_requests'),
+            where('month', '==', month),
+            where('player_type', '==', 'mensalista')
+          )),
+          getDocs(query(collection(db, 'payments'),
+            where('type', '==', 'jogo'),
+            where('paid', '==', false)
+          )),
+          getDocs(query(collection(db, 'payment_requests'),
+            where('player_type', '==', 'avulso'),
+            where('status', '==', 'pending')
+          )),
+        ])
+
+        const paidMensalistaIds = new Set(paidSnap.docs.map(d => d.data().user_id))
+        const requestedMensalistaIds = new Set(requestsSnap.docs.map(d => d.data().user_id))
+        const avulsosWithUnpaid = new Set(unpaidJogoSnap.docs.map(d => d.data().user_id))
+        const avulsosWithPendingRequest = new Set(pendingJogoSnap.docs.map(d => d.data().user_id))
+
+        const activePlayers = players.filter(p => p.active)
+
+        // Mensalistas que ainda não pagaram e não submeteram pedido
+        const mensalistasToNotify = activePlayers.filter(p =>
+          p.player_type === 'mensalista' &&
+          !paidMensalistaIds.has(p.id) &&
+          !requestedMensalistaIds.has(p.id)
+        )
+
+        // Avulsos com jogos pendentes e sem pedido ativo
+        const avulsosToNotify = activePlayers.filter(p =>
+          p.player_type === 'avulso' &&
+          avulsosWithUnpaid.has(p.id) &&
+          !avulsosWithPendingRequest.has(p.id)
+        )
+
+        const toNotify = [...mensalistasToNotify, ...avulsosToNotify]
+        if (toNotify.length === 0) return { sent: 0 }
+
+        const results = await Promise.all(toNotify.map(async p => {
+          const msg = notifMessage || (p.player_type === 'mensalista'
+            ? 'Você ainda tem mensalidade pendente. Por favor, efetue o pagamento!'
+            : 'Você ainda tem pagamento de jogo pendente. Por favor, efetue o pagamento!')
+          const res = await fetch(`${SERVER_URL}/notify-cobranca`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ userId: p.id, message: msg })
+          })
+          return res.ok ? 1 : 0
+        }))
+
+        return { sent: results.reduce((a: number, b: number) => a + b, 0) }
       }
     },
     onSuccess: (data) => {

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { collection, getDocs, query, where, doc, getDoc, writeBatch } from 'firebase/firestore'
+import { getAuth, getIdToken } from 'firebase/auth'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { format, isAfter, nextWednesday, isWednesday, startOfDay } from 'date-fns'
@@ -13,6 +14,7 @@ import type { Attendance } from '../types'
 import Header from '../components/layout/Header'
 
 const MAX_PLAYERS = 16
+const SERVER_URL = 'https://chicofc-server.onrender.com'
 
 function getNextWednesday(): Date {
   const today = startOfDay(new Date())
@@ -163,10 +165,23 @@ export default function GamesPage() {
   const handleConfirm = useMutation({
     mutationFn: async () => {
       const batch = writeBatch(db)
+      let shouldNotifyAvulso = false
+
+      const playerType = user!.player_type ?? 'avulso'
+
       if (myAttendance) {
         batch.update(doc(db, 'attendances', myAttendance.id), { status: 'confirmed' })
+        // Avulso saindo da fila de espera após terça 13h: janela de prioridade fechou,
+        // agora é confirmação real → cria pagamento e notifica
+        if (playerType === 'avulso' && myAttendance.status === 'waitlist' && !priorityOpen) {
+          const payRef = doc(collection(db, 'payments'))
+          batch.set(payRef, {
+            user_id: user!.id, amount: 22, type: 'jogo',
+            game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString()
+          })
+          shouldNotifyAvulso = true
+        }
       } else {
-        const playerType = user!.player_type ?? 'avulso'
         const status: 'confirmed' | 'waitlist' = isFull || (playerType === 'avulso' && priorityOpen) ? 'waitlist' : 'confirmed'
         const attRef = doc(collection(db, 'attendances'))
         batch.set(attRef, {
@@ -176,15 +191,36 @@ export default function GamesPage() {
           status,
           confirmed_at: new Date().toISOString()
         })
+        // Avulso confirmando diretamente (após terça 13h, janela já fechada)
         if (status === 'confirmed' && playerType === 'avulso') {
           const payRef = doc(collection(db, 'payments'))
           batch.set(payRef, {
             user_id: user!.id, amount: 22, type: 'jogo',
             game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString()
           })
+          shouldNotifyAvulso = true
         }
       }
       await batch.commit()
+
+      // Notifica avulso confirmado para lembrar de pagar
+      if (shouldNotifyAvulso) {
+        try {
+          const authInstance = getAuth()
+          const currentUser = authInstance.currentUser
+          if (currentUser) {
+            const token = await getIdToken(currentUser)
+            await fetch(`${SERVER_URL}/notify-cobranca`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({
+                userId: user!.id,
+                message: 'Você confirmou presença! Não esqueça de pagar o jogo. Acesse a Caixinha para efetuar o pagamento.'
+              })
+            })
+          }
+        } catch { /* falha na notificação não bloqueia a confirmação */ }
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attendances', gameId] })
