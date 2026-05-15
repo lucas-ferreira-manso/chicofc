@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import BadgeRanking from '../components/BadgeRanking'
@@ -209,9 +209,9 @@ function BadgeVotacao({ type, player, onClick, disabled }: BadgeProps) {
             <img
               src={player.photoURL} alt={player.name}
               style={{
-                position: 'absolute', top: -6, left: -14,
-                width: 157, height: 157, objectFit: 'cover',
-                pointerEvents: 'none'
+                width: '100%', height: '100%',
+                objectFit: 'cover', objectPosition: 'center',
+                display: 'block', pointerEvents: 'none'
               }}
             />
           ) : (
@@ -375,6 +375,7 @@ function JogadorTab() {
   const [sheetType, setSheetType] = useState<'bolaCheia' | 'bolaMurcha' | null>(null)
   const [pendingCheia, setPendingCheia] = useState<string | null>(null)
   const [pendingMurcha, setPendingMurcha] = useState<string | null>(null)
+  const shareCardRef = useRef<HTMLDivElement>(null)
 
   const { data: players = [], isLoading: loadingPlayers } = useQuery({
     queryKey: ['confirmed-players', gameId],
@@ -409,16 +410,31 @@ function JogadorTab() {
   }
 
   const handleShare = async () => {
-    const cheiaId = votacao ? computeWinner(votacao.votos, 'bolaCheia') : null
-    const murchaId = votacao ? computeWinner(votacao.votos, 'bolaMurcha') : null
-    const cheiaName = players.find(p => p.id === cheiaId)?.name ?? '?'
-    const murchaName = players.find(p => p.id === murchaId)?.name ?? '?'
-    const text = `⚽ Bola Cheia: ${cheiaName}\n🫨 Bola Murcha: ${murchaName}\n#ChicoFC`
-    if (navigator.share) {
-      try { await navigator.share({ text }) } catch { /* user cancelled */ }
-    } else {
-      await navigator.clipboard.writeText(text)
-      toast.success('Copiado para a área de transferência!')
+    if (!shareCardRef.current) return
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(shareCardRef.current, {
+        backgroundColor: '#f8f8f8',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        ignoreElements: (el) => el.hasAttribute('data-share-exclude')
+      })
+      canvas.toBlob(async (blob) => {
+        if (!blob) return
+        const file = new File([blob], 'bola-cheia-chicofc.png', { type: 'image/png' })
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'Bola Cheia & Bola Murcha ⚽' })
+        } else {
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url; a.download = 'bola-cheia-chicofc.png'; a.click()
+          URL.revokeObjectURL(url)
+          toast.success('Imagem salva!')
+        }
+      }, 'image/png')
+    } catch {
+      toast.error('Erro ao gerar imagem')
     }
   }
 
@@ -454,11 +470,12 @@ function JogadorTab() {
   if (!votingOpen) {
     if (cheiaWinnerId || murchaWinnerId) {
       return (
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: 10,
-          padding: 16, background: 'var(--color-surface-primary)', borderRadius: 24
+        <div ref={shareCardRef} style={{
+          display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
+          padding: '24px 16px 16px', background: 'var(--color-surface-primary)', borderRadius: 24
         }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
+          <img src="/team-blue.png" alt="ChicoFC" style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center' }}>
             <p style={{
               fontFamily: 'var(--font-primary)', fontWeight: 600,
               fontSize: 24, lineHeight: '28px', color: 'var(--color-fg-accent)'
@@ -472,11 +489,12 @@ function JogadorTab() {
               Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!
             </p>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center' }}>
             <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled />
             <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled />
           </div>
           <button
+            data-share-exclude
             onClick={handleShare}
             style={{
               width: '100%', height: 56, borderRadius: 9999,
@@ -505,10 +523,11 @@ function JogadorTab() {
   if (hasVoted) {
     return (
       <div style={{
-        display: 'flex', flexDirection: 'column', gap: 10,
-        padding: 16, background: 'var(--color-surface-primary)', borderRadius: 24
+        display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
+        padding: '24px 16px 16px', background: 'var(--color-surface-primary)', borderRadius: 24
       }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
+        <img src="/team-blue.png" alt="ChicoFC" style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center' }}>
           <p style={{
             fontFamily: 'var(--font-primary)', fontWeight: 600,
             fontSize: 24, lineHeight: '28px', color: 'var(--color-fg-accent)'
@@ -522,7 +541,7 @@ function JogadorTab() {
             Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!
           </p>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center' }}>
           <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled />
           <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled />
         </div>
@@ -536,10 +555,11 @@ function JogadorTab() {
     if (cheiaWinnerId || murchaWinnerId) {
       return (
         <div style={{
-          display: 'flex', flexDirection: 'column', gap: 10,
-          padding: 16, background: 'var(--color-surface-primary)', borderRadius: 24
+          display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
+          padding: '24px 16px 16px', background: 'var(--color-surface-primary)', borderRadius: 24
         }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
+          <img src="/team-blue.png" alt="ChicoFC" style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center' }}>
             <p style={{
               fontFamily: 'var(--font-primary)', fontWeight: 600,
               fontSize: 24, lineHeight: '28px', color: 'var(--color-fg-accent)'
@@ -553,7 +573,7 @@ function JogadorTab() {
               Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!
             </p>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center' }}>
             <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled />
             <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled />
           </div>
