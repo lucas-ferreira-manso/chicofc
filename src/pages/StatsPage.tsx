@@ -344,25 +344,14 @@ function SmallCardVotacao({ entry, onClick }: { entry: HistoryEntry; onClick: ()
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, width: '100%', position: 'relative', padding: '0 4px' }}>
         <div style={{ position: 'relative' }}>
           <MiniPhoto player={entry.cheiaWinner} />
-          {/* Mini Bola Cheia icon */}
-          <div style={{ position: 'absolute', right: -1.4, top: 56, pointerEvents: 'none', width: 24.7, height: 24.7 }}>
-            <svg width="25" height="25" viewBox="0 0 52 52" fill="none">
-              <circle cx="26" cy="26" r="21.125" fill="white"/>
-              <g transform="translate(4.878 4.878)">
-                <path d="M21.125 0C16.9 0 12.9 1.24 9.39 3.56C5.91 5.88 3.21 9.18 1.61 13.04C0.009 16.9 -0.41 21.15 0.41 25.25C1.22 29.34 3.23 33.11 6.19 36.06C9.14 39.02 12.91 41.03 17 41.84C21.1 42.66 25.35 42.24 29.21 40.64C33.07 39.04 36.37 36.34 38.69 32.86C41.01 29.39 42.25 25.3 42.25 21.125C42.24 15.52 40.02 10.15 36.06 6.19C32.1 2.23 26.73 0.006 21.125 0Z" fill="#082996"/>
-              </g>
-            </svg>
+          <div style={{ position: 'absolute', right: -1.4, top: 48, pointerEvents: 'none' }}>
+            <BolaCheiaIcon size={25} />
           </div>
         </div>
         <div style={{ position: 'relative' }}>
           <MiniPhoto player={entry.murchaWinner} />
-          {/* Mini Bola Murcha icon */}
-          <div style={{ position: 'absolute', right: -1.4, top: 56, pointerEvents: 'none', width: 24.7, height: 24.7 }}>
-            <svg width="25" height="25" viewBox="0 0 52 52" fill="none">
-              <g transform="translate(5 13)">
-                <path d="M19.7 0C20.1 -0.005 20.6 0.002 21 0.001C25.7 -0.042 30.2 1.056 34.3 3.195C35.9 4.052 37.4 5.031 38.7 6.294C40.9 8.43 41.7 10.764 41.9 13.744C42 14.409 42 14.959 42 15.644C42 17.786 41.2 19.877 39.6 21.371C35.2 25.505 28.1 26.004 22.3 25.985C20.5 25.984 18.4 26.035 16.6 25.953C11.9 25.743 6.3 24.82 2.7 21.681C1.1 20.27 0.04 18.263 0.005 16.139C-0.056 12.669 0.41 9.275 2.95 6.668C6.2 3.328 10.9 1.349 15.5 0.493C16.9 0.238 18.3 0.079 19.7 0.019Z" fill="#ED0000"/>
-              </g>
-            </svg>
+          <div style={{ position: 'absolute', right: -1.4, top: 48, pointerEvents: 'none' }}>
+            <BolaMurchaIcon size={25} />
           </div>
         </div>
       </div>
