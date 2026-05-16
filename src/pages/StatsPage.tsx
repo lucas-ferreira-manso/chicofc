@@ -26,6 +26,11 @@ interface PlayerInfo { id: string; name: string; photoURL?: string }
 interface VotacaoData {
   votos: Record<string, { bolaCheia: string; bolaMurcha: string }>
 }
+interface HistoryEntry {
+  gameId: string
+  cheiaWinner: PlayerInfo | null
+  murchaWinner: PlayerInfo | null
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -97,6 +102,39 @@ async function fetchVotacao(gameId: string): Promise<VotacaoData> {
   const snap = await getDoc(doc(db, 'votacao', gameId))
   if (!snap.exists()) return { votos: {} }
   return { votos: snap.data().votos ?? {} }
+}
+
+async function fetchAllPlayers(): Promise<PlayerInfo[]> {
+  const snap = await getDocs(collection(db, 'players'))
+  return snap.docs
+    .filter(d => d.data().active !== false)
+    .map(d => ({
+      id: d.id,
+      name: d.data().name || d.data().email || 'Jogador',
+      photoURL: d.data().photoURL
+    }))
+}
+
+async function fetchVotacaoHistory(currentGameId: string): Promise<HistoryEntry[]> {
+  const [votacaoSnap, allPlayers] = await Promise.all([
+    getDocs(collection(db, 'votacao')),
+    fetchAllPlayers()
+  ])
+  const playerMap = new Map(allPlayers.map(p => [p.id, p]))
+  return votacaoSnap.docs
+    .filter(d => d.id !== currentGameId && Object.keys(d.data().votos ?? {}).length > 0)
+    .sort((a, b) => b.id.localeCompare(a.id))
+    .map(d => {
+      const votos = d.data().votos ?? {}
+      const cheiaId = computeWinner(votos, 'bolaCheia')
+      const murchaId = computeWinner(votos, 'bolaMurcha')
+      return {
+        gameId: d.id,
+        cheiaWinner: cheiaId ? (playerMap.get(cheiaId) ?? null) : null,
+        murchaWinner: murchaId ? (playerMap.get(murchaId) ?? null) : null,
+      }
+    })
+    .filter(e => e.cheiaWinner || e.murchaWinner)
 }
 
 // ─── SVG Icons (paths extraídos do Figma) ────────────────────────────────────
@@ -254,6 +292,84 @@ function BadgeVotacao({ type, player, onClick, disabled, completed }: BadgeProps
   )
 }
 
+// ─── Small Card Votação (histórico) ───────────────────────────────────────────
+
+function SmallCardVotacao({ entry, onClick }: { entry: HistoryEntry; onClick: () => void }) {
+  const dateLabel = (() => {
+    try { return format(new Date(entry.gameId + 'T12:00:00'), 'dd/MM/yyyy') } catch { return entry.gameId }
+  })()
+
+  const MiniPhoto = ({ player }: { player: PlayerInfo | null }) => (
+    <div style={{
+      width: 63, height: 71, borderRadius: 16, overflow: 'hidden', flexShrink: 0,
+      background: 'var(--color-surface-secondary)', position: 'relative'
+    }}>
+      {player?.photoURL ? (
+        <img src={player.photoURL} alt={player.name}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }} />
+      ) : player ? (
+        <span style={{
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 22,
+          color: 'rgba(255,255,255,0.4)'
+        }}>
+          {getInitials(player.name)}
+        </span>
+      ) : null}
+    </div>
+  )
+
+  return (
+    <button onClick={onClick} style={{
+      width: 164, borderRadius: 24, overflow: 'hidden',
+      position: 'relative', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', gap: 8, padding: '12px 8px 8px',
+      border: 'none', cursor: 'pointer', background: 'transparent'
+    }}>
+      {/* Stadium bg */}
+      <img src="/stadium-bg.png" aria-hidden alt=""
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', pointerEvents: 'none' }} />
+
+      {/* Content */}
+      <img src="/team-blue.png" alt="" style={{ width: 32, height: 32, objectFit: 'contain', position: 'relative', flexShrink: 0 }} />
+      <div style={{ width: '100%', position: 'relative', textAlign: 'center' }}>
+        <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 12, lineHeight: '16px', color: 'white' }}>
+          Bola Cheia/Murcha
+        </p>
+        <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 400, fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 2 }}>
+          Pelada dia {dateLabel}
+        </p>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, width: '100%', position: 'relative', padding: '0 4px' }}>
+        <div style={{ position: 'relative' }}>
+          <MiniPhoto player={entry.cheiaWinner} />
+          {/* Mini Bola Cheia icon */}
+          <div style={{ position: 'absolute', right: -1.4, top: 56, pointerEvents: 'none', width: 24.7, height: 24.7 }}>
+            <svg width="25" height="25" viewBox="0 0 52 52" fill="none">
+              <circle cx="26" cy="26" r="21.125" fill="white"/>
+              <g transform="translate(4.878 4.878)">
+                <path d="M21.125 0C16.9 0 12.9 1.24 9.39 3.56C5.91 5.88 3.21 9.18 1.61 13.04C0.009 16.9 -0.41 21.15 0.41 25.25C1.22 29.34 3.23 33.11 6.19 36.06C9.14 39.02 12.91 41.03 17 41.84C21.1 42.66 25.35 42.24 29.21 40.64C33.07 39.04 36.37 36.34 38.69 32.86C41.01 29.39 42.25 25.3 42.25 21.125C42.24 15.52 40.02 10.15 36.06 6.19C32.1 2.23 26.73 0.006 21.125 0Z" fill="#082996"/>
+              </g>
+            </svg>
+          </div>
+        </div>
+        <div style={{ position: 'relative' }}>
+          <MiniPhoto player={entry.murchaWinner} />
+          {/* Mini Bola Murcha icon */}
+          <div style={{ position: 'absolute', right: -1.4, top: 56, pointerEvents: 'none', width: 24.7, height: 24.7 }}>
+            <svg width="25" height="25" viewBox="0 0 52 52" fill="none">
+              <g transform="translate(5 13)">
+                <path d="M19.7 0C20.1 -0.005 20.6 0.002 21 0.001C25.7 -0.042 30.2 1.056 34.3 3.195C35.9 4.052 37.4 5.031 38.7 6.294C40.9 8.43 41.7 10.764 41.9 13.744C42 14.409 42 14.959 42 15.644C42 17.786 41.2 19.877 39.6 21.371C35.2 25.505 28.1 26.004 22.3 25.985C20.5 25.984 18.4 26.035 16.6 25.953C11.9 25.743 6.3 24.82 2.7 21.681C1.1 20.27 0.04 18.263 0.005 16.139C-0.056 12.669 0.41 9.275 2.95 6.668C6.2 3.328 10.9 1.349 15.5 0.493C16.9 0.238 18.3 0.079 19.7 0.019Z" fill="#ED0000"/>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </button>
+  )
+}
+
 // ─── Voting Bottom Sheet ───────────────────────────────────────────────────────
 
 interface VotingSheetProps {
@@ -375,7 +491,9 @@ function JogadorTab() {
   const [sheetType, setSheetType] = useState<'bolaCheia' | 'bolaMurcha' | null>(null)
   const [pendingCheia, setPendingCheia] = useState<string | null>(null)
   const [pendingMurcha, setPendingMurcha] = useState<string | null>(null)
+  const [historySheet, setHistorySheet] = useState<HistoryEntry | null>(null)
   const shareCardRef = useRef<HTMLDivElement>(null)
+  const historyShareRef = useRef<HTMLDivElement>(null)
 
   const { data: players = [], isLoading: loadingPlayers } = useQuery({
     queryKey: ['confirmed-players', gameId],
@@ -387,6 +505,12 @@ function JogadorTab() {
     queryKey: ['votacao', gameId],
     queryFn: () => fetchVotacao(gameId),
     refetchInterval: 10_000
+  })
+
+  const { data: history = [] } = useQuery({
+    queryKey: ['votacao-history', gameId],
+    queryFn: () => fetchVotacaoHistory(gameId),
+    staleTime: 5 * 60_000
   })
 
   const saveVote = useMutation({
@@ -438,6 +562,32 @@ function JogadorTab() {
     }
   }
 
+  const handleShareHistory = async () => {
+    if (!historyShareRef.current) return
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(historyShareRef.current, {
+        backgroundColor: null, scale: 2, useCORS: true, logging: false,
+        ignoreElements: (el) => el.hasAttribute('data-share-exclude')
+      })
+      canvas.toBlob(async (blob) => {
+        if (!blob) return
+        const file = new File([blob], 'bola-cheia-chicofc.png', { type: 'image/png' })
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'Bola Cheia & Bola Murcha ⚽' })
+        } else {
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url; a.download = 'bola-cheia-chicofc.png'; a.click()
+          URL.revokeObjectURL(url)
+          toast.success('Imagem salva!')
+        }
+      }, 'image/png')
+    } catch {
+      toast.error('Erro ao gerar imagem')
+    }
+  }
+
   if (loadingPlayers || loadingVotacao) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', padding: '32px 0' }}>
@@ -466,127 +616,187 @@ function JogadorTab() {
   const votableForCheia = players.filter(p => p.id !== user!.id && p.id !== pendingMurcha)
   const votableForMurcha = players.filter(p => p.id !== user!.id && p.id !== pendingCheia)
 
-  // ── Estado: votação encerrada (toda segunda-feira) ────────────────────────
-  if (!votingOpen) {
-    if (cheiaWinnerId || murchaWinnerId) {
-      return (
-        <div ref={shareCardRef} style={{
-          display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
-          padding: '24px 16px 16px', borderRadius: 24,
-          position: 'relative', overflow: 'hidden'
-        }}>
-          {/* Stadium background */}
-          <img src="/stadium-bg.png" aria-hidden alt=""
-            style={{
-              position: 'absolute', inset: 0,
-              width: '100%', height: '100%',
-              objectFit: 'cover', pointerEvents: 'none'
-            }} />
-          {/* Dark overlay */}
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'rgba(0,0,0,0.45)', pointerEvents: 'none'
-          }} />
-
-          {/* Content */}
-          <img src="/team-blue.png" alt="ChicoFC"
-            style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0, position: 'relative' }} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center', position: 'relative' }}>
-            <p style={{
-              fontFamily: 'var(--font-primary)', fontWeight: 600,
-              fontSize: 24, lineHeight: '28px', color: 'white'
-            }}>
-              Parabéns aos envolvidos!
-            </p>
-            <p style={{
-              fontFamily: 'var(--font-primary)', fontWeight: 500,
-              fontSize: 16, color: 'rgba(255,255,255,0.85)'
-            }}>
-              Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!
-            </p>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center', position: 'relative' }}>
-            <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled completed />
-            <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled completed />
-          </div>
-          <button
-            data-share-exclude
-            onClick={handleShare}
-            style={{
-              width: '100%', height: 56, borderRadius: 9999,
-              background: 'white', border: 'none',
-              color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)',
-              fontWeight: 500, fontSize: 16, cursor: 'pointer',
-              position: 'relative'
-            }}>
-            Compartilhar
-          </button>
-        </div>
-      )
-    }
+  // ── helpers reutilizáveis ─────────────────────────────────────────────────
+  const BigCard = ({ entry, cardRef, onShare }: {
+    entry: { cheiaWinner: PlayerInfo | null; murchaWinner: PlayerInfo | null; gameId?: string }
+    cardRef: React.RefObject<HTMLDivElement>
+    onShare: () => void
+  }) => {
+    const dateLabel = entry.gameId
+      ? (() => { try { return format(new Date(entry.gameId + 'T12:00:00'), "d 'de' MMMM", { locale: ptBR }) } catch { return '' } })()
+      : null
     return (
-      <p style={{
-        textAlign: 'center', padding: '32px 0',
-        fontFamily: 'var(--font-primary)', fontSize: 16,
-        color: 'var(--color-fg-secondary)'
+      <div ref={cardRef} style={{
+        display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
+        padding: '24px 16px 16px', borderRadius: 24,
+        position: 'relative', overflow: 'hidden'
       }}>
-        Votação encerrada. Volte na quarta após o jogo!
-      </p>
+        <img src="/stadium-bg.png" aria-hidden alt=""
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', pointerEvents: 'none' }} />
+
+        <img src="/team-blue.png" alt="ChicoFC"
+          style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0, position: 'relative' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center', position: 'relative' }}>
+          <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 24, lineHeight: '28px', color: 'white' }}>
+            Parabéns aos envolvidos!
+          </p>
+          <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'rgba(255,255,255,0.85)' }}>
+            {dateLabel ? `Pelada dia ${format(new Date(entry.gameId! + 'T12:00:00'), 'dd/MM/yyyy')}` : 'Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!'}
+          </p>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center', position: 'relative' }}>
+          <BadgeVotacao type="bolaCheia" player={entry.cheiaWinner} disabled completed />
+          <BadgeVotacao type="bolaMurcha" player={entry.murchaWinner} disabled completed />
+        </div>
+        <button data-share-exclude onClick={onShare}
+          style={{
+            width: '100%', height: 56, borderRadius: 9999,
+            background: 'white', border: 'none',
+            color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)',
+            fontWeight: 500, fontSize: 16, cursor: 'pointer', position: 'relative'
+          }}>
+          Compartilhar
+        </button>
+      </div>
     )
   }
 
-  // ── Estado: usuário já votou (votação ainda aberta) ───────────────────────
-  // Compartilhar não aparece aqui — só após encerramento (segunda-feira)
-  if (hasVoted) {
+  const HistoryGrid = () => {
+    if (history.length === 0) return null
     return (
-      <div style={{
-        display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
-        padding: '24px 16px 16px', background: 'var(--color-surface-primary)', borderRadius: 24
-      }}>
-        <img src="/team-blue.png" alt="ChicoFC" style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }} />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center' }}>
-          <p style={{
-            fontFamily: 'var(--font-primary)', fontWeight: 600,
-            fontSize: 24, lineHeight: '28px', color: 'var(--color-fg-accent)'
-          }}>
-            Parabéns aos envolvidos!
-          </p>
-          <p style={{
-            fontFamily: 'var(--font-primary)', fontWeight: 500,
-            fontSize: 16, color: 'var(--color-fg-secondary)'
-          }}>
-            Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!
-          </p>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center' }}>
-          <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled />
-          <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)' }}>
+          Histórico
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {history.map(entry => (
+            <SmallCardVotacao key={entry.gameId} entry={entry} onClick={() => setHistorySheet(entry)} />
+          ))}
         </div>
       </div>
     )
   }
 
-  // ── Estado: usuário não jogou ─────────────────────────────────────────────
-  if (!userWasConfirmed) {
-    // Se já há votos, exibe o resultado mesmo sem poder votar
+  // ── Estado: votação encerrada (toda segunda-feira) ────────────────────────
+  if (!votingOpen) {
     if (cheiaWinnerId || murchaWinnerId) {
       return (
+        <>
+          <BigCard
+            entry={{ cheiaWinner, murchaWinner }}
+            cardRef={shareCardRef}
+            onShare={handleShare}
+          />
+          <HistoryGrid />
+          {historySheet && (
+            <>
+              <div onClick={() => setHistorySheet(null)}
+                style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 70 }} />
+              <div style={{
+                position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70,
+                background: 'var(--color-bg)', borderRadius: '24px 24px 0 0',
+                padding: '16px 16px 40px',
+                display: 'flex', flexDirection: 'column', gap: 12
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px 4px' }}>
+                  <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)' }}>
+                    Resultado anterior
+                  </p>
+                  <button onClick={() => setHistorySheet(null)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+                    <X size={20} color="var(--color-fg-secondary)" />
+                  </button>
+                </div>
+                <BigCard
+                  entry={historySheet}
+                  cardRef={historyShareRef}
+                  onShare={handleShareHistory}
+                />
+              </div>
+            </>
+          )}
+        </>
+      )
+    }
+    return (
+      <>
+        <p style={{
+          textAlign: 'center', padding: '32px 0',
+          fontFamily: 'var(--font-primary)', fontSize: 16,
+          color: 'var(--color-fg-secondary)'
+        }}>
+          Votação encerrada. Volte na quarta após o jogo!
+        </p>
+        <HistoryGrid />
+        {historySheet && (
+          <>
+            <div onClick={() => setHistorySheet(null)}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 70 }} />
+            <div style={{
+              position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70,
+              background: 'var(--color-bg)', borderRadius: '24px 24px 0 0',
+              padding: '16px 16px 40px',
+              display: 'flex', flexDirection: 'column', gap: 12
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px 4px' }}>
+                <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)' }}>
+                  Resultado anterior
+                </p>
+                <button onClick={() => setHistorySheet(null)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+                  <X size={20} color="var(--color-fg-secondary)" />
+                </button>
+              </div>
+              <BigCard
+                entry={historySheet}
+                cardRef={historyShareRef}
+                onShare={handleShareHistory}
+              />
+            </div>
+          </>
+        )}
+      </>
+    )
+  }
+
+  const HistorySheetEl = historySheet && (
+    <>
+      <div onClick={() => setHistorySheet(null)}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 70 }} />
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70,
+        background: 'var(--color-bg)', borderRadius: '24px 24px 0 0',
+        padding: '16px 16px 40px', display: 'flex', flexDirection: 'column', gap: 12
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px 4px' }}>
+          <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)' }}>
+            Resultado anterior
+          </p>
+          <button onClick={() => setHistorySheet(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+            <X size={20} color="var(--color-fg-secondary)" />
+          </button>
+        </div>
+        <BigCard entry={historySheet} cardRef={historyShareRef} onShare={handleShareHistory} />
+      </div>
+    </>
+  )
+
+  // ── Estado: usuário já votou (votação ainda aberta) ───────────────────────
+  if (hasVoted) {
+    return (
+      <>
         <div style={{
           display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
           padding: '24px 16px 16px', background: 'var(--color-surface-primary)', borderRadius: 24
         }}>
           <img src="/team-blue.png" alt="ChicoFC" style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center' }}>
-            <p style={{
-              fontFamily: 'var(--font-primary)', fontWeight: 600,
-              fontSize: 24, lineHeight: '28px', color: 'var(--color-fg-accent)'
-            }}>
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 24, lineHeight: '28px', color: 'var(--color-fg-accent)' }}>
               Parabéns aos envolvidos!
             </p>
-            <p style={{
-              fontFamily: 'var(--font-primary)', fontWeight: 500,
-              fontSize: 16, color: 'var(--color-fg-secondary)'
-            }}>
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'var(--color-fg-secondary)' }}>
               Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!
             </p>
           </div>
@@ -595,17 +805,43 @@ function JogadorTab() {
             <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled />
           </div>
         </div>
-      )
-    }
+        <HistoryGrid />
+        {HistorySheetEl}
+      </>
+    )
+  }
 
+  // ── Estado: usuário não jogou ─────────────────────────────────────────────
+  if (!userWasConfirmed) {
     return (
-      <p style={{
-        textAlign: 'center', padding: '32px 0',
-        fontFamily: 'var(--font-primary)', fontSize: 16,
-        color: 'var(--color-fg-secondary)'
-      }}>
-        Você não participou deste jogo.
-      </p>
+      <>
+        {cheiaWinnerId || murchaWinnerId ? (
+          <div style={{
+            display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
+            padding: '24px 16px 16px', background: 'var(--color-surface-primary)', borderRadius: 24
+          }}>
+            <img src="/team-blue.png" alt="ChicoFC" style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center' }}>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 24, lineHeight: '28px', color: 'var(--color-fg-accent)' }}>
+                Parabéns aos envolvidos!
+              </p>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'var(--color-fg-secondary)' }}>
+                Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!
+              </p>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center' }}>
+              <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled />
+              <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled />
+            </div>
+          </div>
+        ) : (
+          <p style={{ textAlign: 'center', padding: '32px 0', fontFamily: 'var(--font-primary)', fontSize: 16, color: 'var(--color-fg-secondary)' }}>
+            Você não participou deste jogo.
+          </p>
+        )}
+        <HistoryGrid />
+        {HistorySheetEl}
+      </>
     )
   }
 
@@ -669,6 +905,9 @@ function JogadorTab() {
           onVote={(id) => handleSelectVote(sheetType, id)}
         />
       )}
+
+      <HistoryGrid />
+      {HistorySheetEl}
     </>
   )
 }
