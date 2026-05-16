@@ -780,21 +780,24 @@ function JogadorTab() {
       <>
         <div style={{
           display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
-          padding: '24px 16px 16px', background: 'var(--color-surface-primary)', borderRadius: 24,
-          aspectRatio: '9/16', width: '100%'
+          padding: '24px 16px 16px', borderRadius: 24,
+          position: 'relative', overflow: 'hidden', width: '100%'
         }}>
-          <img src="/team-blue.png" alt="ChicoFC" style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center' }}>
-            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 24, lineHeight: '28px', color: 'var(--color-fg-accent)' }}>
+          <img src="/stadium-bg.png" aria-hidden alt=""
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', pointerEvents: 'none' }} />
+          <img src="/team-blue.png" alt="ChicoFC" style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0, position: 'relative' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center', position: 'relative' }}>
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 24, lineHeight: '28px', color: 'white' }}>
               Parabéns aos envolvidos!
             </p>
-            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'var(--color-fg-secondary)' }}>
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'rgba(255,255,255,0.85)' }}>
               Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!
             </p>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center', flex: 1 }}>
-            <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled />
-            <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled />
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center', position: 'relative' }}>
+            <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled completed />
+            <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled completed />
           </div>
         </div>
         <HistoryGrid />
@@ -810,21 +813,24 @@ function JogadorTab() {
         {cheiaWinnerId || murchaWinnerId ? (
           <div style={{
             display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
-            padding: '24px 16px 16px', background: 'var(--color-surface-primary)', borderRadius: 24,
-            aspectRatio: '9/16', width: '100%'
+            padding: '24px 16px 16px', borderRadius: 24,
+            position: 'relative', overflow: 'hidden', width: '100%'
           }}>
-            <img src="/team-blue.png" alt="ChicoFC" style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center' }}>
-              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 24, lineHeight: '28px', color: 'var(--color-fg-accent)' }}>
+            <img src="/stadium-bg.png" aria-hidden alt=""
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', pointerEvents: 'none' }} />
+            <img src="/team-blue.png" alt="ChicoFC" style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0, position: 'relative' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center', position: 'relative' }}>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 24, lineHeight: '28px', color: 'white' }}>
                 Parabéns aos envolvidos!
               </p>
-              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'var(--color-fg-secondary)' }}>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'rgba(255,255,255,0.85)' }}>
                 Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!
               </p>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center', flex: 1 }}>
-              <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled />
-              <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled />
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center', position: 'relative' }}>
+              <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled completed />
+              <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled completed />
             </div>
           </div>
         ) : (
