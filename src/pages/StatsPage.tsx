@@ -476,7 +476,7 @@ function JogadorTab() {
           position: 'relative', overflow: 'hidden'
         }}>
           {/* Stadium background */}
-          <img src="/stadium-bg.svg" aria-hidden alt=""
+          <img src="/stadium-bg.png" aria-hidden alt=""
             style={{
               position: 'absolute', inset: 0,
               width: '100%', height: '100%',
