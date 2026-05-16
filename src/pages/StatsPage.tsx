@@ -780,7 +780,8 @@ function JogadorTab() {
       <>
         <div style={{
           display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
-          padding: '24px 16px 16px', background: 'var(--color-surface-primary)', borderRadius: 24
+          padding: '24px 16px 16px', background: 'var(--color-surface-primary)', borderRadius: 24,
+          aspectRatio: '9/16', width: '100%'
         }}>
           <img src="/team-blue.png" alt="ChicoFC" style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center' }}>
@@ -791,7 +792,7 @@ function JogadorTab() {
               Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!
             </p>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center', flex: 1 }}>
             <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled />
             <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled />
           </div>
@@ -809,7 +810,8 @@ function JogadorTab() {
         {cheiaWinnerId || murchaWinnerId ? (
           <div style={{
             display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
-            padding: '24px 16px 16px', background: 'var(--color-surface-primary)', borderRadius: 24
+            padding: '24px 16px 16px', background: 'var(--color-surface-primary)', borderRadius: 24,
+            aspectRatio: '9/16', width: '100%'
           }}>
             <img src="/team-blue.png" alt="ChicoFC" style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center' }}>
@@ -820,7 +822,7 @@ function JogadorTab() {
                 Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!
               </p>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center', flex: 1 }}>
               <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled />
               <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled />
             </div>
@@ -841,7 +843,8 @@ function JogadorTab() {
     <>
       <div style={{
         display: 'flex', flexDirection: 'column', gap: 10,
-        padding: 16, background: 'var(--color-surface-primary)', borderRadius: 24
+        padding: 16, background: 'var(--color-surface-primary)', borderRadius: 24,
+        aspectRatio: '9/16', width: '100%'
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8, textAlign: 'center' }}>
           <p style={{
@@ -858,7 +861,7 @@ function JogadorTab() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 8px', flex: 1, alignItems: 'center' }}>
           <BadgeVotacao
             type="bolaCheia"
             player={pendingCheiaPlayer}
