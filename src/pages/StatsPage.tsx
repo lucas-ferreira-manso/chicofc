@@ -234,7 +234,7 @@ function BadgeVotacao({ type, player, onClick, disabled, completed }: BadgeProps
         onClick={onClick}
         disabled={disabled || !onClick}
         style={{
-          height: 150, borderRadius: 24, width: '100%',
+          aspectRatio: '2/3', borderRadius: 24, width: '100%',
           background: player ? 'var(--color-surface-secondary)' : 'white',
           border: player ? 'none' : '1.5px solid var(--color-border)',
           overflow: 'hidden', position: 'relative',
@@ -285,7 +285,7 @@ function BadgeVotacao({ type, player, onClick, disabled, completed }: BadgeProps
       </div>
 
       {/* Ícone da bola sobreposto */}
-      <div style={{ position: 'absolute', right: -3, top: 118, pointerEvents: 'none' }}>
+      <div style={{ position: 'absolute', right: -3, top: 165, pointerEvents: 'none' }}>
         {isMurcha ? <BolaMurchaIcon size={52} /> : <BolaCheiaIcon size={52} />}
       </div>
     </div>
@@ -843,34 +843,40 @@ function JogadorTab() {
     <>
       <div style={{
         display: 'flex', flexDirection: 'column', gap: 10,
-        padding: 16, background: 'var(--color-surface-primary)', borderRadius: 24,
-        aspectRatio: '9/16', width: '100%'
+        padding: '24px 16px 16px', borderRadius: 24,
+        position: 'relative', overflow: 'hidden', width: '100%'
       }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8, textAlign: 'center' }}>
+        <img src="/stadium-bg.png" aria-hidden alt=""
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', pointerEvents: 'none' }} />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'center', position: 'relative' }}>
           <p style={{
             fontFamily: 'var(--font-primary)', fontWeight: 600,
-            fontSize: 24, lineHeight: '28px', color: 'var(--color-fg-accent)'
+            fontSize: 24, lineHeight: '28px', color: 'white'
           }}>
             Chegou a hora de julgar!
           </p>
           <p style={{
             fontFamily: 'var(--font-primary)', fontWeight: 500,
-            fontSize: 16, color: 'var(--color-fg-secondary)'
+            fontSize: 16, color: 'rgba(255,255,255,0.85)'
           }}>
             Vote no Bola Cheia e Bola murcha da rodada!
           </p>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 8px', flex: 1, alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 8px', position: 'relative' }}>
           <BadgeVotacao
             type="bolaCheia"
             player={pendingCheiaPlayer}
             onClick={() => setSheetType('bolaCheia')}
+            completed
           />
           <BadgeVotacao
             type="bolaMurcha"
             player={pendingMurchaPlayer}
             onClick={() => setSheetType('bolaMurcha')}
+            completed
           />
         </div>
 
@@ -882,9 +888,9 @@ function JogadorTab() {
             className="transition-all active:scale-95 disabled:opacity-40"
             style={{
               width: '100%', height: 56, borderRadius: 9999,
-              background: 'var(--color-surface-accent)', color: 'white',
+              background: 'white', color: 'var(--color-fg-accent)',
               fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16,
-              border: 'none', cursor: 'pointer'
+              border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0
             }}>
             {saveVote.isPending ? 'Salvando...' : 'Confirmar votos'}
           </button>
