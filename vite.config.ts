@@ -2,8 +2,14 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import path from 'path'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@phosphor-icons/react': path.resolve('./node_modules/@phosphor-icons/react/dist/index.cjs.js')
+    }
+  },
   plugins: [
     react(),
     tailwindcss(),
