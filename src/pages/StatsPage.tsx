@@ -180,13 +180,13 @@ interface BadgeProps {
   player?: PlayerInfo | null
   onClick?: () => void
   disabled?: boolean
+  completed?: boolean
 }
 
-function BadgeVotacao({ type, player, onClick, disabled }: BadgeProps) {
+function BadgeVotacao({ type, player, onClick, disabled, completed }: BadgeProps) {
   const isMurcha = type === 'bolaMurcha'
-  // Bola Cheia usa var(--color-fg-accent) para adaptar ao dark mode (#082996 light / #66d1ff dark)
-  // Bola Murcha usa vermelho fixo — legível em ambos os modos
-  const accentColor = isMurcha ? '#ed0000' : 'var(--color-fg-accent)'
+  const accentColor = completed ? 'white' : isMurcha ? '#ed0000' : 'var(--color-fg-accent)'
+  const nameColor = completed ? 'rgba(255,255,255,0.8)' : 'var(--color-fg-secondary)'
   const label = isMurcha ? 'Bola Murcha' : 'Bola Cheia'
 
   return (
@@ -240,7 +240,7 @@ function BadgeVotacao({ type, player, onClick, disabled }: BadgeProps) {
         </span>
         <span style={{
           fontFamily: 'var(--font-primary)', fontWeight: 500,
-          fontSize: 14, color: 'var(--color-fg-secondary)'
+          fontSize: 14, color: nameColor
         }}>
           {player ? player.name : 'nome atleta'}
         </span>
@@ -414,7 +414,7 @@ function JogadorTab() {
     try {
       const html2canvas = (await import('html2canvas')).default
       const canvas = await html2canvas(shareCardRef.current, {
-        backgroundColor: '#f8f8f8',
+        backgroundColor: null,
         scale: 2,
         useCORS: true,
         logging: false,
@@ -472,35 +472,52 @@ function JogadorTab() {
       return (
         <div ref={shareCardRef} style={{
           display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
-          padding: '24px 16px 16px', background: 'var(--color-surface-primary)', borderRadius: 24
+          padding: '24px 16px 16px', borderRadius: 24,
+          position: 'relative', overflow: 'hidden'
         }}>
-          <img src="/team-blue.png" alt="ChicoFC" style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center' }}>
+          {/* Stadium background */}
+          <img src="/stadium-bg.svg" aria-hidden alt=""
+            style={{
+              position: 'absolute', inset: 0,
+              width: '100%', height: '100%',
+              objectFit: 'cover', pointerEvents: 'none'
+            }} />
+          {/* Dark overlay */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'rgba(0,0,0,0.45)', pointerEvents: 'none'
+          }} />
+
+          {/* Content */}
+          <img src="/team-blue.png" alt="ChicoFC"
+            style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0, position: 'relative' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center', position: 'relative' }}>
             <p style={{
               fontFamily: 'var(--font-primary)', fontWeight: 600,
-              fontSize: 24, lineHeight: '28px', color: 'var(--color-fg-accent)'
+              fontSize: 24, lineHeight: '28px', color: 'white'
             }}>
               Parabéns aos envolvidos!
             </p>
             <p style={{
               fontFamily: 'var(--font-primary)', fontWeight: 500,
-              fontSize: 16, color: 'var(--color-fg-secondary)'
+              fontSize: 16, color: 'rgba(255,255,255,0.85)'
             }}>
               Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!
             </p>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center' }}>
-            <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled />
-            <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled />
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center', position: 'relative' }}>
+            <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled completed />
+            <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled completed />
           </div>
           <button
             data-share-exclude
             onClick={handleShare}
             style={{
               width: '100%', height: 56, borderRadius: 9999,
-              background: 'transparent', border: '2px solid var(--color-fg-accent)',
+              background: 'white', border: 'none',
               color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)',
-              fontWeight: 500, fontSize: 16, cursor: 'pointer'
+              fontWeight: 500, fontSize: 16, cursor: 'pointer',
+              position: 'relative'
             }}>
             Compartilhar
           </button>
