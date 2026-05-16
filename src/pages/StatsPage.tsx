@@ -618,7 +618,8 @@ function JogadorTab() {
       <div ref={cardRef} style={{
         display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
         padding: '24px 16px 16px', borderRadius: 24,
-        position: 'relative', overflow: 'hidden'
+        position: 'relative', overflow: 'hidden',
+        aspectRatio: '9/16', width: '100%'
       }}>
         <img src="/stadium-bg.png" aria-hidden alt=""
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
@@ -634,7 +635,7 @@ function JogadorTab() {
             {dateLabel ? `Pelada dia ${format(new Date(entry.gameId! + 'T12:00:00'), 'dd/MM/yyyy')}` : 'Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!'}
           </p>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center', position: 'relative' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center', position: 'relative', flex: 1 }}>
           <BadgeVotacao type="bolaCheia" player={entry.cheiaWinner} disabled completed />
           <BadgeVotacao type="bolaMurcha" player={entry.murchaWinner} disabled completed />
         </div>
@@ -643,7 +644,8 @@ function JogadorTab() {
             width: '100%', height: 56, borderRadius: 9999,
             background: 'white', border: 'none',
             color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)',
-            fontWeight: 500, fontSize: 16, cursor: 'pointer', position: 'relative'
+            fontWeight: 500, fontSize: 16, cursor: 'pointer', position: 'relative',
+            flexShrink: 0
           }}>
           Compartilhar
         </button>
