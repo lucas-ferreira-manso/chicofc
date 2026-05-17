@@ -99,7 +99,7 @@ function getGameId(date: Date): string {
 async function fetchMyTempAvulsos(userId: string, gameId: string): Promise<any[]> {
   const q = query(collection(db, 'avulsos_temp'), where('addedBy', '==', userId))
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.gameId === gameId)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() } as any)).filter(d => d.gameId === gameId)
 }
 
 type EditField = 'quadra' | 'extras' | 'mensalista' | 'avulso' | null
