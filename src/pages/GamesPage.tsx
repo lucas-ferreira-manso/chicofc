@@ -349,7 +349,7 @@ export default function GamesPage() {
     onError: () => toast.error('Erro ao remover avulso')
   })
 
-  const pct = Math.min((confirmed.length / MAX_PLAYERS) * 100, 100)
+  const pct = Math.min((totalConfirmed / MAX_PLAYERS) * 100, 100)
   const isPending = handleConfirm.isPending || handleDecline.isPending
 
   return (
@@ -389,7 +389,7 @@ export default function GamesPage() {
           </p>
           <div className="text-right">
             <p className="font-semibold" style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)' }}>
-              {confirmed.length}/{MAX_PLAYERS}
+              {totalConfirmed}/{MAX_PLAYERS}
             </p>
             <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
               confirmados
