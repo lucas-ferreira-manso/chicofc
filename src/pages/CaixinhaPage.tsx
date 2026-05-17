@@ -3,9 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { collection, getDocs, doc, updateDoc, addDoc, getDoc, setDoc, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
-import { format } from 'date-fns'
+import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Copy, Check, PencilSimple, X, CheckCircle, Circle } from '@phosphor-icons/react'
+import { Copy, Check, PencilSimple, X, CheckCircle, Circle, BellRinging } from '@phosphor-icons/react'
 import Header from '../components/layout/Header'
 import { toast } from 'sonner'
 import type { Payment, Profile } from '../types'
@@ -86,6 +86,26 @@ async function fetchMyUnpaidJogoPayments(userId: string): Promise<any[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }))
 }
 
+function getNextWednesday(): Date {
+  const today = startOfDay(new Date())
+  if (isWednesday(today)) return today
+  return nextWednesday(today)
+}
+
+function getGameId(date: Date): string {
+  return format(date, 'yyyy-MM-dd')
+}
+
+async function fetchMyTempAvulsos(userId: string, gameId: string): Promise<any[]> {
+  const q = query(
+    collection(db, 'avulsos_temp'),
+    where('addedBy', '==', userId),
+    where('gameId', '==', gameId)
+  )
+  const snap = await getDocs(q)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
 type EditField = 'quadra' | 'extras' | 'mensalista' | 'avulso' | null
 
 export default function CaixinhaPage() {
@@ -115,6 +135,15 @@ export default function CaixinhaPage() {
     enabled: !!user?.id && user?.player_type === 'avulso',
     refetchInterval: 8000
   })
+
+  const currentGameId = getGameId(getNextWednesday())
+  const { data: myTempAvulsos = [] } = useQuery({
+    queryKey: ['my-temp-avulsos', user?.id, currentGameId],
+    queryFn: () => fetchMyTempAvulsos(user!.id, currentGameId),
+    enabled: !!user?.id,
+    refetchInterval: 15000
+  })
+  const hasAddedTempAvulso = myTempAvulsos.length > 0
 
   const [pixCopied, setPixCopied] = useState(false)
   const [editingField, setEditingField] = useState<EditField>(null)
@@ -365,6 +394,17 @@ export default function CaixinhaPage() {
           {/* Botões — estado conforme myRequest
               Mensalistas: sempre exibe (pending/approved/default)
               Avulsos: só exibe quando há jogo(s) com pagamento pendente */}
+          {isAvulso && hasAddedTempAvulso && (
+            <div style={{
+              background: 'var(--color-surface-primary)', border: '1px solid #ed0000',
+              borderRadius: 8, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8
+            }}>
+              <BellRinging size={16} color="#ed0000" />
+              <p style={{ fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-11)', color: '#ed0000', lineHeight: '16px' }}>
+                Você tem valores pendentes pelo Avulso Adicionado.
+              </p>
+            </div>
+          )}
           {(!isAvulso || avulsoNeedsPay) && (
             !hasRequested && !isApproved ? (
               <div className="flex gap-3">
@@ -372,7 +412,7 @@ export default function CaixinhaPage() {
                   className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
                   style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                   {pixCopied ? <Check size={18} /> : <Copy size={18} />}
-                  {pixCopied ? 'Copiado!' : 'Copiar PIX'}
+                  {pixCopied ? 'Copiado!' : (!isAvulso && hasAddedTempAvulso ? 'Pagar Avulso' : 'Copiar PIX')}
                 </button>
                 <button onClick={() => submitPaymentRequest.mutate()} disabled={submitPaymentRequest.isPending}
                   className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 disabled:opacity-40"
