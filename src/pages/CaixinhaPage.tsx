@@ -97,13 +97,9 @@ function getGameId(date: Date): string {
 }
 
 async function fetchMyTempAvulsos(userId: string, gameId: string): Promise<any[]> {
-  const q = query(
-    collection(db, 'avulsos_temp'),
-    where('addedBy', '==', userId),
-    where('gameId', '==', gameId)
-  )
+  const q = query(collection(db, 'avulsos_temp'), where('addedBy', '==', userId))
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.gameId === gameId)
 }
 
 type EditField = 'quadra' | 'extras' | 'mensalista' | 'avulso' | null
@@ -391,20 +387,9 @@ export default function CaixinhaPage() {
             </div>
           </div>
 
-          {/* Botões — estado conforme myRequest
+          {/* Botões pagamento próprio — estado conforme myRequest
               Mensalistas: sempre exibe (pending/approved/default)
               Avulsos: só exibe quando há jogo(s) com pagamento pendente */}
-          {isAvulso && hasAddedTempAvulso && (
-            <div style={{
-              background: 'var(--color-surface-primary)', border: '1px solid #ed0000',
-              borderRadius: 8, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8
-            }}>
-              <BellRinging size={16} color="#ed0000" />
-              <p style={{ fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-11)', color: '#ed0000', lineHeight: '16px' }}>
-                Você tem valores pendentes pelo Avulso Adicionado.
-              </p>
-            </div>
-          )}
           {(!isAvulso || avulsoNeedsPay) && (
             !hasRequested && !isApproved ? (
               <div className="flex gap-3">
@@ -412,7 +397,7 @@ export default function CaixinhaPage() {
                   className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
                   style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                   {pixCopied ? <Check size={18} /> : <Copy size={18} />}
-                  {pixCopied ? 'Copiado!' : (!isAvulso && hasAddedTempAvulso ? 'Pagar Avulso' : 'Copiar PIX')}
+                  {pixCopied ? 'Copiado!' : 'Copiar PIX'}
                 </button>
                 <button onClick={() => submitPaymentRequest.mutate()} disabled={submitPaymentRequest.isPending}
                   className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 disabled:opacity-40"
@@ -432,6 +417,34 @@ export default function CaixinhaPage() {
                 <p style={{ color: '#089527', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Pagamento aprovado!</p>
               </div>
             ) : null
+          )}
+
+          {/* Seção avulso temporário — independente do pagamento próprio */}
+          {hasAddedTempAvulso && !isAvulso && (
+            <div className="flex gap-3">
+              <button onClick={handleCopyPix}
+                className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
+                style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                {pixCopied ? <Check size={18} /> : <Copy size={18} />}
+                {pixCopied ? 'Copiado!' : 'Pagar Avulso'}
+              </button>
+              <button onClick={() => submitPaymentRequest.mutate()} disabled={submitPaymentRequest.isPending}
+                className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 disabled:opacity-40"
+                style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                {submitPaymentRequest.isPending ? '...' : 'Já Paguei'}
+              </button>
+            </div>
+          )}
+          {hasAddedTempAvulso && isAvulso && (
+            <div style={{
+              background: 'var(--color-surface-primary)', border: '1px solid #ed0000',
+              borderRadius: 8, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8
+            }}>
+              <BellRinging size={16} color="#ed0000" />
+              <p style={{ fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-11)', color: '#ed0000', lineHeight: '16px' }}>
+                Você tem valores pendentes pelo Avulso Adicionado.
+              </p>
+            </div>
           )}
         </div>
 

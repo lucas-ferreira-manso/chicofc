@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { collection, getDocs, query, where, doc, getDoc, writeBatch, addDoc } from 'firebase/firestore'
+import { collection, getDocs, query, where, doc, getDoc, writeBatch, addDoc, deleteDoc } from 'firebase/firestore'
 import { getAuth, getIdToken } from 'firebase/auth'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
@@ -138,6 +138,7 @@ export default function GamesPage() {
   const [sharing, setSharing] = useState(false)
   const [showAvulsoSheet, setShowAvulsoSheet] = useState(false)
   const [avulsoName, setAvulsoName] = useState('')
+  const [selectedTempAvulso, setSelectedTempAvulso] = useState<TempAvulso | null>(null)
   const shareCardRef = useRef<HTMLDivElement>(null)
 
   const handleShare = async () => {
@@ -336,6 +337,18 @@ export default function GamesPage() {
     onError: () => toast.error('Erro ao adicionar avulso')
   })
 
+  const removeAvulso = useMutation({
+    mutationFn: async (id: string) => {
+      await deleteDoc(doc(db, 'avulsos_temp', id))
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['temp-avulsos', gameId] })
+      setSelectedTempAvulso(null)
+      toast.success('Avulso removido.')
+    },
+    onError: () => toast.error('Erro ao remover avulso')
+  })
+
   const pct = Math.min((confirmed.length / MAX_PLAYERS) * 100, 100)
   const isPending = handleConfirm.isPending || handleDecline.isPending
 
@@ -501,25 +514,30 @@ export default function GamesPage() {
               Avulsos Temporários ({tempAvulsos.length})
             </p>
           )}
-          {tempAvulsos.map((t) => (
-            <div key={t.id} className="flex items-center gap-3 p-4 rounded-3xl"
-              style={{ background: 'var(--color-surface-primary)', border: '1.5px solid transparent' }}>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                style={{ background: 'var(--color-surface-secondary)' }}>
-                <span style={{ fontFamily: 'var(--font-primary)', fontSize: 14, fontWeight: 500, color: 'var(--color-fg-secondary)' }}>
-                  {getInitials(t.name)}
+          {tempAvulsos.map((t) => {
+            const canManage = t.addedBy === user?.id || isAdmin
+            return (
+              <button key={t.id}
+                onClick={() => canManage && setSelectedTempAvulso(t)}
+                className="flex items-center gap-3 p-4 rounded-3xl w-full transition-all active:scale-[0.99]"
+                style={{ background: 'var(--color-surface-primary)', border: '1.5px solid transparent', cursor: canManage ? 'pointer' : 'default', textAlign: 'left' }}>
+                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                  style={{ background: 'var(--color-surface-secondary)' }}>
+                  <span style={{ fontFamily: 'var(--font-primary)', fontSize: 14, fontWeight: 500, color: 'var(--color-fg-secondary)' }}>
+                    {getInitials(t.name)}
+                  </span>
+                </div>
+                <p className="flex-1 font-medium truncate"
+                  style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                  {t.name}
+                </p>
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium"
+                  style={{ background: '#fff3cd', color: '#856404', fontFamily: 'var(--font-primary)' }}>
+                  Temp
                 </span>
-              </div>
-              <p className="flex-1 font-medium truncate"
-                style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-                {t.name}
-              </p>
-              <span className="px-2 py-0.5 rounded-full text-xs font-medium"
-                style={{ background: '#fff3cd', color: '#856404', fontFamily: 'var(--font-primary)' }}>
-                Temp
-              </span>
-            </div>
-          ))}
+              </button>
+            )
+          })}
 
           {confirmed.length === 0 && (
             <p className="text-center py-6" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
@@ -638,6 +656,60 @@ export default function GamesPage() {
             Adicionar Avulso Temporário
           </button>
         </div>
+      )}
+
+      {/* Bottom sheet — Detalhe avulso temporário */}
+      {selectedTempAvulso && (
+        <>
+          <div onClick={() => setSelectedTempAvulso(null)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 60 }} />
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70,
+            background: 'white', borderRadius: '24px 24px 0 0',
+            padding: '24px 24px 40px', display: 'flex', flexDirection: 'column', gap: 16
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 'var(--font-size-16)', color: 'var(--color-fg-primary)' }}>
+                Avulso Temporário
+              </p>
+              <button onClick={() => setSelectedTempAvulso(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+                <X size={20} color="var(--color-fg-secondary)" />
+              </button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: '50%', flexShrink: 0,
+                background: 'var(--color-surface-secondary)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                <span style={{ fontFamily: 'var(--font-primary)', fontSize: 16, fontWeight: 500, color: 'var(--color-fg-secondary)' }}>
+                  {getInitials(selectedTempAvulso.name)}
+                </span>
+              </div>
+              <div>
+                <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 'var(--font-size-16)', color: 'var(--color-fg-primary)' }}>
+                  {selectedTempAvulso.name}
+                </p>
+                <p style={{ fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', color: 'var(--color-fg-secondary)' }}>
+                  Adicionado por {selectedTempAvulso.addedByName}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => removeAvulso.mutate(selectedTempAvulso.id)}
+              disabled={removeAvulso.isPending}
+              className="w-full transition-all active:scale-95 disabled:opacity-40"
+              style={{
+                background: 'var(--color-danger)', border: 'none', cursor: 'pointer',
+                borderRadius: 'var(--radius-pill)', padding: '16px 24px',
+                fontFamily: 'var(--font-primary)', fontWeight: 500,
+                fontSize: 'var(--font-size-16)', color: 'white'
+              }}>
+              {removeAvulso.isPending ? 'Removendo...' : 'Excluir Avulso'}
+            </button>
+          </div>
+        </>
       )}
 
       {/* Bottom sheet — Avulso Temporário */}
