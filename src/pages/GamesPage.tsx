@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { collection, getDocs, query, where, doc, getDoc, writeBatch } from 'firebase/firestore'
+import { collection, getDocs, query, where, doc, getDoc, writeBatch, addDoc } from 'firebase/firestore'
 import { getAuth, getIdToken } from 'firebase/auth'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { format, isAfter, nextWednesday, isWednesday, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Crown, BellRinging, CheckCircle, ShareNetwork } from '@phosphor-icons/react'
+import { Crown, BellRinging, CheckCircle, ShareNetwork, X } from '@phosphor-icons/react'
 import { useRef } from 'react'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
@@ -79,6 +79,43 @@ async function fetchLineup(gameId: string): Promise<{ blue: string[]; black: str
   return snap.data() as { blue: string[]; black: string[] }
 }
 
+interface TempAvulso {
+  id: string
+  name: string
+  addedBy: string
+  addedByName: string
+  gameId: string
+  createdAt: string
+}
+
+function getTuesdayAt16h(gameDate: Date): Date {
+  const tuesday = new Date(gameDate)
+  tuesday.setDate(gameDate.getDate() - 1)
+  tuesday.setHours(16, 0, 0, 0)
+  return tuesday
+}
+
+function getWednesdayAt10h(gameDate: Date): Date {
+  const wednesday = new Date(gameDate)
+  wednesday.setHours(10, 0, 0, 0)
+  return wednesday
+}
+
+function shouldShowAvulsoButton(gameDate: Date, totalConfirmed: number): boolean {
+  const now = new Date()
+  return (
+    isAfter(now, getTuesdayAt16h(gameDate)) &&
+    !isAfter(now, getWednesdayAt10h(gameDate)) &&
+    totalConfirmed < 14
+  )
+}
+
+async function fetchTempAvulsos(gameId: string): Promise<TempAvulso[]> {
+  const q = query(collection(db, 'avulsos_temp'), where('gameId', '==', gameId))
+  const snap = await getDocs(q)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() } as TempAvulso))
+}
+
 async function fetchAttendances(gameId: string): Promise<Attendance[]> {
   const q = query(collection(db, 'attendances'), where('game_id', '==', gameId))
   const snap = await getDocs(q)
@@ -99,6 +136,8 @@ export default function GamesPage() {
   const navigate = useNavigate()
   const [activeTeam, setActiveTeam] = useState<'blue' | 'black'>('blue')
   const [sharing, setSharing] = useState(false)
+  const [showAvulsoSheet, setShowAvulsoSheet] = useState(false)
+  const [avulsoName, setAvulsoName] = useState('')
   const shareCardRef = useRef<HTMLDivElement>(null)
 
   const handleShare = async () => {
@@ -137,14 +176,22 @@ export default function GamesPage() {
     queryFn: () => fetchAttendances(gameId)
   })
 
+  const { data: tempAvulsos = [] } = useQuery({
+    queryKey: ['temp-avulsos', gameId],
+    queryFn: () => fetchTempAvulsos(gameId),
+    refetchInterval: 15000
+  })
+
   const myAttendance = attendances.find(a => a.user_id === user?.id)
   const confirmed = attendances.filter(a => a.status === 'confirmed')
   const waitlist = attendances.filter(a => a.status === 'waitlist')
   const declined = attendances.filter(a => a.status === 'declined')
   const confirmedMensalistas = confirmed.filter(a => a.player_type === 'mensalista')
   const confirmedAvulsos = confirmed.filter(a => a.player_type === 'avulso')
-  const isFull = confirmed.length >= MAX_PLAYERS
+  const totalConfirmed = confirmed.length + tempAvulsos.length
+  const isFull = totalConfirmed >= MAX_PLAYERS
   const amConfirmed = myAttendance?.status === 'confirmed'
+  const showAvulsoBtn = amConfirmed && shouldShowAvulsoButton(gameDate, totalConfirmed)
   const amInWaitlist = myAttendance?.status === 'waitlist'
   const amDeclined = myAttendance?.status === 'declined'
   const isAdmin = user?.role === 'admin'
@@ -269,6 +316,26 @@ export default function GamesPage() {
     onError: () => toast.error('Erro ao registrar ausência')
   })
 
+  const addAvulso = useMutation({
+    mutationFn: async () => {
+      const userName = (user as any)?.name || (user as any)?.email || 'Usuário'
+      await addDoc(collection(db, 'avulsos_temp'), {
+        name: avulsoName.trim(),
+        addedBy: user!.id,
+        addedByName: userName,
+        gameId,
+        createdAt: new Date().toISOString()
+      })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['temp-avulsos', gameId] })
+      setAvulsoName('')
+      setShowAvulsoSheet(false)
+      toast.success('Avulso temporário adicionado!')
+    },
+    onError: () => toast.error('Erro ao adicionar avulso')
+  })
+
   const pct = Math.min((confirmed.length / MAX_PLAYERS) * 100, 100)
   const isPending = handleConfirm.isPending || handleDecline.isPending
 
@@ -294,7 +361,7 @@ export default function GamesPage() {
               padding: '8px 16px',
             }}
           >
-            Sair
+            Sair da Pelada
           </button>
         ) : undefined}
       />
@@ -429,6 +496,31 @@ export default function GamesPage() {
             </>
           )}
 
+          {tempAvulsos.length > 0 && (
+            <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', paddingTop: 4 }}>
+              Avulsos Temporários ({tempAvulsos.length})
+            </p>
+          )}
+          {tempAvulsos.map((t) => (
+            <div key={t.id} className="flex items-center gap-3 p-4 rounded-3xl"
+              style={{ background: 'var(--color-surface-primary)', border: '1.5px solid transparent' }}>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                style={{ background: 'var(--color-surface-secondary)' }}>
+                <span style={{ fontFamily: 'var(--font-primary)', fontSize: 14, fontWeight: 500, color: 'var(--color-fg-secondary)' }}>
+                  {getInitials(t.name)}
+                </span>
+              </div>
+              <p className="flex-1 font-medium truncate"
+                style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                {t.name}
+              </p>
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium"
+                style={{ background: '#fff3cd', color: '#856404', fontFamily: 'var(--font-primary)' }}>
+                Temp
+              </span>
+            </div>
+          ))}
+
           {confirmed.length === 0 && (
             <p className="text-center py-6" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
               Ninguém confirmado ainda 🙋
@@ -528,6 +620,72 @@ export default function GamesPage() {
             {handleDecline.isPending ? '...' : 'Muié não deixa'}
           </button>
         </div>
+      )}
+
+      {/* Botão fixo — Adicionar Avulso Temporário */}
+      {showAvulsoBtn && (
+        <div className="fixed inset-x-0 px-6 pt-4 pb-3"
+          style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', zIndex: 50 }}>
+          <button
+            onClick={() => setShowAvulsoSheet(true)}
+            className="w-full transition-all active:scale-95"
+            style={{
+              height: 56, borderRadius: 9999,
+              background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)',
+              fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 'var(--font-size-16)',
+              border: 'none', cursor: 'pointer'
+            }}>
+            Adicionar Avulso Temporário
+          </button>
+        </div>
+      )}
+
+      {/* Bottom sheet — Avulso Temporário */}
+      {showAvulsoSheet && (
+        <>
+          <div onClick={() => { setShowAvulsoSheet(false); setAvulsoName('') }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 60 }} />
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70,
+            background: 'white', borderRadius: '24px 24px 0 0',
+            padding: '24px 24px 40px', display: 'flex', flexDirection: 'column', gap: 24
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)' }}>
+                Adicionar Avulso Temporário
+              </p>
+              <button onClick={() => { setShowAvulsoSheet(false); setAvulsoName('') }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}>
+                <X size={20} color="var(--color-fg-secondary)" />
+              </button>
+            </div>
+            <input
+              type="text"
+              placeholder="Nome do jogador"
+              value={avulsoName}
+              onChange={e => setAvulsoName(e.target.value)}
+              style={{
+                width: '100%', height: 56, borderRadius: 9999,
+                background: 'var(--color-surface-primary)', border: 'none',
+                padding: '0 24px', fontFamily: 'var(--font-primary)', fontSize: 16,
+                color: 'var(--color-fg-primary)', outline: 'none', boxSizing: 'border-box'
+              }}
+            />
+            <button
+              onClick={() => addAvulso.mutate()}
+              disabled={!avulsoName.trim() || addAvulso.isPending}
+              className="transition-all active:scale-95 disabled:opacity-40"
+              style={{
+                width: '100%', height: 56, borderRadius: 9999,
+                background: avulsoName.trim() ? 'var(--btn-primary-bg)' : 'var(--color-surface-secondary)',
+                color: avulsoName.trim() ? 'var(--btn-primary-fg)' : 'var(--color-fg-secondary)',
+                fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16,
+                border: 'none', cursor: avulsoName.trim() ? 'pointer' : 'default'
+              }}>
+              {addAvulso.isPending ? 'Adicionando...' : 'Adicionar'}
+            </button>
+          </div>
+        </>
       )}
     </div>
   )
