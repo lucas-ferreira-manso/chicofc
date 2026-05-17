@@ -102,6 +102,12 @@ async function fetchMyTempAvulsos(userId: string, gameId: string): Promise<any[]
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as any)).filter(d => d.gameId === gameId)
 }
 
+async function fetchAllTempAvulsos(gameId: string): Promise<any[]> {
+  const q = query(collection(db, 'avulsos_temp'), where('gameId', '==', gameId))
+  const snap = await getDocs(q)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() } as any))
+}
+
 type EditField = 'quadra' | 'extras' | 'mensalista' | 'avulso' | null
 
 export default function CaixinhaPage() {
@@ -140,6 +146,13 @@ export default function CaixinhaPage() {
     refetchInterval: 15000
   })
   const hasAddedTempAvulso = myTempAvulsos.length > 0
+
+  const { data: allTempAvulsos = [] } = useQuery({
+    queryKey: ['all-temp-avulsos', currentGameId],
+    queryFn: () => fetchAllTempAvulsos(currentGameId),
+    enabled: isAdmin,
+    refetchInterval: 15000
+  })
 
   const [pixCopied, setPixCopied] = useState(false)
   const [editingField, setEditingField] = useState<EditField>(null)
@@ -450,11 +463,28 @@ export default function CaixinhaPage() {
 
         {(jogoPayments.length > 0 || Object.keys(byMonth).length > 0) && <div style={{ height: 1, background: 'var(--color-border)' }} />}
 
-        {jogoPayments.length > 0 && !playerData?.player_type?.includes('avulso') && (
+        {(jogoPayments.length > 0 || (isAdmin && allTempAvulsos.length > 0)) && !playerData?.player_type?.includes('avulso') && (
           <section>
             <p className="font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>Por jogo — avulsos</p>
             <div className="flex flex-col gap-2">
               {jogoPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => {}} isAdmin={false} />)}
+              {isAdmin && allTempAvulsos.map((t: any) => (
+                <div key={t.id} className="w-full flex items-center gap-3 p-4 rounded-3xl"
+                  style={{ background: 'var(--color-surface-primary)' }}>
+                  <Circle size={22} color="var(--color-fg-secondary)" />
+                  <div className="flex-1 text-left">
+                    <p className="font-medium" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                      {t.addedByName}
+                    </p>
+                    <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
+                      Avulso temp: {t.name}
+                    </p>
+                  </div>
+                  <p className="font-semibold" style={{ color: 'var(--color-danger)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                    R$ {avulsoValue.toFixed(2)}
+                  </p>
+                </div>
+              ))}
             </div>
           </section>
         )}

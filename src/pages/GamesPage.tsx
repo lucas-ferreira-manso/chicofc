@@ -531,10 +531,16 @@ export default function GamesPage() {
                   style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                   {t.name}
                 </p>
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium"
-                  style={{ background: '#fff3cd', color: '#856404', fontFamily: 'var(--font-primary)' }}>
-                  Temp
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium"
+                    style={{ background: '#fff3cd', color: '#856404', fontFamily: 'var(--font-primary)' }}>
+                    Temp
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium"
+                    style={{ background: '#e6f4ea', color: '#166634', fontFamily: 'var(--font-primary)' }}>
+                    R$22
+                  </span>
+                </div>
               </button>
             )
           })}
