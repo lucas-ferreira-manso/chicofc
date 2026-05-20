@@ -666,7 +666,7 @@ export default function GamesPage() {
       )}
 
       {/* Botões fixos — Admin confirmado: Escalar / [Avulso] / [Compartilhar] */}
-      {isAdmin && (amConfirmed || amInWaitlist || listaClosed) && (hasLineup || isFull || listaClosed) && (
+      {isAdmin && (amConfirmed || amInWaitlist || listaClosed) && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
           <button onClick={() => navigate('/escalacao')}
