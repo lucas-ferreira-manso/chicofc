@@ -253,6 +253,10 @@ export default function ProfilePage() {
           <Toggle active={isDark} onChange={toggleDarkMode} />
         </div>
 
+        <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', textAlign: 'center', paddingTop: 4 }}>
+          Versão 1.0.0
+        </p>
+
         <button onClick={signOut}
           className="w-full py-4 font-medium transition-all active:scale-95 text-left px-5"
           style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
