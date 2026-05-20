@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { collection, getDocs, doc, updateDoc, addDoc, getDoc, setDoc, query, where } from 'firebase/firestore'
+import { collection, getDocs, doc, updateDoc, addDoc, getDoc, setDoc, query, where, deleteDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
@@ -206,6 +206,27 @@ export default function CaixinhaPage() {
     onSuccess: (count) => {
       qc.invalidateQueries({ queryKey: ['payments'] })
       toast.success(count > 0 ? `${count} mensalidades criadas!` : 'Todos já têm mensalidade')
+    }
+  })
+
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null)
+
+  const deletePayment = useMutation({
+    mutationFn: async (payment: Payment) => {
+      await deleteDoc(doc(db, 'payments', payment.id))
+      // Limpa payment_request pendente do mesmo usuário/mês para não sujar o cálculo
+      const q = query(collection(db, 'payment_requests'), where('user_id', '==', (payment as any).user_id), where('status', '==', 'pending'))
+      const snap = await getDocs(q)
+      const toDelete = snap.docs.filter(d =>
+        payment.type === 'mensalidade' ? d.data().month === payment.month : true
+      )
+      await Promise.all(toDelete.map(d => deleteDoc(d.ref)))
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payments'] })
+      qc.invalidateQueries({ queryKey: ['pending-requests'] })
+      setSelectedPayment(null)
+      toast.success('Pagamento removido.')
     }
   })
 
@@ -467,7 +488,7 @@ export default function CaixinhaPage() {
           <section>
             <p className="font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>Por jogo — avulsos</p>
             <div className="flex flex-col gap-2">
-              {jogoPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => {}} isAdmin={false} />)}
+              {jogoPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => setSelectedPayment(p)} isAdmin={isAdmin} />)}
               {isAdmin && allTempAvulsos.map((t: any) => (
                 <div key={t.id} className="w-full flex items-center gap-3 p-4 rounded-3xl"
                   style={{ background: 'var(--color-surface-primary)' }}>
@@ -499,7 +520,7 @@ export default function CaixinhaPage() {
                 <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>{monthPayments.filter(p => p.paid).length}/{monthPayments.length}</p>
               </div>
               <div className="flex flex-col gap-2">
-                {monthPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => {}} isAdmin={false} />)}
+                {monthPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => setSelectedPayment(p)} isAdmin={isAdmin} />)}
               </div>
             </section>
           )
@@ -512,6 +533,36 @@ export default function CaixinhaPage() {
           </div>
         )}
       </div>
+
+      {/* Bottom sheet — excluir pagamento (admin only) */}
+      {isAdmin && selectedPayment && (
+        <>
+          <div className="fixed inset-0 z-60" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={() => setSelectedPayment(null)} />
+          <div className="fixed bottom-0 left-0 right-0 z-70 rounded-t-3xl px-6 pt-4 pb-10 flex flex-col gap-3"
+            style={{ background: 'var(--color-bg)' }}>
+            <div className="w-10 h-1 rounded-full mx-auto mb-2" style={{ background: 'var(--color-border)' }} />
+            <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+              {(selectedPayment.profile as any)?.name || 'Jogador'}
+            </p>
+            <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+              {selectedPayment.type === 'mensalidade' ? 'Mensalidade' : 'Avulso'} · R$ {selectedPayment.amount} · {selectedPayment.paid ? 'Pago' : 'Pendente'}
+            </p>
+            <button
+              onClick={() => deletePayment.mutate(selectedPayment)}
+              disabled={deletePayment.isPending}
+              className="w-full py-4 font-medium rounded-full transition-all active:scale-95 disabled:opacity-40 mt-2"
+              style={{ background: 'var(--color-danger)', color: '#fff', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+              {deletePayment.isPending ? 'Removendo...' : 'Excluir Pagamento'}
+            </button>
+            <button
+              onClick={() => setSelectedPayment(null)}
+              className="w-full py-4 font-medium rounded-full transition-all active:scale-95"
+              style={{ background: 'var(--color-surface-primary)', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+              Cancelar
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }
