@@ -95,9 +95,9 @@ function getTuesdayAt16h(gameDate: Date): Date {
   return tuesday
 }
 
-function getWednesdayAt10h(gameDate: Date): Date {
+function getWednesdayAt22h(gameDate: Date): Date {
   const wednesday = new Date(gameDate)
-  wednesday.setHours(10, 0, 0, 0)
+  wednesday.setHours(22, 0, 0, 0)
   return wednesday
 }
 
@@ -105,7 +105,7 @@ function shouldShowAvulsoButton(gameDate: Date, totalConfirmed: number): boolean
   const now = new Date()
   return (
     isAfter(now, getTuesdayAt16h(gameDate)) &&
-    !isAfter(now, getWednesdayAt10h(gameDate)) &&
+    !isAfter(now, getWednesdayAt22h(gameDate)) &&
     totalConfirmed < 14
   )
 }
