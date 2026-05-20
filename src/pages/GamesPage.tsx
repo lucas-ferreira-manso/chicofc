@@ -116,6 +116,11 @@ async function fetchTempAvulsos(gameId: string): Promise<TempAvulso[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as TempAvulso))
 }
 
+async function fetchAllPlayers(): Promise<{ id: string; name: string; player_type: string }[]> {
+  const snap = await getDocs(query(collection(db, 'players'), where('active', '==', true)))
+  return snap.docs.map(d => ({ id: d.id, name: d.data().name ?? '', player_type: d.data().player_type ?? 'avulso' }))
+}
+
 async function fetchAttendances(gameId: string): Promise<Attendance[]> {
   const q = query(collection(db, 'attendances'), where('game_id', '==', gameId))
   const snap = await getDocs(q)
@@ -183,12 +188,20 @@ export default function GamesPage() {
     refetchInterval: 15000
   })
 
+  const { data: allPlayers = [] } = useQuery({
+    queryKey: ['all-players'],
+    queryFn: fetchAllPlayers,
+    staleTime: 1000 * 60 * 5
+  })
+
   const myAttendance = attendances.find(a => a.user_id === user?.id)
   const confirmed = attendances.filter(a => a.status === 'confirmed')
   const waitlist = attendances.filter(a => a.status === 'waitlist')
   const declined = attendances.filter(a => a.status === 'declined')
   const confirmedMensalistas = confirmed.filter(a => a.player_type === 'mensalista')
   const confirmedAvulsos = confirmed.filter(a => a.player_type === 'avulso')
+  const respondedIds = new Set(attendances.map(a => a.user_id))
+  const toConfirm = allPlayers.filter(p => !respondedIds.has(p.id))
   const totalConfirmed = confirmed.length + tempAvulsos.length
   const isFull = totalConfirmed >= MAX_PLAYERS
   const amConfirmed = myAttendance?.status === 'confirmed'
@@ -490,7 +503,7 @@ export default function GamesPage() {
               <div className="flex items-center gap-1.5 mt-2 mb-1">
                 <Crown size={12} color="#f59e0b" weight="fill" />
                 <p className="font-semibold uppercase tracking-wider" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
-                  Mensalistas ({confirmedMensalistas.length})
+                  MENSALISTAS ({confirmedMensalistas.length})
                 </p>
               </div>
               {confirmedMensalistas.map((a, i) => (
@@ -502,7 +515,7 @@ export default function GamesPage() {
           {confirmedAvulsos.length > 0 && (
             <>
               <p className="font-semibold uppercase tracking-wider mt-3 mb-1" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
-                Avulsos ({confirmedAvulsos.length})
+                AVULSOS ({confirmedAvulsos.length})
               </p>
               {confirmedAvulsos.map((a, i) => (
                 <PlayerRow key={a.id} attendance={a} index={confirmedMensalistas.length + i + 1} isMe={a.user_id === user?.id} />
@@ -511,8 +524,8 @@ export default function GamesPage() {
           )}
 
           {tempAvulsos.length > 0 && (
-            <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', paddingTop: 4 }}>
-              Avulsos Temporários ({tempAvulsos.length})
+            <p className="font-semibold uppercase tracking-wider mt-3 mb-1" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
+              AVULSOS TEMPORÁRIOS ({tempAvulsos.length})
             </p>
           )}
           {tempAvulsos.map((t) => {
@@ -545,6 +558,28 @@ export default function GamesPage() {
               </button>
             )
           })}
+
+          {toConfirm.length > 0 && (
+            <>
+              <p className="font-semibold uppercase tracking-wider mt-3 mb-1" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
+                À CONFIRMAR ({toConfirm.length})
+              </p>
+              {toConfirm.map(p => (
+                <div key={p.id} className="flex items-center gap-3 p-4 rounded-3xl"
+                  style={{ background: 'var(--color-surface-primary)', opacity: 0.55 }}>
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                    style={{ background: 'var(--color-avatar-bg)' }}>
+                    <span style={{ fontFamily: 'var(--font-primary)', fontSize: 14, fontWeight: 500, color: 'var(--color-avatar-fg)' }}>
+                      {p.name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
+                    </span>
+                  </div>
+                  <p className="flex-1 font-medium truncate" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                    {p.name}
+                  </p>
+                </div>
+              ))}
+            </>
+          )}
 
           {confirmed.length === 0 && (
             <p className="text-center py-6" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
