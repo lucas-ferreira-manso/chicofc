@@ -212,7 +212,7 @@ export default function GamesPage() {
   const isAdmin = user?.role === 'admin'
 
   const closeTime = new Date(gameDate)
-  closeTime.setHours(17, 0, 0, 0)
+  closeTime.setHours(19, 30, 0, 0)
   const listaClosed = isAfter(new Date(), closeTime)
 
   const { data: lineup = { blue: [], black: [] } } = useQuery({
@@ -282,6 +282,30 @@ export default function GamesPage() {
             })
           }
         } catch { /* falha na notificação não bloqueia a confirmação */ }
+      }
+
+      // Notifica admins se times já escalados → novo jogador confirmou
+      if (hasLineup) {
+        try {
+          const authInstance = getAuth()
+          const currentUser = authInstance.currentUser
+          if (currentUser) {
+            const token = await getIdToken(currentUser)
+            const adminSnap = await getDocs(query(collection(db, 'players'), where('role', '==', 'admin')))
+            const playerType = user!.player_type ?? 'avulso'
+            const playerName = user!.name || user!.email || 'Jogador'
+            await Promise.all(adminSnap.docs.map(adminDoc =>
+              fetch(`${SERVER_URL}/notify-cobranca`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({
+                  userId: adminDoc.id,
+                  message: `Novo jogador confirmado: ${playerName} (${playerType}). Rever escalação dos times.`
+                })
+              }).catch(() => {})
+            ))
+          }
+        } catch { /* notificação de admin não bloqueia confirmação */ }
       }
     },
     onSuccess: () => {
@@ -641,8 +665,8 @@ export default function GamesPage() {
         </div>
       )}
 
-      {/* Botões fixos — Admin: Escalar / Compartilhar */}
-      {isAdmin && (isFull || listaClosed || hasLineup) && (
+      {/* Botões fixos — Admin confirmado: Escalar / Compartilhar */}
+      {isAdmin && (amConfirmed || amInWaitlist || listaClosed) && (hasLineup || isFull || listaClosed) && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
           <button onClick={() => navigate('/escalacao')}
@@ -661,8 +685,27 @@ export default function GamesPage() {
         </div>
       )}
 
-      {/* Botões fixos — Bora Jogar / Muié não deixa */}
-      {!listaClosed && !isFull && !amConfirmed && !amInWaitlist && (
+      {/* Botões fixos — Admin NÃO confirmado: Escalar + Confirmar Presença */}
+      {isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && (
+        <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
+          style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
+          <button onClick={() => navigate('/escalacao')}
+            className="flex-1 py-4 font-medium transition-all active:scale-95"
+            style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+            {hasLineup ? 'Editar Times' : 'Escalar Times'}
+          </button>
+          <button
+            onClick={() => handleConfirm.mutate()}
+            disabled={isPending}
+            className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
+            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+            {handleConfirm.isPending ? '...' : 'Confirmar Presença'}
+          </button>
+        </div>
+      )}
+
+      {/* Botões fixos — Jogador não confirmado: Bora Jogar / Muié não deixa */}
+      {!isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
           <button
