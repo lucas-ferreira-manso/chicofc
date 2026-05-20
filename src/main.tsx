@@ -6,6 +6,10 @@ import { Toaster } from 'sonner'
 import App from './App'
 import './index.css'
 
+if (localStorage.getItem('theme') === 'dark') {
+  document.documentElement.classList.add('dark')
+}
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5 } }
 })

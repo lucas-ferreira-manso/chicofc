@@ -1085,11 +1085,16 @@ export default function StatsPage() {
   const gameId = getLastWednesdayId()
   const gameDate = format(new Date(gameId + 'T12:00:00'), "d 'de' MMMM", { locale: ptBR })
 
+  const rankingUpdatedAt = qc.getQueryState(['last-game-players'])?.dataUpdatedAt
+  const rankingUpdatedStr = rankingUpdatedAt
+    ? format(new Date(rankingUpdatedAt), "d 'de' MMMM 'às' HH'h'mm", { locale: ptBR })
+    : null
+
   const subtitle = activeTab === 'placar'
     ? (updatedStr ? `Atualizado ${updatedStr}` : 'Nenhuma atualização ainda')
     : activeTab === 'jogador'
     ? `Jogo de ${gameDate}`
-    : 'Histórico do grupo'
+    : (rankingUpdatedStr ? `Atualizado ${rankingUpdatedStr}` : 'Ranking geral')
 
   return (
     <div className="flex flex-col min-h-full pb-28" style={{ background: 'var(--color-bg)' }}>

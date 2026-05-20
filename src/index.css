@@ -113,6 +113,46 @@
   }
 }
 
+/* Manual dark mode — overrides system preference */
+html.dark {
+  --color-bg: #2d2d2d;
+  --color-surface-primary: #1a1a1a;
+  --color-surface-secondary: #2a2a2a;
+  --color-surface-accent: #082996;
+  --color-surface-accent-light: #0d1f3c;
+  --color-surface-accent-yellow: #FFDC50;
+  --color-surface-white: #ffffff;
+  --color-surface-quaternary: #66d1ff;
+  --color-fg-primary: #ffffff;
+  --color-fg-secondary: #8e8e93;
+  --color-fg-tertiary: #ffffff;
+  --color-fg-accent: #66d1ff;
+  --color-fg-accent-light: #66d1ff;
+  --color-fg-accent-yellow: #FFDC50;
+  --color-border: #2a2a2a;
+  --color-number-bg: #1a1a1a;
+  --color-avatar-bg: #66d1ff;
+  --color-avatar-fg: #082996;
+  --color-item-bg: #1a1a1a;
+  --color-tab-selected-bg: #2a2a2a;
+  --color-item-number-bg: #1a1a1a;
+  --color-item-number-border: #8e8e93;
+  --color-item-number-fg: #ffffff;
+  --color-item-fg: #ffffff;
+  --color-number-fg: #ffffff;
+  --color-number-border: #8e8e93;
+  --color-info-bg: #1a1a1a;
+  --color-info-fg: #ffffff;
+  --color-success: #30d158;
+  --color-warning: #ff9f0a;
+  --color-danger: #ff453a;
+  --btn-primary-bg: #ffffff;
+  --btn-primary-fg: #1a1a1a;
+  --btn-secondary-bg: #1a1a1a;
+  --btn-secondary-fg: #ffffff;
+  --btn-secondary-border: #8e8e93;
+}
+
 * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
 body {

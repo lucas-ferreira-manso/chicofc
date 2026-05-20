@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
 import { CaretRight, Eye, EyeSlash, PencilSimple } from '@phosphor-icons/react'
 import Header from '../components/layout/Header'
+import Toggle from '../components/Toggle'
 
 const auth = getAuth()
 
@@ -22,6 +23,7 @@ export default function ProfilePage() {
   const [showPassword, setShowPassword] = useState(false)
   const [name, setName] = useState(user?.name ?? '')
   const [newPassword, setNewPassword] = useState('')
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
   const [uploading, setUploading] = useState(false)
   // Estado local só para forçar re-render imediato da foto
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null)
@@ -91,6 +93,17 @@ export default function ProfilePage() {
       setShowNameForm(false)
     }
   })
+
+  const toggleDarkMode = (value: boolean) => {
+    setIsDark(value)
+    if (value) {
+      document.documentElement.classList.add('dark')
+      localStorage.setItem('theme', 'dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+      localStorage.setItem('theme', 'light')
+    }
+  }
 
   const changePassword = useMutation({
     mutationFn: async () => {
@@ -230,6 +243,14 @@ export default function ProfilePage() {
               </button>
             </div>
           )}
+        </div>
+
+        <div className="flex items-center justify-between px-5 rounded-3xl"
+          style={{ background: 'var(--color-surface-primary)', height: 64 }}>
+          <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+            Dark Mode
+          </p>
+          <Toggle active={isDark} onChange={toggleDarkMode} />
         </div>
 
         <button onClick={signOut}
