@@ -243,14 +243,14 @@ export default function ProfilePage() {
               </button>
             </div>
           )}
-        </div>
 
-        <div className="flex items-center justify-between px-5 rounded-3xl"
-          style={{ background: 'var(--color-surface-primary)', height: 64 }}>
-          <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-            Dark Mode
-          </p>
-          <Toggle active={isDark} onChange={toggleDarkMode} />
+          <div className="flex items-center justify-between px-5 rounded-3xl"
+            style={{ background: 'var(--color-surface-primary)', height: 64 }}>
+            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+              Dark Mode
+            </p>
+            <Toggle active={isDark} onChange={toggleDarkMode} />
+          </div>
         </div>
 
         <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', paddingTop: 4 }}>
@@ -258,7 +258,7 @@ export default function ProfilePage() {
         </p>
 
         <button onClick={signOut}
-          className="w-full py-4 font-medium transition-all active:scale-95 text-left px-5"
+          className="w-full py-4 font-medium transition-all active:scale-95 text-left"
           style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
           Sair do app
         </button>
