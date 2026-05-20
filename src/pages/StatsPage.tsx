@@ -255,7 +255,7 @@ function BadgeVotacao({ type, player, onClick, disabled, completed }: BadgeProps
           ) : (
             <span style={{
               fontFamily: 'var(--font-primary)', fontWeight: 700,
-              fontSize: 48, color: accentColor, opacity: 0.4
+              fontSize: 48, color: 'var(--color-badge-initials)', opacity: 0.4
             }}>
               {getInitials(player.name)}
             </span>
