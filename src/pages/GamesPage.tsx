@@ -56,12 +56,12 @@ function Avatar({ name, photoURL, bgSelected = false }: {
   return (
     <div
       className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden"
-      style={{ background: photoURL ? 'transparent' : bgSelected ? 'var(--color-fg-accent-light)' : 'var(--color-surface-quaternary)' }}>
+      style={{ background: photoURL ? 'transparent' : bgSelected ? 'var(--color-fg-accent-light)' : 'var(--color-avatar-bg)' }}>
       {photoURL ? (
         <img src={photoURL} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       ) : (
         <span style={{
-          color: bgSelected ? 'white' : 'var(--color-fg-primary)',
+          color: bgSelected ? 'white' : 'var(--color-avatar-fg)',
           fontFamily: 'var(--font-primary)',
           fontSize: 14,
           fontWeight: 500
