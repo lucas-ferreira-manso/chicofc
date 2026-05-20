@@ -261,7 +261,7 @@ export default function ProfilePage() {
         </div>
 
         <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', paddingTop: 4 }}>
-          Versão 1.0.0
+          Versão {__APP_VERSION__}
         </p>
 
         <button onClick={signOut}
