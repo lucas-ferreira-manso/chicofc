@@ -192,9 +192,10 @@ export default function GamesPage() {
   const totalConfirmed = confirmed.length + tempAvulsos.length
   const isFull = totalConfirmed >= MAX_PLAYERS
   const amConfirmed = myAttendance?.status === 'confirmed'
-  const showAvulsoBtn = amConfirmed && shouldShowAvulsoButton(gameDate, totalConfirmed)
   const amInWaitlist = myAttendance?.status === 'waitlist'
   const amDeclined = myAttendance?.status === 'declined'
+  const avulsoWindowOpen = shouldShowAvulsoButton(gameDate, totalConfirmed)
+  const showAvulsoBtn = amConfirmed && avulsoWindowOpen
   const isAdmin = user?.role === 'admin'
 
   const closeTime = new Date(gameDate)
@@ -636,13 +637,22 @@ export default function GamesPage() {
             style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
             {handleConfirm.isPending ? '...' : 'Bora Jogar'}
           </button>
-          <button
-            onClick={() => !amDeclined && handleDecline.mutate()}
-            disabled={isPending || amDeclined}
-            className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-            style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500, opacity: amDeclined ? 0.5 : 1 }}>
-            {handleDecline.isPending ? '...' : 'Muié não deixa'}
-          </button>
+          {amDeclined && avulsoWindowOpen ? (
+            <button
+              onClick={() => setShowAvulsoSheet(true)}
+              className="flex-1 py-4 font-medium transition-all active:scale-95"
+              style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+              Adicionar Avulso
+            </button>
+          ) : (
+            <button
+              onClick={() => !amDeclined && handleDecline.mutate()}
+              disabled={isPending || amDeclined}
+              className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
+              style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500, opacity: amDeclined ? 0.5 : 1 }}>
+              {handleDecline.isPending ? '...' : 'Muié não deixa'}
+            </button>
+          )}
         </div>
       )}
 
