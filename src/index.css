@@ -115,6 +115,43 @@
   }
 }
 
+/* Manual light mode — overrides system dark preference */
+html.light {
+  --color-bg: #ffffff;
+  --color-surface-primary: #f8f8f8;
+  --color-surface-secondary: #efefef;
+  --color-surface-accent: #082996;
+  --color-surface-accent-light: #e6f8ff;
+  --color-fg-primary: #1a1a1a;
+  --color-fg-secondary: #8e8e93;
+  --color-fg-tertiary: #ffffff;
+  --color-fg-accent: #082996;
+  --color-fg-accent-light: #082996;
+  --color-border: #efefef;
+  --color-success: #34c759;
+  --color-warning: #ff9500;
+  --color-danger: #ff3b30;
+  --color-number-bg: #efefef;
+  --color-avatar-bg: #66d1ff;
+  --color-avatar-fg: #082996;
+  --color-badge-initials: #082996;
+  --color-item-bg: #f8f8f8;
+  --color-tab-selected-bg: #ffffff;
+  --color-item-number-bg: #ffffff;
+  --color-item-number-border: #efefef;
+  --color-item-number-fg: #1a1a1a;
+  --color-item-fg: #1a1a1a;
+  --color-number-fg: #1a1a1a;
+  --color-number-border: #efefef;
+  --color-info-bg: #e6f8ff;
+  --color-info-fg: #082996;
+  --btn-primary-bg: #082996;
+  --btn-primary-fg: #ffffff;
+  --btn-secondary-bg: #e6f8ff;
+  --btn-secondary-fg: #082996;
+  --btn-secondary-border: transparent;
+}
+
 /* Manual dark mode — overrides system preference */
 html.dark {
   --color-bg: #2d2d2d;

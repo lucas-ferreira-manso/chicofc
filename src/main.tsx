@@ -6,8 +6,11 @@ import { Toaster } from 'sonner'
 import App from './App'
 import './index.css'
 
-if (localStorage.getItem('theme') === 'dark') {
+const savedTheme = localStorage.getItem('theme')
+if (savedTheme === 'dark') {
   document.documentElement.classList.add('dark')
+} else if (savedTheme === 'light') {
+  document.documentElement.classList.add('light')
 }
 
 const queryClient = new QueryClient({

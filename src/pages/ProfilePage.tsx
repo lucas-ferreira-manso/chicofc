@@ -23,7 +23,12 @@ export default function ProfilePage() {
   const [showPassword, setShowPassword] = useState(false)
   const [name, setName] = useState(user?.name ?? '')
   const [newPassword, setNewPassword] = useState('')
-  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem('theme')
+    if (saved === 'dark') return true
+    if (saved === 'light') return false
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  })
   const [uploading, setUploading] = useState(false)
   // Estado local só para forçar re-render imediato da foto
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null)
@@ -98,9 +103,11 @@ export default function ProfilePage() {
     setIsDark(value)
     if (value) {
       document.documentElement.classList.add('dark')
+      document.documentElement.classList.remove('light')
       localStorage.setItem('theme', 'dark')
     } else {
       document.documentElement.classList.remove('dark')
+      document.documentElement.classList.add('light')
       localStorage.setItem('theme', 'light')
     }
   }
