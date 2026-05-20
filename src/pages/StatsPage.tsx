@@ -311,7 +311,7 @@ function SmallCardVotacao({ entry, onClick }: { entry: HistoryEntry; onClick: ()
         <span style={{
           position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 22,
-          color: 'rgba(255,255,255,0.4)'
+          color: 'var(--color-badge-initials)', opacity: 0.5
         }}>
           {getInitials(player.name)}
         </span>
