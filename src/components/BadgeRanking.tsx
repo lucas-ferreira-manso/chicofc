@@ -42,7 +42,7 @@ export default function BadgeRanking({ player, rank, count }: BadgeRankingProps)
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span style={{
               fontFamily: 'var(--font-primary)', fontWeight: 700,
-              fontSize: 32, color: 'var(--color-avatar-fg)', opacity: 0.5
+              fontSize: 32, color: 'var(--color-badge-initials)', opacity: 0.5
             }}>
               {initials}
             </span>

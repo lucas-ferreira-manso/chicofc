@@ -56,6 +56,7 @@
   --color-number-bg: #efefef;
   --color-avatar-bg: #66d1ff;
   --color-avatar-fg: #082996;
+  --color-badge-initials: #082996;
   --color-item-bg: #f8f8f8;
   --color-tab-selected-bg: #ffffff;
   --color-item-number-bg: #ffffff;
@@ -90,6 +91,7 @@
     --color-number-bg: #1a1a1a;
     --color-avatar-bg: #66d1ff;
     --color-avatar-fg: #082996;
+    --color-badge-initials: #8e8e93;
     --color-item-bg: #1a1a1a;
     --color-tab-selected-bg: #2a2a2a;
     --color-item-number-bg: #1a1a1a;
@@ -133,6 +135,7 @@ html.dark {
   --color-number-bg: #1a1a1a;
   --color-avatar-bg: #66d1ff;
   --color-avatar-fg: #082996;
+  --color-badge-initials: #8e8e93;
   --color-item-bg: #1a1a1a;
   --color-tab-selected-bg: #2a2a2a;
   --color-item-number-bg: #1a1a1a;
