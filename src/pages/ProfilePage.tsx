@@ -253,7 +253,7 @@ export default function ProfilePage() {
           <Toggle active={isDark} onChange={toggleDarkMode} />
         </div>
 
-        <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', textAlign: 'center', paddingTop: 4 }}>
+        <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', paddingTop: 4 }}>
           Versão 1.0.0
         </p>
 
