@@ -1186,7 +1186,14 @@ export default function StatsPage() {
                       .map(({ entry, originalIndex }) => {
                         const blueWon = entry.blue > entry.yellow
                         const yellowWon = entry.yellow > entry.blue
-                        const dateStr = format(new Date(entry.date), "d MMM", { locale: ptBR })
+                        // Deriva a quarta-feira do jogo a partir da data de input
+                        const gameWed = (() => {
+                          const d = new Date(entry.date.includes('T') ? entry.date : entry.date + 'T12:00:00')
+                          const daysBack = (d.getDay() - 3 + 7) % 7
+                          d.setDate(d.getDate() - daysBack)
+                          return d
+                        })()
+                        const dateStr = format(gameWed, 'dd/MM')
                         return (
                           <div key={originalIndex}
                             className="flex items-center px-4 py-4 rounded-3xl gap-2"
