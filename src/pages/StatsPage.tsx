@@ -1312,7 +1312,7 @@ export default function StatsPage() {
                   placeholder="00" min={0}
                   className="text-center font-bold outline-none w-[82px] rounded-2xl"
                   style={{
-                    background: 'white', color: 'var(--color-fg-primary)',
+                    background: 'white', color: '#1a1a1a',
                     fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)',
                     padding: '8px 12px', border: '2px solid var(--color-border)'
                   }} />
@@ -1329,7 +1329,7 @@ export default function StatsPage() {
                   placeholder="00" min={0}
                   className="text-center font-bold outline-none w-[82px] rounded-2xl"
                   style={{
-                    background: 'white', color: 'var(--color-fg-primary)',
+                    background: 'white', color: '#1a1a1a',
                     fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-32)',
                     padding: '8px 12px', border: '2px solid var(--color-border)'
                   }} />
