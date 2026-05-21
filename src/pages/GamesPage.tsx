@@ -183,6 +183,7 @@ export default function GamesPage() {
   const priorityOpen = isPriorityWindowOpen(gameDate)
   const deadline = getPriorityDeadline(gameDate)
   const deadlineStr = format(deadline, "EEE dd/MM 'às' HH'h'mm", { locale: ptBR })
+  const gameDateStr = format(gameDate, 'dd/MM')
 
   const { data: attendances = [], isLoading } = useQuery({
     queryKey: ['attendances', gameId],
@@ -414,8 +415,8 @@ export default function GamesPage() {
 
       <Header
         title="Próximo Jogo"
-        subtitle="Dia: Quarta-feira, 21:30"
-        subtitle2="Local: 9E10"
+        subtitle={`${gameDateStr} | Quarta-feira, 21:30`}
+        subtitle2="Campo 9E10"
         rightContent={(amConfirmed || amInWaitlist) ? (
           <button
             onClick={() => handleDecline.mutate()}
