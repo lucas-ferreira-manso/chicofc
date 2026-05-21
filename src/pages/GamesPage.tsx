@@ -713,14 +713,14 @@ export default function GamesPage() {
         </div>
       )}
 
-      {/* Botões fixos — Admin NÃO confirmado: Escalar + Confirmar Presença */}
+      {/* Botões fixos — Admin NÃO confirmado: [Escalar] + Confirmar Presença + Muié não deixa */}
       {isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
           {showEscalarBtn && (
             <button onClick={() => navigate('/escalacao')}
               className="flex-1 py-4 font-medium transition-all active:scale-95"
-              style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+              style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', fontWeight: 500 }}>
               {hasLineup ? 'Editar Times' : 'Escalar Times'}
             </button>
           )}
@@ -728,9 +728,25 @@ export default function GamesPage() {
             onClick={() => handleConfirm.mutate()}
             disabled={isPending}
             className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500 }}>
             {handleConfirm.isPending ? '...' : 'Confirmar Presença'}
           </button>
+          {amDeclined && avulsoWindowOpen ? (
+            <button
+              onClick={() => setShowAvulsoSheet(true)}
+              className="flex-1 py-4 font-medium transition-all active:scale-95"
+              style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500 }}>
+              Adicionar Avulso
+            </button>
+          ) : (
+            <button
+              onClick={() => !amDeclined && handleDecline.mutate()}
+              disabled={isPending || amDeclined}
+              className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
+              style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500, opacity: amDeclined ? 0.5 : 1 }}>
+              {handleDecline.isPending ? '...' : 'Muié não deixa'}
+            </button>
+          )}
         </div>
       )}
 
