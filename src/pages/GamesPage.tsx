@@ -17,8 +17,15 @@ const MAX_PLAYERS = 16
 const SERVER_URL = 'https://chicofc-server.onrender.com'
 
 function getNextWednesday(): Date {
-  const today = startOfDay(new Date())
-  if (isWednesday(today)) return today
+  const now = new Date()
+  const today = startOfDay(now)
+  if (isWednesday(today)) {
+    // Após 23h da quarta, avança para a próxima quarta (reset da página)
+    const resetTime = new Date(today)
+    resetTime.setHours(23, 0, 0, 0)
+    if (isAfter(now, resetTime)) return nextWednesday(today)
+    return today
+  }
   return nextWednesday(today)
 }
 
@@ -214,6 +221,10 @@ export default function GamesPage() {
   const closeTime = new Date(gameDate)
   closeTime.setHours(19, 30, 0, 0)
   const listaClosed = isAfter(new Date(), closeTime)
+
+  const escalacaoCloseTime = new Date(gameDate)
+  escalacaoCloseTime.setHours(21, 30, 0, 0)
+  const escalacaoClosed = isAfter(new Date(), escalacaoCloseTime)
 
   const { data: lineup = { blue: [], black: [] } } = useQuery({
     queryKey: ['lineup', gameId],
@@ -665,26 +676,28 @@ export default function GamesPage() {
         </div>
       )}
 
-      {/* Botões fixos — Admin confirmado: Escalar / [Avulso] / [Compartilhar] */}
-      {isAdmin && (amConfirmed || amInWaitlist || listaClosed) && (
+      {/* Botões fixos — Admin confirmado */}
+      {isAdmin && (amConfirmed || amInWaitlist || listaClosed) && (showAvulsoBtn || hasLineup || !escalacaoClosed) && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
-          <button onClick={() => navigate('/escalacao')}
-            className="flex-1 py-4 font-medium transition-all active:scale-95"
-            style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && hasLineup ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
-            {hasLineup ? 'Editar Times' : 'Escalar Times'}
-          </button>
+          {!escalacaoClosed && (
+            <button onClick={() => navigate('/escalacao')}
+              className="flex-1 py-4 font-medium transition-all active:scale-95"
+              style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && hasLineup ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
+              {hasLineup ? 'Editar Times' : 'Escalar Times'}
+            </button>
+          )}
           {showAvulsoBtn && (
             <button onClick={() => setShowAvulsoSheet(true)}
               className="flex-1 py-4 font-medium transition-all active:scale-95"
-              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && hasLineup ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
+              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && hasLineup && !escalacaoClosed ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
               + Avulso Temp.
             </button>
           )}
           {hasLineup && (
             <button onClick={handleShare} disabled={sharing}
               className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2"
-              style={{ background: showAvulsoBtn ? 'var(--color-surface-secondary)' : 'var(--btn-primary-bg)', color: showAvulsoBtn ? 'var(--color-fg-primary)' : 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
+              style={{ background: (!escalacaoClosed || showAvulsoBtn) ? 'var(--color-surface-secondary)' : 'var(--btn-primary-bg)', color: (!escalacaoClosed || showAvulsoBtn) ? 'var(--color-fg-primary)' : 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && !escalacaoClosed ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
               {sharing ? <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'white' }} /> : <ShareNetwork size={16} />}
               {sharing ? '...' : 'Compartilhar'}
             </button>
@@ -696,11 +709,13 @@ export default function GamesPage() {
       {isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
-          <button onClick={() => navigate('/escalacao')}
-            className="flex-1 py-4 font-medium transition-all active:scale-95"
-            style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
-            {hasLineup ? 'Editar Times' : 'Escalar Times'}
-          </button>
+          {!escalacaoClosed && (
+            <button onClick={() => navigate('/escalacao')}
+              className="flex-1 py-4 font-medium transition-all active:scale-95"
+              style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+              {hasLineup ? 'Editar Times' : 'Escalar Times'}
+            </button>
+          )}
           <button
             onClick={() => handleConfirm.mutate()}
             disabled={isPending}
