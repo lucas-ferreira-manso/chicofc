@@ -226,6 +226,14 @@ export default function GamesPage() {
   escalacaoCloseTime.setHours(21, 30, 0, 0)
   const escalacaoClosed = isAfter(new Date(), escalacaoCloseTime)
 
+  // "Escalar Times" só aparece: quarta-feira, após 16h, mínimo 12 confirmados, antes das 21h30
+  const escalacaoOpenTime = new Date(gameDate)
+  escalacaoOpenTime.setHours(16, 0, 0, 0)
+  const showEscalarBtn = isWednesday(startOfDay(new Date()))
+    && isAfter(new Date(), escalacaoOpenTime)
+    && !escalacaoClosed
+    && totalConfirmed >= 12
+
   const { data: lineup = { blue: [], black: [] } } = useQuery({
     queryKey: ['lineup', gameId],
     queryFn: () => fetchLineup(gameId),
@@ -677,10 +685,10 @@ export default function GamesPage() {
       )}
 
       {/* Botões fixos — Admin confirmado */}
-      {isAdmin && (amConfirmed || amInWaitlist || listaClosed) && (showAvulsoBtn || hasLineup || !escalacaoClosed) && (
+      {isAdmin && (amConfirmed || amInWaitlist || listaClosed) && (showAvulsoBtn || hasLineup || showEscalarBtn) && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
-          {!escalacaoClosed && (
+          {showEscalarBtn && (
             <button onClick={() => navigate('/escalacao')}
               className="flex-1 py-4 font-medium transition-all active:scale-95"
               style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && hasLineup ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
@@ -690,14 +698,14 @@ export default function GamesPage() {
           {showAvulsoBtn && (
             <button onClick={() => setShowAvulsoSheet(true)}
               className="flex-1 py-4 font-medium transition-all active:scale-95"
-              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && hasLineup && !escalacaoClosed ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
+              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && hasLineup && showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
               + Avulso Temp.
             </button>
           )}
           {hasLineup && (
             <button onClick={handleShare} disabled={sharing}
               className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2"
-              style={{ background: (!escalacaoClosed || showAvulsoBtn) ? 'var(--color-surface-secondary)' : 'var(--btn-primary-bg)', color: (!escalacaoClosed || showAvulsoBtn) ? 'var(--color-fg-primary)' : 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && !escalacaoClosed ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
+              style={{ background: (showEscalarBtn || showAvulsoBtn) ? 'var(--color-surface-secondary)' : 'var(--btn-primary-bg)', color: (showEscalarBtn || showAvulsoBtn) ? 'var(--color-fg-primary)' : 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
               {sharing ? <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'white' }} /> : <ShareNetwork size={16} />}
               {sharing ? '...' : 'Compartilhar'}
             </button>
@@ -709,7 +717,7 @@ export default function GamesPage() {
       {isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
-          {!escalacaoClosed && (
+          {showEscalarBtn && (
             <button onClick={() => navigate('/escalacao')}
               className="flex-1 py-4 font-medium transition-all active:scale-95"
               style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
