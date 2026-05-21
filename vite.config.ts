@@ -4,12 +4,16 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 import { readFileSync } from 'fs'
+import { execSync } from 'child_process'
 
 const { version } = JSON.parse(readFileSync('./package.json', 'utf-8'))
+const [major, minor] = version.split('.')
+const commitCount = execSync('git rev-list --count HEAD').toString().trim()
+const autoVersion = `${major}.${minor}.${commitCount}`
 
 export default defineConfig({
   define: {
-    __APP_VERSION__: JSON.stringify(version),
+    __APP_VERSION__: JSON.stringify(autoVersion),
   },
   resolve: {
     alias: {
