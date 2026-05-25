@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Eye, EyeSlash } from '@phosphor-icons/react'
+import { sendPasswordResetEmail } from 'firebase/auth'
+import { auth } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 
 export default function LoginPage() {
@@ -8,7 +10,25 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
   const signIn = useAuthStore(s => s.signIn)
+
+  const handleForgotPassword = async () => {
+    const trimmed = email.trim().toLowerCase()
+    if (!trimmed) {
+      toast.error('Digite seu email primeiro')
+      return
+    }
+    setResetLoading(true)
+    try {
+      await sendPasswordResetEmail(auth, trimmed)
+      toast.success('Email de recuperação enviado!')
+    } catch {
+      toast.error('Não foi possível enviar o email. Verifique o endereço.')
+    } finally {
+      setResetLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -24,7 +44,7 @@ export default function LoginPage() {
     <div className="min-h-dvh flex flex-col" style={{ background: 'var(--color-bg)' }}>
       <div className="flex-1 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <img src="/logo.png" alt="Chico FC" width={72} height={72} />
+          <img src="/logo.png" alt="Chico FC" width={144} height={144} />
           <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
             O app da nossa pelada
           </p>
@@ -75,6 +95,16 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+
+          <button
+            type="button"
+            disabled={resetLoading}
+            onClick={handleForgotPassword}
+            className="self-center"
+            style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', background: 'none', border: 'none' }}
+          >
+            {resetLoading ? 'Enviando...' : 'Esqueci minha senha'}
+          </button>
 
           <button
             type="submit"
