@@ -4,6 +4,7 @@ import { Eye, EyeSlash } from '@phosphor-icons/react'
 import { sendPasswordResetEmail } from 'firebase/auth'
 import { auth } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
+import TermsContent from '../components/TermsContent'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -11,6 +12,8 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
+  const [termsChecked, setTermsChecked] = useState(false)
+  const [showTermsText, setShowTermsText] = useState(false)
   const signIn = useAuthStore(s => s.signIn)
 
   const handleForgotPassword = async () => {
@@ -38,7 +41,7 @@ export default function LoginPage() {
     if (error) toast.error(error)
   }
 
-  const filled = email.length > 0 && password.length > 0
+  const filled = email.length > 0 && password.length > 0 && termsChecked
 
   return (
     <div className="min-h-dvh flex flex-col" style={{ background: 'var(--color-bg)' }}>
@@ -96,6 +99,25 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {/* Checkbox de termos */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={termsChecked}
+              onChange={e => setTermsChecked(e.target.checked)}
+              style={{ width: 18, height: 18, accentColor: 'var(--color-fg-accent)', flexShrink: 0 }}
+            />
+            <span style={{ fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-13)', color: 'var(--color-fg-secondary)', lineHeight: 1.4 }}>
+              Li e aceito os{' '}
+              <button
+                type="button"
+                onClick={() => setShowTermsText(true)}
+                style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-13)', textDecoration: 'underline', cursor: 'pointer' }}>
+                Termos da Pelada
+              </button>
+            </span>
+          </label>
+
           <button
             type="button"
             disabled={resetLoading}
@@ -122,6 +144,31 @@ export default function LoginPage() {
           </button>
         </form>
       </div>
+      {/* Modal leitura dos termos (no login, sem aceite — só leitura) */}
+      {showTermsText && (
+        <>
+          <div onClick={() => setShowTermsText(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 80 }} />
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 90,
+            background: 'var(--color-bg)', borderRadius: '24px 24px 0 0',
+            padding: '28px 24px 40px', display: 'flex', flexDirection: 'column', gap: 20,
+            maxHeight: '85dvh', overflowY: 'auto'
+          }}>
+            <TermsContent />
+            <button
+              onClick={() => { setTermsChecked(true); setShowTermsText(false) }}
+              style={{
+                width: '100%', padding: '16px', borderRadius: 9999,
+                background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)',
+                fontFamily: 'var(--font-primary)', fontWeight: 600,
+                fontSize: 'var(--font-size-16)', border: 'none', cursor: 'pointer'
+              }}>
+              Entendido, aceito ✅
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

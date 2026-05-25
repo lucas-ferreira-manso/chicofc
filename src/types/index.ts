@@ -7,6 +7,7 @@ export interface Profile {
   active: boolean
   created_at: string
   photoURL?: string
+  termsAccepted?: boolean
 }
 
 export interface Game {

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from './lib/firebase'
@@ -17,9 +17,15 @@ import EscalacaoPage from './pages/EscalacaoPage'
 import NotificacoesAdminPage from './pages/NotificacoesAdminPage'
 import PresencaPage from './pages/PresencaPage'
 import RankingVotacaoPage from './pages/RankingVotacaoPage'
+import TermsSheet from './components/TermsSheet'
 
 export default function App() {
   const { user, loading, setLoading, fetchProfile } = useAuthStore()
+  const [showTerms, setShowTerms] = useState(false)
+
+  useEffect(() => {
+    if (user && !user.termsAccepted) setShowTerms(true)
+  }, [user?.id])
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -74,6 +80,7 @@ export default function App() {
         </Routes>
       </main>
       {!hideNav && <BottomNav />}
+      {showTerms && <TermsSheet onAccept={() => setShowTerms(false)} />}
     </div>
   )
 }
