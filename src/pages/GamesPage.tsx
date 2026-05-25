@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { collection, getDocs, query, where, doc, getDoc, writeBatch, addDoc, deleteDoc } from 'firebase/firestore'
 import { getAuth, getIdToken } from 'firebase/auth'
@@ -264,7 +264,8 @@ export default function GamesPage() {
           shouldNotifyAvulso = true
         }
       } else {
-        const status: 'confirmed' | 'waitlist' = isFull || (playerType === 'avulso' && priorityOpen) ? 'waitlist' : 'confirmed'
+        // Avulsos sempre vão para a lista de espera; mensalistas confirmam direto (se não lotado)
+        const status: 'confirmed' | 'waitlist' = (isFull || playerType === 'avulso') ? 'waitlist' : 'confirmed'
         const attRef = doc(collection(db, 'attendances'))
         batch.set(attRef, {
           game_id: gameId,
@@ -273,15 +274,6 @@ export default function GamesPage() {
           status,
           confirmed_at: new Date().toISOString()
         })
-        // Avulso confirmando diretamente (após terça 13h, janela já fechada)
-        if (status === 'confirmed' && playerType === 'avulso') {
-          const payRef = doc(collection(db, 'payments'))
-          batch.set(payRef, {
-            user_id: user!.id, amount: 22, type: 'jogo',
-            game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString()
-          })
-          shouldNotifyAvulso = true
-        }
       }
       await batch.commit()
 
@@ -331,7 +323,7 @@ export default function GamesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attendances', gameId] })
       const playerType = user!.player_type ?? 'avulso'
-      if (isFull || (playerType === 'avulso' && priorityOpen)) {
+      if (isFull || playerType === 'avulso') {
         toast('Na lista de espera ⏳')
       } else {
         toast.success('Bora jogar! 🙌')
@@ -406,6 +398,41 @@ export default function GamesPage() {
     },
     onError: () => toast.error('Erro ao remover avulso')
   })
+
+  // Promoção automática: após terça 13h, avulsos em espera são confirmados (admin dispara)
+  const autoPromoteRef = useRef(false)
+  useEffect(() => {
+    if (priorityOpen || autoPromoteRef.current || !isAdmin || attendances.length === 0) return
+    const spots = MAX_PLAYERS - confirmed.length - tempAvulsos.length
+    if (spots <= 0) return
+    const toPromote = waitlist.slice(0, spots)
+    if (toPromote.length === 0) return
+    autoPromoteRef.current = true
+    ;(async () => {
+      try {
+        // Verifica pagamentos já existentes para não duplicar
+        const avulsoIds = toPromote.filter(a => a.player_type === 'avulso').map(a => a.user_id)
+        const existingPayers = new Set<string>()
+        await Promise.all(avulsoIds.map(async uid => {
+          const snap = await getDocs(query(collection(db, 'payments'), where('user_id', '==', uid), where('game_id', '==', gameId)))
+          if (!snap.empty) existingPayers.add(uid)
+        }))
+        const batch = writeBatch(db)
+        toPromote.forEach(a => {
+          batch.update(doc(db, 'attendances', a.id), { status: 'confirmed' })
+          if (a.player_type === 'avulso' && !existingPayers.has(a.user_id)) {
+            batch.set(doc(collection(db, 'payments')), {
+              user_id: a.user_id, amount: 22, type: 'jogo',
+              game_id: gameId, month: gameId, paid: false,
+              created_at: new Date().toISOString()
+            })
+          }
+        })
+        await batch.commit()
+        qc.invalidateQueries({ queryKey: ['attendances', gameId] })
+      } catch { autoPromoteRef.current = false }
+    })()
+  }, [priorityOpen, isAdmin, attendances.length])
 
   const pct = Math.min((totalConfirmed / MAX_PLAYERS) * 100, 100)
   const isPending = handleConfirm.isPending || handleDecline.isPending
