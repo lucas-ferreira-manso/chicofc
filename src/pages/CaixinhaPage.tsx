@@ -86,6 +86,13 @@ async function fetchMyUnpaidJogoPayments(userId: string): Promise<any[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }))
 }
 
+async function fetchMyCurrentGameAttendance(userId: string, gameId: string): Promise<any | null> {
+  const q = query(collection(db, 'attendances'), where('user_id', '==', userId), where('game_id', '==', gameId))
+  const snap = await getDocs(q)
+  if (snap.empty) return null
+  return { id: snap.docs[0].id, ...snap.docs[0].data() }
+}
+
 function getNextWednesday(): Date {
   const today = startOfDay(new Date())
   if (isWednesday(today)) return today
@@ -139,6 +146,13 @@ export default function CaixinhaPage() {
   })
 
   const currentGameId = getGameId(getNextWednesday())
+
+  const { data: myCurrentGameAttendance } = useQuery({
+    queryKey: ['my-game-attendance', user?.id, currentGameId],
+    queryFn: () => fetchMyCurrentGameAttendance(user!.id, currentGameId),
+    enabled: !!user?.id && user?.player_type === 'avulso',
+    refetchInterval: 15000
+  })
   const { data: myTempAvulsos = [] } = useQuery({
     queryKey: ['my-temp-avulsos', user?.id, currentGameId],
     queryFn: () => fetchMyTempAvulsos(user!.id, currentGameId),
@@ -299,8 +313,9 @@ export default function CaixinhaPage() {
   // Para avulsos, fetchMyPaymentRequest só retorna pendentes; para mensalistas inclui aprovados
   const hasRequested = !!myRequest && (myRequest as any).status === 'pending'
   const isApproved = !isAvulso && !!myRequest && (myRequest as any).status === 'approved'
-  // Avulsos veem botões de pagamento apenas quando têm jogo(s) pendente(s) de pagamento
-  const avulsoNeedsPay = isAvulso && myUnpaidJogoPayments.length > 0
+  // Avulsos veem botões de pagamento se têm jogo pendente OU estão na lista de espera/confirmados
+  const avulsoInGame = !!myCurrentGameAttendance && ['confirmed', 'waitlist'].includes(myCurrentGameAttendance.status)
+  const avulsoNeedsPay = isAvulso && (myUnpaidJogoPayments.length > 0 || avulsoInGame)
 
   const EditableRow = ({ field, label, value }: { field: EditField, label: string, value: number }) => (
     <div className="flex flex-col gap-1">

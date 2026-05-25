@@ -399,6 +399,16 @@ export default function GamesPage() {
     onError: () => toast.error('Erro ao remover avulso')
   })
 
+  // Correção: se a janela de prioridade está aberta, avulsos não devem estar como 'confirmed'
+  useEffect(() => {
+    if (!priorityOpen || confirmedAvulsos.length === 0 || attendances.length === 0) return
+    const batch = writeBatch(db)
+    confirmedAvulsos.forEach(a => {
+      batch.update(doc(db, 'attendances', a.id), { status: 'waitlist' })
+    })
+    batch.commit().then(() => qc.invalidateQueries({ queryKey: ['attendances', gameId] }))
+  }, [priorityOpen, confirmedAvulsos.length, attendances.length])
+
   // Promoção automática: após terça 13h, avulsos em espera são confirmados (admin dispara)
   const autoPromoteRef = useRef(false)
   useEffect(() => {
@@ -948,14 +958,16 @@ function PlayerRow({ attendance, index, isMe, waitlist = false }: {
         {isMe && <span className="ml-1" style={{ color: 'var(--color-fg-secondary)', fontSize: 'var(--font-size-14)' }}>(você)</span>}
       </p>
 
-      {!waitlist && (
+      {attendance.player_type === 'avulso' && (
         <span className="px-2 py-0.5 rounded-full text-xs font-medium"
-          style={{
-            background: attendance.player_type === 'mensalista' ? '#fff3cd' : '#e6f4ea',
-            color: attendance.player_type === 'mensalista' ? '#856404' : '#166634',
-            fontFamily: 'var(--font-primary)'
-          }}>
-          {attendance.player_type === 'mensalista' ? 'Mensalista' : 'R$22'}
+          style={{ background: '#e6f4ea', color: '#166634', fontFamily: 'var(--font-primary)' }}>
+          R$22
+        </span>
+      )}
+      {attendance.player_type === 'mensalista' && !waitlist && (
+        <span className="px-2 py-0.5 rounded-full text-xs font-medium"
+          style={{ background: '#fff3cd', color: '#856404', fontFamily: 'var(--font-primary)' }}>
+          Mensalista
         </span>
       )}
     </div>
