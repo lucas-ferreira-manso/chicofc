@@ -123,9 +123,9 @@ async function fetchTempAvulsos(gameId: string): Promise<TempAvulso[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as TempAvulso))
 }
 
-async function fetchAllPlayers(): Promise<{ id: string; name: string; player_type: string }[]> {
+async function fetchAllPlayers(): Promise<{ id: string; name: string; player_type: string; photoURL?: string }[]> {
   const snap = await getDocs(query(collection(db, 'players'), where('active', '==', true)))
-  return snap.docs.map(d => ({ id: d.id, name: d.data().name ?? '', player_type: d.data().player_type ?? 'avulso' }))
+  return snap.docs.map(d => ({ id: d.id, name: d.data().name ?? '', player_type: d.data().player_type ?? 'avulso', photoURL: d.data().photoURL }))
 }
 
 async function fetchAttendances(gameId: string): Promise<Attendance[]> {
@@ -660,12 +660,7 @@ export default function GamesPage() {
               {toConfirm.map(p => (
                 <div key={p.id} className="flex items-center gap-3 p-4 rounded-3xl"
                   style={{ background: 'var(--color-surface-primary)', opacity: 0.55 }}>
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                    style={{ background: 'var(--color-avatar-bg)' }}>
-                    <span style={{ fontFamily: 'var(--font-primary)', fontSize: 14, fontWeight: 500, color: 'var(--color-avatar-fg)' }}>
-                      {p.name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
-                    </span>
-                  </div>
+                  <Avatar name={p.name} photoURL={p.photoURL} />
                   <p className="flex-1 font-medium truncate" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                     {p.name}
                   </p>
