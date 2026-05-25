@@ -412,6 +412,37 @@ export default function GamesPage() {
     onError: () => toast.error('Erro ao remover avulso')
   })
 
+  // Migração: cria payment para avulsos na espera que ainda não têm nenhum registro
+  const paymentMigrationRef = useRef(false)
+  useEffect(() => {
+    if (paymentMigrationRef.current || attendances.length === 0) return
+    const avulsosNaEspera = waitlist.filter(a => a.player_type === 'avulso')
+    if (avulsosNaEspera.length === 0) return
+    paymentMigrationRef.current = true
+    ;(async () => {
+      try {
+        const existingPayers = new Set<string>()
+        await Promise.all(avulsosNaEspera.map(async a => {
+          // Checa qualquer payment (pago ou não) para não duplicar
+          const snap = await getDocs(query(collection(db, 'payments'),
+            where('user_id', '==', a.user_id), where('game_id', '==', gameId)))
+          if (!snap.empty) existingPayers.add(a.user_id)
+        }))
+        const toCreate = avulsosNaEspera.filter(a => !existingPayers.has(a.user_id))
+        if (toCreate.length === 0) return
+        const batch = writeBatch(db)
+        toCreate.forEach(a => {
+          batch.set(doc(collection(db, 'payments')), {
+            user_id: a.user_id, amount: 22, type: 'jogo',
+            game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString()
+          })
+        })
+        await batch.commit()
+        qc.invalidateQueries({ queryKey: ['payments'] })
+      } catch { paymentMigrationRef.current = false }
+    })()
+  }, [attendances.length])
+
   // Correção: se a janela de prioridade está aberta, avulsos não devem estar como 'confirmed'
   useEffect(() => {
     if (!priorityOpen || confirmedAvulsos.length === 0 || attendances.length === 0) return
