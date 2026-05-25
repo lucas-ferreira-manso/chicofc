@@ -943,14 +943,15 @@ function PlayerRow({ attendance, index, isMe, waitlist = false }: {
         border: isMe ? '1.5px solid var(--color-fg-accent-light)' : '1.5px solid transparent'
       }}>
 
-      {waitlist ? (
-        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-          style={{ background: 'var(--color-surface-secondary)' }}>
-          <span style={{ fontSize: 14 }}>⏳</span>
-        </div>
-      ) : (
+      <div className="relative shrink-0">
         <Avatar name={name} photoURL={photoURL} />
-      )}
+        {waitlist && (
+          <span style={{
+            position: 'absolute', bottom: -2, right: -4,
+            fontSize: 10, lineHeight: 1
+          }}>⏳</span>
+        )}
+      </div>
 
       <p className="flex-1 font-medium truncate"
         style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
