@@ -210,7 +210,7 @@ export default function GamesPage() {
   const confirmedAvulsos = confirmed.filter(a => a.player_type === 'avulso')
   const respondedIds = new Set(attendances.map(a => a.user_id))
   const toConfirm = allPlayers.filter(p => !respondedIds.has(p.id))
-  const totalConfirmed = confirmed.length + tempAvulsos.length
+  const totalConfirmed = confirmed.length + waitlist.length + tempAvulsos.length
   const isFull = totalConfirmed >= MAX_PLAYERS
   const amConfirmed = myAttendance?.status === 'confirmed'
   const amInWaitlist = myAttendance?.status === 'waitlist'
