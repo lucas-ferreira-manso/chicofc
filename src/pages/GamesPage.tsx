@@ -542,27 +542,15 @@ export default function GamesPage() {
         <div className="flex justify-center py-8"><div className="text-4xl animate-spin">⚽</div></div>
       ) : (
         <div className="px-6 flex flex-col gap-2">
-          {confirmedMensalistas.length > 0 && (
+          {confirmed.length > 0 && (
             <>
               <div className="flex items-center gap-1.5 mt-2 mb-1">
-                <Crown size={12} color="#f59e0b" weight="fill" />
                 <p className="font-semibold uppercase tracking-wider" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
-                  MENSALISTAS ({confirmedMensalistas.length})
+                  CONFIRMADOS ({confirmed.length})
                 </p>
               </div>
-              {confirmedMensalistas.map((a, i) => (
+              {confirmed.map((a, i) => (
                 <PlayerRow key={a.id} attendance={a} index={i + 1} isMe={a.user_id === user?.id} />
-              ))}
-            </>
-          )}
-
-          {confirmedAvulsos.length > 0 && (
-            <>
-              <p className="font-semibold uppercase tracking-wider mt-3 mb-1" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
-                AVULSOS ({confirmedAvulsos.length})
-              </p>
-              {confirmedAvulsos.map((a, i) => (
-                <PlayerRow key={a.id} attendance={a} index={confirmedMensalistas.length + i + 1} isMe={a.user_id === user?.id} />
               ))}
             </>
           )}
@@ -933,10 +921,14 @@ function PlayerRow({ attendance, index, isMe, waitlist = false }: {
         {isMe && <span className="ml-1" style={{ color: 'var(--color-fg-secondary)', fontSize: 'var(--font-size-14)' }}>(você)</span>}
       </p>
 
-      {attendance.player_type === 'avulso' && !waitlist && (
+      {!waitlist && (
         <span className="px-2 py-0.5 rounded-full text-xs font-medium"
-          style={{ background: '#e6f4ea', color: '#166634', fontFamily: 'var(--font-primary)' }}>
-          R$22
+          style={{
+            background: attendance.player_type === 'mensalista' ? '#fff3cd' : '#e6f4ea',
+            color: attendance.player_type === 'mensalista' ? '#856404' : '#166634',
+            fontFamily: 'var(--font-primary)'
+          }}>
+          {attendance.player_type === 'mensalista' ? 'Mensalista' : 'R$22'}
         </span>
       )}
     </div>
