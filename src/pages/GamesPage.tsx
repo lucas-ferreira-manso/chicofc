@@ -555,6 +555,30 @@ export default function GamesPage() {
             </>
           )}
 
+          {confirmed.length === 0 && (
+            <p className="text-center py-6" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+              Ninguém confirmado ainda 🙋
+            </p>
+          )}
+
+          {waitlist.length > 0 && (
+            <>
+              <div className="flex items-center justify-between mt-4 mb-1">
+                <p className="font-semibold uppercase tracking-wider" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
+                  LISTA DE ESPERA
+                </p>
+                <div className="px-3 py-1 rounded-2xl" style={{ background: 'var(--color-surface-primary)' }}>
+                  <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+                    {waitlist.length} jogadores
+                  </p>
+                </div>
+              </div>
+              {waitlist.map((a, i) => (
+                <PlayerRow key={a.id} attendance={a} index={i + 1} isMe={a.user_id === user?.id} waitlist />
+              ))}
+            </>
+          )}
+
           {tempAvulsos.length > 0 && (
             <p className="font-semibold uppercase tracking-wider mt-3 mb-1" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
               AVULSOS TEMPORÁRIOS ({tempAvulsos.length})
@@ -609,30 +633,6 @@ export default function GamesPage() {
                     {p.name}
                   </p>
                 </div>
-              ))}
-            </>
-          )}
-
-          {confirmed.length === 0 && (
-            <p className="text-center py-6" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-              Ninguém confirmado ainda 🙋
-            </p>
-          )}
-
-          {waitlist.length > 0 && (
-            <>
-              <div className="flex items-center justify-between mt-4 mb-1">
-                <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-                  Lista de espera
-                </p>
-                <div className="px-3 py-1 rounded-2xl" style={{ background: 'var(--color-surface-primary)' }}>
-                  <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-                    {waitlist.length} jogadores
-                  </p>
-                </div>
-              </div>
-              {waitlist.map((a, i) => (
-                <PlayerRow key={a.id} attendance={a} index={i + 1} isMe={a.user_id === user?.id} waitlist />
               ))}
             </>
           )}
