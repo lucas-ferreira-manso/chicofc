@@ -247,8 +247,9 @@ function BadgeVotacao({ type, player, onClick, disabled, completed }: BadgeProps
             <img
               src={player.photoURL} alt={player.name}
               style={{
+                position: 'absolute', inset: 0,
                 width: '100%', height: '100%',
-                objectFit: 'cover', objectPosition: 'center',
+                objectFit: 'cover', objectPosition: 'center top',
                 display: 'block', pointerEvents: 'none'
               }}
             />
