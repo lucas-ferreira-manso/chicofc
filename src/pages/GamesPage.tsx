@@ -252,15 +252,10 @@ export default function GamesPage() {
       const playerType = user!.player_type ?? 'avulso'
 
       if (myAttendance) {
+        // Movendo da espera para confirmado (após terça 13h)
         batch.update(doc(db, 'attendances', myAttendance.id), { status: 'confirmed' })
-        // Avulso saindo da fila de espera após terça 13h: janela de prioridade fechou,
-        // agora é confirmação real → cria pagamento e notifica
+        // Pagamento já existe desde que entrou na espera — só notifica
         if (playerType === 'avulso' && myAttendance.status === 'waitlist' && !priorityOpen) {
-          const payRef = doc(collection(db, 'payments'))
-          batch.set(payRef, {
-            user_id: user!.id, amount: 22, type: 'jogo',
-            game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString()
-          })
           shouldNotifyAvulso = true
         }
       } else {
@@ -274,6 +269,13 @@ export default function GamesPage() {
           status,
           confirmed_at: new Date().toISOString()
         })
+        // Cria pagamento imediatamente ao entrar (espera ou confirmado)
+        if (playerType === 'avulso') {
+          batch.set(doc(collection(db, 'payments')), {
+            user_id: user!.id, amount: 22, type: 'jogo',
+            game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString()
+          })
+        }
       }
       await batch.commit()
 
@@ -334,20 +336,31 @@ export default function GamesPage() {
 
   const handleDecline = useMutation({
     mutationFn: async () => {
+      // Busca pagamento não pago do avulso para deletar ao sair
+      let unpaidPaymentId: string | null = null
+      if (myAttendance && user?.player_type === 'avulso') {
+        const paySnap = await getDocs(query(
+          collection(db, 'payments'),
+          where('user_id', '==', user!.id),
+          where('game_id', '==', gameId),
+          where('paid', '==', false)
+        ))
+        if (!paySnap.empty) unpaidPaymentId = paySnap.docs[0].id
+      }
+
       const batch = writeBatch(db)
       if (myAttendance) {
+        // Promove próximo da fila se o que saiu estava confirmado
         if (myAttendance.status === 'confirmed' && waitlist.length > 0) {
           const next = waitlist[0]
           batch.update(doc(db, 'attendances', next.id), { status: 'confirmed' })
-          if (next.player_type === 'avulso') {
-            const payRef = doc(collection(db, 'payments'))
-            batch.set(payRef, {
-              user_id: next.user_id, amount: 22, type: 'jogo',
-              game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString()
-            })
-          }
+          // Pagamento do próximo já existe desde que entrou na espera — não cria de novo
         }
         batch.update(doc(db, 'attendances', myAttendance.id), { status: 'declined' })
+        // Remove pagamento pendente ao sair da pelada
+        if (unpaidPaymentId) {
+          batch.delete(doc(db, 'payments', unpaidPaymentId))
+        }
       } else {
         const attRef = doc(collection(db, 'attendances'))
         batch.set(attRef, {

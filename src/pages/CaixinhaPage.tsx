@@ -244,22 +244,13 @@ export default function CaixinhaPage() {
     }
   })
 
-  // Já paguei — cria payment_request
+  // Já paguei — cria payment_request para o admin aprovar
   const submitPaymentRequest = useMutation({
     mutationFn: async () => {
       const month = format(new Date(), 'yyyy-MM')
       const playerData = players.find(p => p.id === user?.id)
       const tipo = playerData?.player_type || 'mensalista'
       const amount = tipo === 'mensalista' ? (config?.mensalistaValue ?? 80) : (config?.avulsoValue ?? 22)
-      // Notificar admin via FCM
-      const adminSnap = await getDocs(query(collection(db, 'players'), where('role', '==', 'admin')))
-      const adminIds = adminSnap.docs.map(d => d.id)
-      await Promise.all(adminIds.map(async adminId => {
-        const tokenSnap = await getDoc(doc(db, 'fcm_tokens', adminId))
-        if (tokenSnap.exists()) {
-          // Salva notificação no Firestore para o admin ver
-        }
-      }))
       await addDoc(collection(db, 'payment_requests'), {
         user_id: user!.id,
         user_name: user?.name || user?.email,
