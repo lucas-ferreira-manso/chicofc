@@ -197,7 +197,7 @@ function PlayerAvatar({ player, size = 32 }: { player: PlayerInfo; size?: number
       flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
     }}>
       {player.photoURL ? (
-        <img src={player.photoURL} alt={player.name}
+        <img src={player.photoURL} alt={player.name} crossOrigin="anonymous"
           style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       ) : (
         <span style={{
@@ -245,7 +245,7 @@ function BadgeVotacao({ type, player, onClick, disabled, completed }: BadgeProps
         {player ? (
           player.photoURL ? (
             <img
-              src={player.photoURL} alt={player.name}
+              src={player.photoURL} alt={player.name} crossOrigin="anonymous"
               style={{
                 position: 'absolute', inset: 0,
                 width: '100%', height: '100%',
@@ -306,7 +306,7 @@ function SmallCardVotacao({ entry, onClick }: { entry: HistoryEntry; onClick: ()
       background: 'var(--color-surface-secondary)', position: 'relative'
     }}>
       {player?.photoURL ? (
-        <img src={player.photoURL} alt={player.name}
+        <img src={player.photoURL} alt={player.name} crossOrigin="anonymous"
           style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }} />
       ) : player ? (
         <span style={{
@@ -482,6 +482,7 @@ function JogadorTab() {
   const [pendingCheia, setPendingCheia] = useState<string | null>(null)
   const [pendingMurcha, setPendingMurcha] = useState<string | null>(null)
   const [historySheet, setHistorySheet] = useState<HistoryEntry | null>(null)
+  const [sharing, setSharing] = useState(false)
   const shareCardRef = useRef<HTMLDivElement>(null)
   const historyShareRef = useRef<HTMLDivElement>(null)
 
@@ -523,60 +524,52 @@ function JogadorTab() {
     setSheetType(null)
   }
 
-  const handleShare = async () => {
-    if (!shareCardRef.current) return
+  // Utilitário: converte toBlob (callback) em Promise
+  const blobFromCanvas = (canvas: HTMLCanvasElement): Promise<Blob> =>
+    new Promise((resolve, reject) => {
+      canvas.toBlob(blob => {
+        if (blob) resolve(blob)
+        else reject(new Error('canvas.toBlob retornou null'))
+      }, 'image/png')
+    })
+
+  const shareFromRef = async (ref: React.RefObject<HTMLDivElement>) => {
+    if (!ref.current) return
+    setSharing(true)
     try {
       const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(shareCardRef.current, {
-        backgroundColor: null,
+      const canvas = await html2canvas(ref.current, {
+        backgroundColor: '#111827',   // fundo escuro explícito (evita canvas vazio)
         scale: 2,
-        useCORS: true,
+        useCORS: true,                 // solicita CORS para imagens externas
         logging: false,
         ignoreElements: (el) => el.hasAttribute('data-share-exclude')
       })
-      canvas.toBlob(async (blob) => {
-        if (!blob) return
-        const file = new File([blob], 'bola-cheia-chicofc.png', { type: 'image/png' })
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: 'Bola Cheia & Bola Murcha ⚽' })
-        } else {
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url; a.download = 'bola-cheia-chicofc.png'; a.click()
-          URL.revokeObjectURL(url)
-          toast.success('Imagem salva!')
-        }
-      }, 'image/png')
-    } catch {
-      toast.error('Erro ao gerar imagem')
+      const blob = await blobFromCanvas(canvas)
+      const file = new File([blob], 'bola-cheia-chicofc.png', { type: 'image/png' })
+
+      if (navigator.share && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Bola Cheia & Bola Murcha ⚽' })
+      } else {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = 'bola-cheia-chicofc.png'; a.click()
+        URL.revokeObjectURL(url)
+        toast.success('Imagem salva!')
+      }
+    } catch (e: any) {
+      // AbortError = usuário cancelou o compartilhamento — não é erro
+      if (e?.name !== 'AbortError') {
+        console.error('[Share] erro:', e)
+        toast.error('Não foi possível gerar a imagem')
+      }
+    } finally {
+      setSharing(false)
     }
   }
 
-  const handleShareHistory = async () => {
-    if (!historyShareRef.current) return
-    try {
-      const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(historyShareRef.current, {
-        backgroundColor: null, scale: 2, useCORS: true, logging: false,
-        ignoreElements: (el) => el.hasAttribute('data-share-exclude')
-      })
-      canvas.toBlob(async (blob) => {
-        if (!blob) return
-        const file = new File([blob], 'bola-cheia-chicofc.png', { type: 'image/png' })
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: 'Bola Cheia & Bola Murcha ⚽' })
-        } else {
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url; a.download = 'bola-cheia-chicofc.png'; a.click()
-          URL.revokeObjectURL(url)
-          toast.success('Imagem salva!')
-        }
-      }, 'image/png')
-    } catch {
-      toast.error('Erro ao gerar imagem')
-    }
-  }
+  const handleShare = () => shareFromRef(shareCardRef)
+  const handleShareHistory = () => shareFromRef(historyShareRef)
 
   if (loadingPlayers || loadingVotacao) {
     return (
@@ -640,15 +633,16 @@ function JogadorTab() {
           <BadgeVotacao type="bolaCheia" player={entry.cheiaWinner} disabled completed />
           <BadgeVotacao type="bolaMurcha" player={entry.murchaWinner} disabled completed />
         </div>
-        <button data-share-exclude onClick={onShare}
+        <button data-share-exclude onClick={onShare} disabled={sharing}
           style={{
             width: '100%', height: 56, borderRadius: 9999,
             background: 'white', border: 'none',
             color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)',
-            fontWeight: 500, fontSize: 16, cursor: 'pointer', position: 'relative',
-            flexShrink: 0
+            fontWeight: 500, fontSize: 16, cursor: sharing ? 'default' : 'pointer',
+            position: 'relative', flexShrink: 0,
+            opacity: sharing ? 0.7 : 1
           }}>
-          Compartilhar
+          {sharing ? 'Gerando imagem...' : 'Compartilhar'}
         </button>
       </div>
     )
