@@ -50,15 +50,29 @@ export default function ProfilePage() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !user?.id) return
-    if (file.size > 5 * 1024 * 1024) { toast.error('Foto muito grande. Máximo 5MB.'); return }
+
+    // Validações
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecione um arquivo de imagem.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Foto muito grande. Máximo 5MB.')
+      return
+    }
 
     setUploading(true)
+    // Guarda URL anterior para reverter em caso de erro no Firestore
+    const previousUrl = localAvatarUrl ?? user.photoURL ?? null
+
     try {
+      // ── 1. Upload para o Cloudinary ──────────────────────────────────────
       const formData = new FormData()
       formData.append('file', file)
       formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
-      // Unique public_id per upload avoids Cloudinary overwrite restrictions
-      formData.append('public_id', `avatar_${user.id}_${Date.now()}`)
+      // Não enviamos public_id — deixamos o Cloudinary gerar automaticamente,
+      // pois presets unsigned frequentemente bloqueiam public_id personalizado
+      // e retornam erro 400, impedindo o upload de usuários com foto já existente.
 
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
@@ -68,26 +82,35 @@ export default function ProfilePage() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error?.message || 'Falha no upload')
+        console.error('[Avatar] Cloudinary error:', data)
+        throw new Error(data.error?.message || 'Falha no upload da imagem')
       }
 
-      const url = data.secure_url
+      const url: string = data.secure_url
 
-      // Atualiza imediatamente na tela
+      // Mostra a nova foto imediatamente
       setLocalAvatarUrl(url)
 
-      // Salva no Firestore
-      await updateDoc(doc(db, 'players', user.id), { photoURL: url })
+      // ── 2. Salva URL no Firestore ────────────────────────────────────────
+      try {
+        await updateDoc(doc(db, 'players', user.id), { photoURL: url })
+        setUser(Object.assign({}, user, { photoURL: url }))
+        toast.success('Foto atualizada!')
+      } catch (firestoreErr) {
+        // Upload ok, mas salvamento falhou: reverte exibição local para não
+        // enganar o usuário (foto pareceria atualizada mas voltaria no próximo login)
+        console.error('[Avatar] Firestore save error:', firestoreErr)
+        setLocalAvatarUrl(previousUrl)
+        toast.error('Foto enviada mas não foi possível salvar. Tente novamente.')
+      }
 
-      // Atualiza o store com objeto novo (força re-render)
-      setUser(Object.assign({}, user, { photoURL: url }))
-
-      toast.success('Foto atualizada!')
-    } catch (e) {
-      console.error('Erro upload avatar:', e)
-      toast.error('Erro ao enviar foto. Tente novamente.')
+    } catch (uploadErr: any) {
+      console.error('[Avatar] Upload error:', uploadErr)
+      setLocalAvatarUrl(previousUrl)
+      toast.error(uploadErr.message || 'Erro ao enviar foto. Tente novamente.')
     } finally {
       setUploading(false)
+      // Remonta o input para permitir selecionar o mesmo arquivo novamente
       setInputKey(k => k + 1)
     }
   }
@@ -174,12 +197,18 @@ export default function ProfilePage() {
       <Header title="Atleta" />
       <div style={{ height: 80 }} />
 
+      {/*
+        IMPORTANTE: não usar display:none — no iOS Safari, inputs type="file"
+        ocultos via display:none bloqueiam o .click() programático em usos
+        repetidos (bug WebKit). Usar posicionamento off-screen como workaround.
+      */}
       <input
         key={inputKey}
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        style={{ display: 'none' }}
+        aria-hidden="true"
+        style={{ position: 'fixed', top: -9999, left: -9999, width: 1, height: 1, opacity: 0 }}
         onChange={handleFileChange}
       />
 
