@@ -8,6 +8,15 @@ interface Props {
   onAccept: () => void
 }
 
+// Chave do localStorage para aceite offline/fallback
+function termsKey(userId: string) {
+  return `terms_accepted_${userId}`
+}
+
+export function hasAcceptedTermsLocally(userId: string): boolean {
+  try { return localStorage.getItem(termsKey(userId)) === '1' } catch { return false }
+}
+
 export default function TermsSheet({ onAccept }: Props) {
   const user = useAuthStore(s => s.user)
   const setUser = useAuthStore(s => s.setUser)
@@ -16,13 +25,24 @@ export default function TermsSheet({ onAccept }: Props) {
   const handleAccept = async () => {
     if (!user) return
     setLoading(true)
+
+    // 1. Salva no localStorage imediatamente — garante que o usuário não fica preso
+    //    mesmo que o Firestore falhe (e.g. regras ainda não publicadas)
+    try { localStorage.setItem(termsKey(user.id), '1') } catch { /* ignore */ }
+
+    // 2. Tenta persistir no Firestore (best-effort)
     try {
       await updateDoc(doc(db, 'players', user.id), { termsAccepted: true })
-      setUser({ ...user, termsAccepted: true })
-      onAccept()
     } catch {
-      setLoading(false)
+      // Falha silenciosa — localStorage já garante que a sheet não reaparece
+      // na mesma sessão/dispositivo até as regras serem publicadas
+      console.warn('[TermsSheet] Não foi possível salvar termsAccepted no Firestore.')
     }
+
+    // 3. Atualiza store e libera o app sempre, independente do Firestore
+    setUser({ ...user, termsAccepted: true })
+    setLoading(false)
+    onAccept()
   }
 
   return (

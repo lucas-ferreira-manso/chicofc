@@ -17,14 +17,17 @@ import EscalacaoPage from './pages/EscalacaoPage'
 import NotificacoesAdminPage from './pages/NotificacoesAdminPage'
 import PresencaPage from './pages/PresencaPage'
 import RankingVotacaoPage from './pages/RankingVotacaoPage'
-import TermsSheet from './components/TermsSheet'
+import TermsSheet, { hasAcceptedTermsLocally } from './components/TermsSheet'
 
 export default function App() {
   const { user, loading, setLoading, fetchProfile } = useAuthStore()
   const [showTerms, setShowTerms] = useState(false)
 
   useEffect(() => {
-    if (user && !user.termsAccepted) setShowTerms(true)
+    if (!user) return
+    // Considera aceito se: campo no Firestore OU aceite gravado no localStorage
+    const accepted = user.termsAccepted || hasAcceptedTermsLocally(user.id)
+    if (!accepted) setShowTerms(true)
   }, [user?.id])
 
   useEffect(() => {
