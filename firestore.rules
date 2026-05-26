@@ -19,9 +19,9 @@ service cloud.firestore {
     match /players/{playerId} {
       allow read: if isAuthenticated();
       allow create: if isAdmin();
-      // Jogador pode atualizar só seu próprio nome e foto
+      // Jogador pode atualizar campos próprios: nome, foto, termos e chinelinho
       allow update: if isAdmin() ||
-        (isOwner(playerId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'photoURL']));
+        (isOwner(playerId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'photoURL', 'termsAccepted', 'chinelinhoActive', 'chinelinhoUntil']));
       allow delete: if isAdmin();
     }
 

@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { CaretRight, Eye, EyeSlash, PencilSimple } from '@phosphor-icons/react'
 import Header from '../components/layout/Header'
 import Toggle from '../components/Toggle'
+import ChinelinhoSheet from '../components/ChinelinhoSheet'
 
 const auth = getAuth()
 
@@ -29,6 +30,7 @@ export default function ProfilePage() {
     if (saved === 'light') return false
     return window.matchMedia('(prefers-color-scheme: dark)').matches
   })
+  const [showChinelinhoSheet, setShowChinelinhoSheet] = useState(false)
   const [uploading, setUploading] = useState(false)
   // Estado local só para forçar re-render imediato da foto
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null)
@@ -109,6 +111,41 @@ export default function ProfilePage() {
       document.documentElement.classList.remove('dark')
       document.documentElement.classList.add('light')
       localStorage.setItem('theme', 'light')
+    }
+  }
+
+  // Chinelinho helpers
+  const isChinelinhoActive = !!(
+    user?.chinelinhoActive &&
+    (!user.chinelinhoUntil || new Date(user.chinelinhoUntil) > new Date())
+  )
+
+  const handleChinelinhoToggle = async (value: boolean) => {
+    if (value) {
+      setShowChinelinhoSheet(true)
+    } else {
+      // Desativar
+      try {
+        await updateDoc(doc(db, 'players', user!.id), { chinelinhoActive: false, chinelinhoUntil: null })
+        setUser(Object.assign({}, user, { chinelinhoActive: false, chinelinhoUntil: null }))
+        toast.success('Modo Chinelinho desativado 🏃')
+      } catch {
+        toast.error('Erro ao desativar. Tente novamente.')
+      }
+    }
+  }
+
+  const handleChinelinhoActivate = async (until: string | null) => {
+    try {
+      await updateDoc(doc(db, 'players', user!.id), { chinelinhoActive: true, chinelinhoUntil: until })
+      setUser(Object.assign({}, user, { chinelinhoActive: true, chinelinhoUntil: until }))
+      setShowChinelinhoSheet(false)
+      const msg = until
+        ? `Modo Chinelinho ativado até ${new Date(until).toLocaleDateString('pt-BR')} 🩴`
+        : 'Modo Chinelinho ativado indefinidamente 🩴'
+      toast(msg)
+    } catch {
+      toast.error('Erro ao ativar. Tente novamente.')
     }
   }
 
@@ -258,6 +295,26 @@ export default function ProfilePage() {
             </p>
             <Toggle active={isDark} onChange={toggleDarkMode} />
           </div>
+
+          <div className="flex items-center justify-between px-5 rounded-3xl"
+            style={{ background: 'var(--color-surface-primary)', height: 64 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+                Modo Chinelinho 🩴
+              </p>
+              {isChinelinhoActive && user?.chinelinhoUntil && (
+                <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-11)' }}>
+                  até {new Date(user.chinelinhoUntil).toLocaleDateString('pt-BR')}
+                </p>
+              )}
+              {isChinelinhoActive && !user?.chinelinhoUntil && (
+                <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-11)' }}>
+                  desativação manual
+                </p>
+              )}
+            </div>
+            <Toggle active={isChinelinhoActive} onChange={handleChinelinhoToggle} />
+          </div>
         </div>
 
         <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', paddingTop: 4 }}>
@@ -270,6 +327,13 @@ export default function ProfilePage() {
           Sair do app
         </button>
       </div>
+
+      {showChinelinhoSheet && (
+        <ChinelinhoSheet
+          onClose={() => setShowChinelinhoSheet(false)}
+          onActivate={handleChinelinhoActivate}
+        />
+      )}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { db } from '../lib/firebase'
 import { toast } from 'sonner'
 import { CaretLeft, TrashSimple, CaretDown, X } from '@phosphor-icons/react'
 import Toggle from '../components/Toggle'
+import ChinelinhoSheet from '../components/ChinelinhoSheet'
 import { fetchPlayers } from './AdminPage'
 
 const auth = getAuth()
@@ -23,6 +24,7 @@ export default function AdminPlayerDetailPage() {
 
   const [showDeleteSheet, setShowDeleteSheet] = useState(false)
   const [showTypeDropdown, setShowTypeDropdown] = useState(false)
+  const [showChinelinhoSheet, setShowChinelinhoSheet] = useState(false)
 
   const { data: players = [] } = useQuery({ queryKey: ['players'], queryFn: fetchPlayers })
   const player = players.find(p => p.id === id)
@@ -87,6 +89,25 @@ export default function AdminPlayerDetailPage() {
     onError: (e: any) => toast.error(`Erro: ${e.message}`)
   })
 
+  const updateChinelinho = useMutation({
+    mutationFn: async ({ active, until }: { active: boolean; until: string | null }) => {
+      await updateDoc(doc(db, 'players', id!), { chinelinhoActive: active, chinelinhoUntil: until })
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['players'] })
+      if (vars.active) {
+        const msg = vars.until
+          ? `Chinelinho ativado até ${new Date(vars.until).toLocaleDateString('pt-BR')} 🩴`
+          : 'Chinelinho ativado indefinidamente 🩴'
+        toast(msg)
+      } else {
+        toast.success('Modo Chinelinho desativado 🏃')
+      }
+      setShowChinelinhoSheet(false)
+    },
+    onError: () => toast.error('Erro ao atualizar Modo Chinelinho.')
+  })
+
   if (!player) return (
     <div className="flex flex-col min-h-full" style={{ background: 'var(--color-bg)' }}>
       <div style={{ height: 80 }} />
@@ -98,6 +119,10 @@ export default function AdminPlayerDetailPage() {
 
   const isAdmin = player.role === 'admin'
   const isMensalista = player.player_type === 'mensalista'
+  const isChinelinhoActive = !!(
+    (player as any).chinelinhoActive &&
+    (!(player as any).chinelinhoUntil || new Date((player as any).chinelinhoUntil) > new Date())
+  )
 
   return (
     <div className="flex flex-col min-h-full" style={{ background: 'var(--color-bg)', paddingBottom: 40 }}>
@@ -234,6 +259,36 @@ export default function AdminPlayerDetailPage() {
           </div>
         )}
 
+        {/* Toggle Modo Chinelinho */}
+        <div style={{
+          background: 'var(--color-surface-primary)', borderRadius: 24, height: 64,
+          padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 'var(--font-size-14)', color: 'var(--color-fg-primary)' }}>
+              Modo Chinelinho 🩴
+            </p>
+            {isChinelinhoActive && (player as any).chinelinhoUntil && (
+              <p style={{ fontFamily: 'var(--font-primary)', fontSize: 11, color: 'var(--color-fg-secondary)' }}>
+                até {new Date((player as any).chinelinhoUntil).toLocaleDateString('pt-BR')}
+              </p>
+            )}
+            {isChinelinhoActive && !(player as any).chinelinhoUntil && (
+              <p style={{ fontFamily: 'var(--font-primary)', fontSize: 11, color: 'var(--color-fg-secondary)' }}>
+                desativação manual
+              </p>
+            )}
+          </div>
+          <Toggle
+            active={isChinelinhoActive}
+            onChange={v => {
+              if (v) setShowChinelinhoSheet(true)
+              else updateChinelinho.mutate({ active: false, until: null })
+            }}
+            disabled={updateChinelinho.isPending}
+          />
+        </div>
+
         {/* Botão Cobrar */}
         <div style={{ marginTop: 'auto', paddingTop: 24 }}>
           <button
@@ -251,6 +306,16 @@ export default function AdminPlayerDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* Bottom sheet: Modo Chinelinho */}
+      {showChinelinhoSheet && (
+        <ChinelinhoSheet
+          onClose={() => setShowChinelinhoSheet(false)}
+          onActivate={async (until) => {
+            updateChinelinho.mutate({ active: true, until })
+          }}
+        />
+      )}
 
       {/* Bottom sheet: Confirmar exclusão */}
       {showDeleteSheet && (

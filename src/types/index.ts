@@ -8,6 +8,8 @@ export interface Profile {
   created_at: string
   photoURL?: string
   termsAccepted?: boolean
+  chinelinhoActive?: boolean
+  chinelinhoUntil?: string | null
 }
 
 export interface Game {

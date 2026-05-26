@@ -491,6 +491,12 @@ export default function GamesPage() {
   const pct = Math.min((totalConfirmed / MAX_PLAYERS) * 100, 100)
   const isPending = handleConfirm.isPending || handleDecline.isPending
 
+  // Modo Chinelinho: bloqueia confirmação enquanto ativo e não expirado
+  const chinelinhoActive = !!(
+    user?.chinelinhoActive &&
+    (!user.chinelinhoUntil || new Date(user.chinelinhoUntil) > new Date())
+  )
+
   return (
     <div className="flex flex-col min-h-full pb-40" style={{ background: 'var(--color-bg)' }}>
 
@@ -789,13 +795,22 @@ export default function GamesPage() {
               {hasLineup ? 'Editar Times' : 'Escalar Times'}
             </button>
           )}
-          <button
-            onClick={() => handleConfirm.mutate()}
-            disabled={isPending}
-            className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500 }}>
-            {handleConfirm.isPending ? '...' : 'Confirmar Presença'}
-          </button>
+          {chinelinhoActive ? (
+            <button
+              disabled
+              className="flex-1 py-4 font-medium"
+              style={{ background: 'var(--color-surface-secondary)', color: 'var(--color-fg-secondary)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500, border: 'none', cursor: 'default' }}>
+              🩴 Chinelinho ativo
+            </button>
+          ) : (
+            <button
+              onClick={() => handleConfirm.mutate()}
+              disabled={isPending}
+              className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
+              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500 }}>
+              {handleConfirm.isPending ? '...' : 'Confirmar Presença'}
+            </button>
+          )}
           {amDeclined && avulsoWindowOpen ? (
             <button
               onClick={() => setShowAvulsoSheet(true)}
@@ -805,10 +820,10 @@ export default function GamesPage() {
             </button>
           ) : (
             <button
-              onClick={() => !amDeclined && handleDecline.mutate()}
-              disabled={isPending || amDeclined}
+              onClick={() => !amDeclined && !chinelinhoActive && handleDecline.mutate()}
+              disabled={isPending || amDeclined || chinelinhoActive}
               className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-              style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500, opacity: amDeclined ? 0.5 : 1 }}>
+              style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500, opacity: (amDeclined || chinelinhoActive) ? 0.5 : 1 }}>
               {handleDecline.isPending ? '...' : 'Muié não deixa'}
             </button>
           )}
@@ -819,13 +834,22 @@ export default function GamesPage() {
       {!isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
-          <button
-            onClick={() => handleConfirm.mutate()}
-            disabled={isPending}
-            className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
-            {handleConfirm.isPending ? '...' : 'Bora Jogar'}
-          </button>
+          {chinelinhoActive ? (
+            <button
+              disabled
+              className="flex-1 py-4 font-medium"
+              style={{ background: 'var(--color-surface-secondary)', color: 'var(--color-fg-secondary)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500, border: 'none', cursor: 'default' }}>
+              🩴 Modo Chinelinho ativo
+            </button>
+          ) : (
+            <button
+              onClick={() => handleConfirm.mutate()}
+              disabled={isPending}
+              className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
+              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+              {handleConfirm.isPending ? '...' : 'Bora Jogar'}
+            </button>
+          )}
           {amDeclined && avulsoWindowOpen ? (
             <button
               onClick={() => setShowAvulsoSheet(true)}
@@ -835,10 +859,10 @@ export default function GamesPage() {
             </button>
           ) : (
             <button
-              onClick={() => !amDeclined && handleDecline.mutate()}
-              disabled={isPending || amDeclined}
+              onClick={() => !amDeclined && !chinelinhoActive && handleDecline.mutate()}
+              disabled={isPending || amDeclined || chinelinhoActive}
               className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-              style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500, opacity: amDeclined ? 0.5 : 1 }}>
+              style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500, opacity: (amDeclined || chinelinhoActive) ? 0.5 : 1 }}>
               {handleDecline.isPending ? '...' : 'Muié não deixa'}
             </button>
           )}
