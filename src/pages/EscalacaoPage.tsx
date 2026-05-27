@@ -64,6 +64,22 @@ async function fetchConfirmed(gameId: string): Promise<Profile[]> {
     const pSnap = await getDoc(doc(db, 'players', pid))
     if (pSnap.exists()) profiles.push({ id: pSnap.id, ...pSnap.data() } as Profile)
   }
+
+  // Inclui avulsos temporários adicionados para este jogo
+  const tempSnap = await getDocs(query(collection(db, 'avulsos_temp'), where('gameId', '==', gameId)))
+  for (const d of tempSnap.docs) {
+    const data = d.data()
+    profiles.push({
+      id: `temp_${d.id}`,
+      name: data.name ?? 'Avulso',
+      email: '',
+      player_type: 'avulso',
+      role: 'player',
+      active: true,
+      created_at: data.createdAt ?? new Date().toISOString(),
+    } as Profile)
+  }
+
   return profiles
 }
 
