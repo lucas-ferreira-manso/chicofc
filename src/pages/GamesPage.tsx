@@ -608,7 +608,8 @@ export default function GamesPage() {
           <div className="px-6 flex flex-col gap-2">
             {(activeTeam === 'blue' ? lineup.blue : lineup.black).map((uid) => {
               const att = confirmed.find(a => a.user_id === uid)
-              const name = att?.profile?.name || att?.profile?.email || uid
+              const tempAvulso = tempAvulsos.find(t => `temp_${t.id}` === uid)
+              const name = att?.profile?.name || att?.profile?.email || tempAvulso?.name || uid
               const photoURL = (att?.profile as any)?.photoURL
               return (
                 <div key={uid} className="flex items-center gap-3 px-4 py-4 rounded-3xl"
@@ -740,7 +741,8 @@ export default function GamesPage() {
                 </div>
                 {ids.map((uid, i) => {
                   const att = confirmed.find(a => a.user_id === uid)
-                  const name = (att as any)?.profile?.name || (att as any)?.profile?.email || uid
+                  const tempAvulso = tempAvulsos.find(t => `temp_${t.id}` === uid)
+                  const name = (att as any)?.profile?.name || (att as any)?.profile?.email || tempAvulso?.name || uid
                   return (
                     <div key={uid} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', marginBottom: 4, borderRadius: 12, background: '#f8f8f8' }}>
                       <span style={{ fontFamily: 'var(--font-primary)', fontSize: 13, color: '#8e8e93', width: 18 }}>{i + 1}</span>
