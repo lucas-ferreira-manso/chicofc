@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { collection, getDocs, doc, updateDoc, addDoc, query, where } from 'firebase/firestore'
+import { collection, getDocs, doc, updateDoc, addDoc, query, where, writeBatch } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useState } from 'react'
 import { X, CheckCircle } from '@phosphor-icons/react'
@@ -17,6 +17,8 @@ interface PaymentRequest {
   month: string
   status: 'pending' | 'approved'
   created_at: string
+  is_for_temp_avulso?: boolean
+  game_id?: string
 }
 
 async function fetchRequests(): Promise<PaymentRequest[]> {
@@ -56,22 +58,21 @@ export default function NotificacoesAdminPage() {
         const tipo = r.player_type === 'mensalista' ? 'mensalidade' : 'jogo'
 
         if (tipo === 'jogo') {
-          // Avulso: payment foi criado com month = gameId (ex: 2025-05-07)
-          // Busca por user_id e type='jogo' sem filtrar month (formato diferente)
-          const q = query(collection(db, 'payments'),
-            where('user_id', '==', r.user_id),
-            where('type', '==', 'jogo'),
-            where('paid', '==', false)
-          )
-          const existing = await getDocs(q)
-          if (!existing.empty) {
-            // Atualiza o payment pendente existente
-            await updateDoc(doc(db, 'payments', existing.docs[0].id), {
-              paid: true,
-              paid_at: new Date().toISOString()
-            })
-          } else {
-            // Não existe nenhum jogo pendente — cria
+          if (r.is_for_temp_avulso && r.game_id) {
+            // Request de avulso temporário: marca os avulsos_temp como pagos e cria
+            // um payment de jogo pago para fins contábeis.
+            const avulsosSnap = await getDocs(
+              query(collection(db, 'avulsos_temp'),
+                where('addedBy', '==', r.user_id),
+                where('gameId', '==', r.game_id)
+              )
+            )
+            if (!avulsosSnap.empty) {
+              const batch = writeBatch(db)
+              avulsosSnap.docs.forEach(d => batch.update(d.ref, { paid: true, paid_at: new Date().toISOString() }))
+              await batch.commit()
+            }
+            // Cria payment de jogo pago para refletir no saldo
             await addDoc(collection(db, 'payments'), {
               user_id: r.user_id,
               amount: r.amount,
@@ -81,6 +82,30 @@ export default function NotificacoesAdminPage() {
               paid_at: new Date().toISOString(),
               created_at: new Date().toISOString()
             })
+          } else {
+            // Avulso jogando: payment foi criado com month = gameId (ex: 2025-05-07)
+            const q = query(collection(db, 'payments'),
+              where('user_id', '==', r.user_id),
+              where('type', '==', 'jogo'),
+              where('paid', '==', false)
+            )
+            const existing = await getDocs(q)
+            if (!existing.empty) {
+              await updateDoc(doc(db, 'payments', existing.docs[0].id), {
+                paid: true,
+                paid_at: new Date().toISOString()
+              })
+            } else {
+              await addDoc(collection(db, 'payments'), {
+                user_id: r.user_id,
+                amount: r.amount,
+                type: 'jogo',
+                month,
+                paid: true,
+                paid_at: new Date().toISOString(),
+                created_at: new Date().toISOString()
+              })
+            }
           }
         } else {
           // Mensalista: month no formato 'yyyy-MM'

@@ -57,7 +57,7 @@ async function fetchPendingRequests(): Promise<any[]> {
 
 async function fetchMyPaymentRequest(userId: string, playerType?: string) {
   if (playerType === 'avulso') {
-    // Avulsos: só retorna requests PENDENTES (não aprovadas) — evita bloquear botões após aprovação anterior
+    // Avulsos: só retorna requests PENDENTES do pagamento próprio (não temp avulso)
     const q = query(
       collection(db, 'payment_requests'),
       where('user_id', '==', userId),
@@ -65,14 +65,19 @@ async function fetchMyPaymentRequest(userId: string, playerType?: string) {
     )
     const snap = await getDocs(q)
     if (snap.empty) return null
-    return { id: snap.docs[0].id, ...snap.docs[0].data() }
+    // Prefere o request do próprio jogo (não temp); se só tiver temp, retorna nulo aqui
+    const ownRequest = snap.docs.find(d => !d.data().is_for_temp_avulso)
+    if (!ownRequest) return null
+    return { id: ownRequest.id, ...ownRequest.data() }
   }
-  // Mensalistas: verifica por mês atual
+  // Mensalistas: verifica por mês atual, ignorando requests de avulso temporário
   const month = format(new Date(), 'yyyy-MM')
   const q = query(collection(db, 'payment_requests'), where('user_id', '==', userId), where('month', '==', month))
   const snap = await getDocs(q)
   if (snap.empty) return null
-  return { id: snap.docs[0].id, ...snap.docs[0].data() }
+  const ownRequest = snap.docs.find(d => !d.data().is_for_temp_avulso)
+  if (!ownRequest) return null
+  return { id: ownRequest.id, ...ownRequest.data() }
 }
 
 async function fetchMyUnpaidJogoPayments(userId: string): Promise<any[]> {
@@ -159,8 +164,6 @@ export default function CaixinhaPage() {
     enabled: !!user?.id,
     refetchInterval: 15000
   })
-  const hasAddedTempAvulso = myTempAvulsos.length > 0
-
   const { data: allTempAvulsos = [] } = useQuery({
     queryKey: ['all-temp-avulsos', currentGameId],
     queryFn: () => fetchAllTempAvulsos(currentGameId),
@@ -244,25 +247,52 @@ export default function CaixinhaPage() {
     }
   })
 
-  // Já paguei — cria payment_request para o admin aprovar
+  // Já paguei — cria payment_request(s) para o admin aprovar.
+  // Cobre o pagamento próprio (se ainda pendente) + avulsos temp adicionados (se houver).
+  // Total = próprio + R$22 × n_temporários.
   const submitPaymentRequest = useMutation({
     mutationFn: async () => {
       const month = format(new Date(), 'yyyy-MM')
       const playerData = players.find(p => p.id === user?.id)
       const tipo = playerData?.player_type || 'mensalista'
-      const amount = tipo === 'mensalista' ? (config?.mensalistaValue ?? 80) : (config?.avulsoValue ?? 22)
-      await addDoc(collection(db, 'payment_requests'), {
-        user_id: user!.id,
-        user_name: user?.name || user?.email,
-        player_type: tipo,
-        amount,
-        month,
-        status: 'pending',
-        created_at: new Date().toISOString()
-      })
+      const ownAmount = tipo === 'mensalista' ? (config?.mensalistaValue ?? 80) : (config?.avulsoValue ?? 22)
+      const unpaidTemps = myTempAvulsos.filter((t: any) => !t.paid)
+
+      const ops: Promise<any>[] = []
+
+      // Pagamento próprio — só cria se ainda não foi submetido/aprovado
+      if (!hasRequested && !isApproved) {
+        ops.push(addDoc(collection(db, 'payment_requests'), {
+          user_id: user!.id,
+          user_name: user?.name || user?.email,
+          player_type: tipo,
+          amount: ownAmount,
+          month,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        }))
+      }
+
+      // Avulsos temporários — um request separado cobrindo todos de uma vez
+      if (unpaidTemps.length > 0 && !hasPendingTempAvulsoRequest) {
+        ops.push(addDoc(collection(db, 'payment_requests'), {
+          user_id: user!.id,
+          user_name: user?.name || user?.email,
+          player_type: 'avulso',
+          amount: (config?.avulsoValue ?? 22) * unpaidTemps.length,
+          month,
+          status: 'pending',
+          is_for_temp_avulso: true,
+          game_id: currentGameId,
+          created_at: new Date().toISOString()
+        }))
+      }
+
+      if (ops.length > 0) await Promise.all(ops)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-payment-request', user?.id] })
+      qc.invalidateQueries({ queryKey: ['pending-requests'] })
       toast.success('Admin notificado! Aguarde aprovação.')
     },
     onError: () => toast.error('Erro ao notificar. Tente novamente.')
@@ -273,14 +303,25 @@ export default function CaixinhaPage() {
   const despesaPayments = payments.filter(p => p.type === 'despesa')
   const totalDespesas = despesaPayments.reduce((s, p) => s + p.amount, 0)
   const mensalidadePayments = payments.filter(p => p.type === 'mensalidade')
+  const avulsoValue = config?.avulsoValue ?? 22
   const avulsoPaid = jogoPayments.filter(p => p.paid).reduce((s, p) => s + p.amount, 0)
-  const avulsoFromPayments = jogoPayments.filter(p => !p.paid).reduce((s, p) => s + p.amount, 0)
-  // Só soma requests de avulsos que NÃO têm jogoPayment pendente (evita dupla contagem)
-  const userIdsComJogoPendente = new Set(jogoPayments.filter(p => !p.paid).map(p => p.user_id))
-  const avulsoFromRequests = pendingRequests
-    .filter((r: any) => r.player_type === 'avulso' && !userIdsComJogoPendente.has(r.user_id))
+  // Usuários que já têm um payment_request de avulso pendente cobrem tudo (próprio + temps)
+  // → não conta o jogo deles em separado (evita dupla contagem)
+  const userIdsComPendingAvulsoRequest = new Set(
+    (pendingRequests as any[]).filter(r => r.player_type === 'avulso').map(r => r.user_id)
+  )
+  const avulsoFromPayments = jogoPayments
+    .filter(p => !p.paid && !userIdsComPendingAvulsoRequest.has(p.user_id))
+    .reduce((s, p) => s + p.amount, 0)
+  // Requests de avulso pendentes (cobrem jogo próprio e/ou temps) — somamos o amount direto
+  const avulsoFromRequests = (pendingRequests as any[])
+    .filter(r => r.player_type === 'avulso')
     .reduce((s: number, r: any) => s + r.amount, 0)
-  const avulsoPending = avulsoFromPayments + avulsoFromRequests
+  // Temp avulsos sem rastreamento: não pagos E addedBy sem request pendente de avulso
+  const avulsoFromTempAvulsos = (allTempAvulsos as any[])
+    .filter(t => !t.paid && !userIdsComPendingAvulsoRequest.has(t.addedBy))
+    .reduce((s: number, _: any) => s + avulsoValue, 0)
+  const avulsoPending = avulsoFromPayments + avulsoFromRequests + avulsoFromTempAvulsos
   const mensalistaPaid = mensalidadePayments.filter(p => p.paid).reduce((s, p) => s + p.amount, 0)
   // Inclui payment_requests pendentes no cálculo de pendente
   const mensalistaPendingFromPayments = mensalidadePayments.filter(p => !p.paid).reduce((s, p) => s + p.amount, 0)
@@ -289,7 +330,6 @@ export default function CaixinhaPage() {
   const quadraCost = config?.quadraCost ?? 760
   const extrasCost = config?.extrasCost ?? 0
   const mensalistaValue = config?.mensalistaValue ?? 80
-  const avulsoValue = config?.avulsoValue ?? 22
   const saldoTotal = SALDO_INICIAL + avulsoPaid + mensalistaPaid - totalDespesas - extrasCost
 
   const byMonth = mensalidadePayments.reduce((acc, p) => {
@@ -301,12 +341,20 @@ export default function CaixinhaPage() {
   const playerData = players.find(p => p.id === user?.id)
   const isAvulso = user?.player_type === 'avulso'
   const myAmount = isAvulso ? avulsoValue : mensalistaValue
-  // Para avulsos, fetchMyPaymentRequest só retorna pendentes; para mensalistas inclui aprovados
+  // Para avulsos, fetchMyPaymentRequest só retorna pendentes do próprio jogo (não temp avulso)
   const hasRequested = !!myRequest && (myRequest as any).status === 'pending'
   const isApproved = !isAvulso && !!myRequest && (myRequest as any).status === 'approved'
   // Avulsos veem botões de pagamento se têm jogo pendente OU estão na lista de espera/confirmados
   const avulsoInGame = !!myCurrentGameAttendance && ['confirmed', 'waitlist'].includes(myCurrentGameAttendance.status)
   const avulsoNeedsPay = isAvulso && (myUnpaidJogoPayments.length > 0 || avulsoInGame)
+  // Estado do avulso temporário adicionado pelo usuário
+  const hasPendingTempAvulsoRequest = (pendingRequests as any[]).some(
+    r => r.user_id === user?.id && r.is_for_temp_avulso === true
+  )
+  const unpaidTempAvulsos = myTempAvulsos.filter((t: any) => !t.paid)
+  const hasTempAvulsoPending = unpaidTempAvulsos.length > 0 && !hasPendingTempAvulsoRequest
+  const ownAmount = isAvulso ? avulsoValue : mensalistaValue
+  const tempTotalAmount = unpaidTempAvulsos.length * avulsoValue
 
   const EditableRow = ({ field, label, value }: { field: EditField, label: string, value: number }) => (
     <div className="flex flex-col gap-1">
@@ -427,11 +475,101 @@ export default function CaixinhaPage() {
             </div>
           </div>
 
-          {/* Botões pagamento próprio — estado conforme myRequest
-              Mensalistas: sempre exibe (pending/approved/default)
-              Avulsos: só exibe quando há jogo(s) com pagamento pendente */}
-          {(!isAvulso || avulsoNeedsPay) && (
-            !hasRequested && !isApproved ? (
+          {/* ── SEÇÃO DE PAGAMENTO UNIFICADA ──────────────────────────────
+               Cobre: pagamento próprio (jogo ou mensalidade) + avulsos temporários.
+               Estados independentes: own (hasRequested/isApproved) e temp (hasPendingTempAvulsoRequest).
+               Quando ambos estão pendentes: mostra breakdown + total + um único "Já Paguei".
+               ──────────────────────────────────────────────────────────────── */}
+
+          {/* Estado: aguardando aprovação (próprio submetido; temp pode estar submetido ou ainda pendente) */}
+          {hasRequested && (
+            <div className="flex flex-col gap-2">
+              <div className="w-full py-3 flex items-center justify-center gap-2 rounded-full" style={{ background: 'var(--color-surface-primary)', border: '1px solid var(--color-border)' }}>
+                <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Aguardando aprovação do admin</p>
+              </div>
+              {/* Se temp ainda não foi submetido (ex: adicionou após já ter enviado o próprio) */}
+              {hasTempAvulsoPending && (
+                <div className="flex gap-3">
+                  <button onClick={handleCopyPix}
+                    className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
+                    style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                    {pixCopied ? <Check size={18} /> : <Copy size={18} />}
+                    {pixCopied ? 'Copiado!' : 'Copiar PIX'}
+                  </button>
+                  <button onClick={() => submitPaymentRequest.mutate()} disabled={submitPaymentRequest.isPending}
+                    className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 disabled:opacity-40"
+                    style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                    {submitPaymentRequest.isPending ? '...' : `Paguei Avulso Temp (+R$ ${tempTotalAmount.toFixed(2)})`}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Estado: pagamento próprio aprovado (mensalistas) */}
+          {!hasRequested && isApproved && (
+            <div className="flex flex-col gap-2">
+              <div className="w-full py-3 flex items-center justify-center gap-2 rounded-full" style={{ background: '#e6f4ea' }}>
+                <CheckCircle size={18} weight="fill" color="#089527" />
+                <p style={{ color: '#089527', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Pagamento aprovado!</p>
+              </div>
+              {/* Temp aguardando */}
+              {hasPendingTempAvulsoRequest && (
+                <div className="w-full py-3 flex items-center justify-center gap-2 rounded-full" style={{ background: 'var(--color-surface-primary)', border: '1px solid var(--color-border)' }}>
+                  <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Avulso temp: aguardando aprovação</p>
+                </div>
+              )}
+              {/* Temp ainda não submetido */}
+              {hasTempAvulsoPending && !hasPendingTempAvulsoRequest && (
+                <div className="flex gap-3">
+                  <button onClick={handleCopyPix}
+                    className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
+                    style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                    {pixCopied ? <Check size={18} /> : <Copy size={18} />}
+                    {pixCopied ? 'Copiado!' : 'Copiar PIX'}
+                  </button>
+                  <button onClick={() => submitPaymentRequest.mutate()} disabled={submitPaymentRequest.isPending}
+                    className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 disabled:opacity-40"
+                    style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                    {submitPaymentRequest.isPending ? '...' : `Paguei Avulso Temp (R$ ${tempTotalAmount.toFixed(2)})`}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Estado: ação necessária — ambos (ou apenas o próprio) ainda não submetidos */}
+          {(!isAvulso || avulsoNeedsPay) && !hasRequested && !isApproved && !hasPendingTempAvulsoRequest && (
+            <div className="flex flex-col gap-3">
+              {/* Breakdown quando tem temp avulso pendente junto */}
+              {hasTempAvulsoPending && (
+                <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+                  <div className="flex justify-between px-4 py-2.5" style={{ background: 'var(--color-surface-primary)' }}>
+                    <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-13)' }}>
+                      {isAvulso ? 'Entrada (jogo)' : 'Mensalidade'}
+                    </p>
+                    <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-13)' }}>
+                      R$ {ownAmount.toFixed(2)}
+                    </p>
+                  </div>
+                  {unpaidTempAvulsos.map((t: any) => (
+                    <div key={t.id} className="flex justify-between px-4 py-2.5" style={{ background: 'var(--color-surface-primary)', borderTop: '1px solid var(--color-border)' }}>
+                      <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-13)' }}>
+                        Avulso: {t.name}
+                      </p>
+                      <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-13)' }}>
+                        R$ {avulsoValue.toFixed(2)}
+                      </p>
+                    </div>
+                  ))}
+                  <div className="flex justify-between px-4 py-2.5" style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-surface-secondary)' }}>
+                    <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 600 }}>Total</p>
+                    <p style={{ color: 'var(--color-danger)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 700 }}>
+                      R$ {(ownAmount + tempTotalAmount).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="flex gap-3">
                 <button onClick={handleCopyPix}
                   className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
@@ -445,45 +583,13 @@ export default function CaixinhaPage() {
                   {submitPaymentRequest.isPending ? '...' : 'Já Paguei'}
                 </button>
               </div>
-            ) : hasRequested ? (
-              <div className="flex flex-col gap-3">
-                <div className="w-full py-3 flex items-center justify-center gap-2 rounded-full" style={{ background: 'var(--color-surface-primary)', border: '1px solid var(--color-border)' }}>
-                  <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Aguardando aprovação do admin</p>
-                </div>
-              </div>
-            ) : isApproved ? (
-              <div className="w-full py-3 flex items-center justify-center gap-2 rounded-full" style={{ background: '#e6f4ea' }}>
-                <CheckCircle size={18} weight="fill" color="#089527" />
-                <p style={{ color: '#089527', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Pagamento aprovado!</p>
-              </div>
-            ) : null
-          )}
-
-          {/* Seção avulso temporário — independente do pagamento próprio */}
-          {hasAddedTempAvulso && !isAvulso && (
-            <div className="flex gap-3">
-              <button onClick={handleCopyPix}
-                className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95"
-                style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-                {pixCopied ? <Check size={18} /> : <Copy size={18} />}
-                {pixCopied ? 'Copiado!' : 'Pagar Avulso'}
-              </button>
-              <button onClick={() => submitPaymentRequest.mutate()} disabled={submitPaymentRequest.isPending}
-                className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 disabled:opacity-40"
-                style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
-                {submitPaymentRequest.isPending ? '...' : 'Já Paguei'}
-              </button>
             </div>
           )}
-          {hasAddedTempAvulso && isAvulso && (
-            <div style={{
-              background: 'var(--color-surface-primary)', border: '1px solid #ed0000',
-              borderRadius: 8, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8
-            }}>
-              <BellRinging size={16} color="#ed0000" />
-              <p style={{ fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-11)', color: '#ed0000', lineHeight: '16px' }}>
-                Você tem valores pendentes pelo Avulso Adicionado.
-              </p>
+
+          {/* Avulso temp aguardando (sem pagamento próprio pendente — ex: avulso aprovado, temp ainda em aberto) */}
+          {hasPendingTempAvulsoRequest && !hasRequested && !isApproved && (
+            <div className="w-full py-3 flex items-center justify-center gap-2 rounded-full" style={{ background: 'var(--color-surface-primary)', border: '1px solid var(--color-border)' }}>
+              <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Avulso temp: aguardando aprovação</p>
             </div>
           )}
         </div>
