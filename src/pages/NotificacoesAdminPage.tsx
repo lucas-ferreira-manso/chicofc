@@ -58,20 +58,13 @@ export default function NotificacoesAdminPage() {
         const tipo = r.player_type === 'mensalista' ? 'mensalidade' : 'jogo'
 
         if (tipo === 'jogo') {
-          if (r.is_for_temp_avulso && r.game_id) {
-            // Request de avulso temporário: marca os avulsos_temp como pagos e cria
-            // um payment de jogo pago para fins contábeis.
-            const avulsosSnap = await getDocs(
-              query(collection(db, 'avulsos_temp'),
-                where('addedBy', '==', r.user_id),
-                where('gameId', '==', r.game_id)
-              )
+          if (r.is_for_temp_avulso && (r as any).temp_avulso_ids?.length > 0) {
+            // Request de avulso temporário: marca cada avulso_temp pelo ID exato
+            const batch = writeBatch(db)
+            ;(r as any).temp_avulso_ids.forEach((id: string) =>
+              batch.update(doc(db, 'avulsos_temp', id), { paid: true, paid_at: new Date().toISOString() })
             )
-            if (!avulsosSnap.empty) {
-              const batch = writeBatch(db)
-              avulsosSnap.docs.forEach(d => batch.update(d.ref, { paid: true, paid_at: new Date().toISOString() }))
-              await batch.commit()
-            }
+            await batch.commit()
             // Cria payment de jogo pago para refletir no saldo
             await addDoc(collection(db, 'payments'), {
               user_id: r.user_id,

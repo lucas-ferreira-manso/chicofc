@@ -108,15 +108,14 @@ function getGameId(date: Date): string {
   return format(date, 'yyyy-MM-dd')
 }
 
-async function fetchMyTempAvulsos(userId: string, gameId: string): Promise<any[]> {
+async function fetchMyTempAvulsos(userId: string): Promise<any[]> {
   const q = query(collection(db, 'avulsos_temp'), where('addedBy', '==', userId))
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as any)).filter(d => d.gameId === gameId)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() } as any))
 }
 
-async function fetchAllTempAvulsos(gameId: string): Promise<any[]> {
-  const q = query(collection(db, 'avulsos_temp'), where('gameId', '==', gameId))
-  const snap = await getDocs(q)
+async function fetchAllTempAvulsos(): Promise<any[]> {
+  const snap = await getDocs(collection(db, 'avulsos_temp'))
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as any))
 }
 
@@ -159,14 +158,14 @@ export default function CaixinhaPage() {
     refetchInterval: 15000
   })
   const { data: myTempAvulsos = [] } = useQuery({
-    queryKey: ['my-temp-avulsos', user?.id, currentGameId],
-    queryFn: () => fetchMyTempAvulsos(user!.id, currentGameId),
+    queryKey: ['my-temp-avulsos', user?.id],
+    queryFn: () => fetchMyTempAvulsos(user!.id),
     enabled: !!user?.id,
     refetchInterval: 15000
   })
   const { data: allTempAvulsos = [] } = useQuery({
-    queryKey: ['all-temp-avulsos', currentGameId],
-    queryFn: () => fetchAllTempAvulsos(currentGameId),
+    queryKey: ['all-temp-avulsos'],
+    queryFn: () => fetchAllTempAvulsos(),
     enabled: isAdmin,
     refetchInterval: 15000
   })
@@ -283,7 +282,7 @@ export default function CaixinhaPage() {
           month,
           status: 'pending',
           is_for_temp_avulso: true,
-          game_id: currentGameId,
+          temp_avulso_ids: unpaidTemps.map((t: any) => t.id),
           created_at: new Date().toISOString()
         }))
       }
@@ -596,12 +595,12 @@ export default function CaixinhaPage() {
 
         {(jogoPayments.length > 0 || Object.keys(byMonth).length > 0) && <div style={{ height: 1, background: 'var(--color-border)' }} />}
 
-        {(jogoPayments.length > 0 || (isAdmin && allTempAvulsos.length > 0)) && !playerData?.player_type?.includes('avulso') && (
+        {(jogoPayments.length > 0 || (isAdmin && allTempAvulsos.some((t: any) => !t.paid))) && !playerData?.player_type?.includes('avulso') && (
           <section>
             <p className="font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>Por jogo — avulsos</p>
             <div className="flex flex-col gap-2">
               {jogoPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => setSelectedPayment(p)} isAdmin={isAdmin} />)}
-              {isAdmin && allTempAvulsos.map((t: any) => (
+              {isAdmin && allTempAvulsos.filter((t: any) => !t.paid).map((t: any) => (
                 <div key={t.id} className="w-full flex items-center gap-3 p-4 rounded-3xl"
                   style={{ background: 'var(--color-surface-primary)' }}>
                   <Circle size={22} color="var(--color-fg-secondary)" />
