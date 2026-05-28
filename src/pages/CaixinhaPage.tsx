@@ -315,55 +315,95 @@ export default function CaixinhaPage() {
     onError: () => toast.error('Erro ao confirmar pagamento')
   })
 
-  // Já paguei — cria payment_request(s) para o admin aprovar.
-  // Cobre o pagamento próprio (se ainda pendente) + avulsos temp adicionados (se houver).
-  // Total = próprio + R$22 × n_temporários.
+  // Já paguei — busca dados frescos do Firestore na hora do clique para evitar
+  // qualquer problema de cache/stale. Cobre próprio + avulsos temp adicionados.
   const submitPaymentRequest = useMutation({
     mutationFn: async () => {
+      if (!user?.id) throw new Error('Usuário não identificado')
+      const now = new Date().toISOString()
       const month = format(new Date(), 'yyyy-MM')
-      const playerData = players.find(p => p.id === user?.id)
-      const tipo = playerData?.player_type || 'mensalista'
-      const ownAmount = tipo === 'mensalista' ? (config?.mensalistaValue ?? 80) : (config?.avulsoValue ?? 22)
-      const unpaidTemps = myTempAvulsos.filter((t: any) => !t.paid)
+
+      // 1. Dados frescos do Firestore — não depende de React Query cache
+      const [playerSnap, tempsSnap, requestsSnap] = await Promise.all([
+        getDoc(doc(db, 'players', user.id)),
+        getDocs(query(collection(db, 'avulsos_temp'), where('addedBy', '==', user.id))),
+        getDocs(query(collection(db, 'payment_requests'), where('user_id', '==', user.id), where('status', '==', 'pending')))
+      ])
+
+      const playerType: string = playerSnap.exists() ? (playerSnap.data().player_type ?? 'mensalista') : 'mensalista'
+      const avulsoVal = config?.avulsoValue ?? 22
+      const mensalistaVal = config?.mensalistaValue ?? 80
+      const ownAmount = playerType === 'mensalista' ? mensalistaVal : avulsoVal
+
+      // Avulsos temp não pagos
+      const unpaidTemps = tempsSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter((t: any) => !t.paid)
+
+      // Requests pendentes existentes
+      const existingPendingRequests = requestsSnap.docs.map(d => d.data())
+      const alreadyHasOwnRequest = existingPendingRequests.some(r => !r.is_for_temp_avulso)
+      const alreadyHasTempRequest = existingPendingRequests.some(r => r.is_for_temp_avulso === true)
+
+      // Para mensalistas, verifica se já existe payment aprovado este mês
+      let ownAlreadyApproved = false
+      if (playerType === 'mensalista') {
+        const approvedSnap = await getDocs(query(
+          collection(db, 'payment_requests'),
+          where('user_id', '==', user.id),
+          where('month', '==', month),
+          where('status', '==', 'approved')
+        ))
+        ownAlreadyApproved = approvedSnap.docs.some(d => !d.data().is_for_temp_avulso)
+      }
 
       const ops: Promise<any>[] = []
 
-      // Pagamento próprio — só cria se ainda não foi submetido/aprovado
-      if (!hasRequested && !isApproved) {
+      // Pagamento próprio — só cria se não submetido e não aprovado
+      if (!alreadyHasOwnRequest && !ownAlreadyApproved) {
         ops.push(addDoc(collection(db, 'payment_requests'), {
-          user_id: user!.id,
-          user_name: user?.name || user?.email,
-          player_type: tipo,
+          user_id: user.id,
+          user_name: user.name || user.email,
+          player_type: playerType,
           amount: ownAmount,
           month,
           status: 'pending',
-          created_at: new Date().toISOString()
+          created_at: now
         }))
       }
 
-      // Avulsos temporários — um request separado cobrindo todos de uma vez
-      if (unpaidTemps.length > 0 && !hasPendingTempAvulsoRequest) {
+      // Avulsos temporários — só cria se há temps não pagos E sem request temp pendente
+      if (unpaidTemps.length > 0 && !alreadyHasTempRequest) {
         ops.push(addDoc(collection(db, 'payment_requests'), {
-          user_id: user!.id,
-          user_name: user?.name || user?.email,
+          user_id: user.id,
+          user_name: user.name || user.email,
           player_type: 'avulso',
-          amount: (config?.avulsoValue ?? 22) * unpaidTemps.length,
+          amount: avulsoVal * unpaidTemps.length,
           month,
           status: 'pending',
           is_for_temp_avulso: true,
           temp_avulso_ids: unpaidTemps.map((t: any) => t.id),
-          created_at: new Date().toISOString()
+          created_at: now
         }))
       }
 
-      if (ops.length > 0) await Promise.all(ops)
+      if (ops.length === 0) throw new Error('Nada a notificar')
+      await Promise.all(ops)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-payment-request', user?.id] })
       qc.invalidateQueries({ queryKey: ['pending-requests'] })
+      qc.invalidateQueries({ queryKey: ['my-temp-avulsos', user?.id] })
+      qc.invalidateQueries({ queryKey: ['payment-requests-count'] })
       toast.success('Admin notificado! Aguarde aprovação.')
     },
-    onError: () => toast.error('Erro ao notificar. Tente novamente.')
+    onError: (e: any) => {
+      if (e.message === 'Nada a notificar') {
+        toast.info('Nenhum pagamento pendente para notificar.')
+      } else {
+        toast.error('Erro ao notificar. Tente novamente.')
+      }
+    }
   })
 
   // Cálculos
