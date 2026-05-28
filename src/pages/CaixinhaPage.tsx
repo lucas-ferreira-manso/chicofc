@@ -226,6 +226,7 @@ export default function CaixinhaPage() {
   })
 
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null)
+  const [selectedTempAvulso, setSelectedTempAvulso] = useState<any | null>(null)
 
   const deletePayment = useMutation({
     mutationFn: async (payment: Payment) => {
@@ -244,6 +245,74 @@ export default function CaixinhaPage() {
       setSelectedPayment(null)
       toast.success('Pagamento removido.')
     }
+  })
+
+  // Admin confirma pagamento diretamente (sem passar por Notificações)
+  const confirmPayment = useMutation({
+    mutationFn: async (payment: Payment) => {
+      const now = new Date().toISOString()
+      await updateDoc(doc(db, 'payments', payment.id), { paid: true, paid_at: now })
+      // Aprova qualquer payment_request pendente do próprio pagamento desse usuário
+      const q = query(
+        collection(db, 'payment_requests'),
+        where('user_id', '==', (payment as any).user_id),
+        where('status', '==', 'pending')
+      )
+      const snap = await getDocs(q)
+      const toApprove = snap.docs.filter(d => {
+        const data = d.data()
+        if (data.is_for_temp_avulso) return false
+        if (payment.type === 'mensalidade') return data.month === payment.month
+        return true
+      })
+      await Promise.all(toApprove.map(d => updateDoc(d.ref, { status: 'approved', approved_at: now })))
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payments'] })
+      qc.invalidateQueries({ queryKey: ['pending-requests'] })
+      setSelectedPayment(null)
+      toast.success('Pagamento confirmado!')
+    },
+    onError: () => toast.error('Erro ao confirmar pagamento')
+  })
+
+  // Admin confirma avulso temporário diretamente
+  const confirmTempAvulso = useMutation({
+    mutationFn: async (temp: any) => {
+      const now = new Date().toISOString()
+      await updateDoc(doc(db, 'avulsos_temp', temp.id), { paid: true, paid_at: now })
+      // Aprova payment_request pendente que inclua este temp
+      const q = query(
+        collection(db, 'payment_requests'),
+        where('user_id', '==', temp.addedBy),
+        where('status', '==', 'pending')
+      )
+      const snap = await getDocs(q)
+      await Promise.all(
+        snap.docs
+          .filter(d => d.data().is_for_temp_avulso && (d.data().temp_avulso_ids ?? []).includes(temp.id))
+          .map(d => updateDoc(d.ref, { status: 'approved', approved_at: now }))
+      )
+      // Cria registro em payments para contabilidade
+      const month = temp.gameId ? (temp.gameId as string).substring(0, 7) : format(new Date(), 'yyyy-MM')
+      await addDoc(collection(db, 'payments'), {
+        user_id: temp.addedBy,
+        amount: config?.avulsoValue ?? 22,
+        type: 'jogo',
+        month,
+        paid: true,
+        paid_at: now,
+        created_at: now
+      })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payments'] })
+      qc.invalidateQueries({ queryKey: ['pending-requests'] })
+      qc.invalidateQueries({ queryKey: ['all-temp-avulsos'] })
+      setSelectedTempAvulso(null)
+      toast.success('Pagamento confirmado!')
+    },
+    onError: () => toast.error('Erro ao confirmar pagamento')
   })
 
   // Já paguei — cria payment_request(s) para o admin aprovar.
@@ -601,7 +670,8 @@ export default function CaixinhaPage() {
             <div className="flex flex-col gap-2">
               {jogoPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => setSelectedPayment(p)} isAdmin={isAdmin} />)}
               {isAdmin && allTempAvulsos.filter((t: any) => !t.paid).map((t: any) => (
-                <div key={t.id} className="w-full flex items-center gap-3 p-4 rounded-3xl"
+                <button key={t.id} onClick={() => setSelectedTempAvulso(t)}
+                  className="w-full flex items-center gap-3 p-4 rounded-3xl transition-all active:scale-[0.99]"
                   style={{ background: 'var(--color-surface-primary)' }}>
                   <Circle size={22} color="var(--color-fg-secondary)" />
                   <div className="flex-1 text-left">
@@ -615,7 +685,7 @@ export default function CaixinhaPage() {
                   <p className="font-semibold" style={{ color: 'var(--color-danger)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                     R$ {avulsoValue.toFixed(2)}
                   </p>
-                </div>
+                </button>
               ))}
             </div>
           </section>
@@ -645,7 +715,7 @@ export default function CaixinhaPage() {
         )}
       </div>
 
-      {/* Bottom sheet — excluir pagamento (admin only) */}
+      {/* Bottom sheet — pagamentos normais (admin only) */}
       {isAdmin && selectedPayment && (
         <>
           <div className="fixed inset-0 z-60" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={() => setSelectedPayment(null)} />
@@ -658,15 +728,54 @@ export default function CaixinhaPage() {
             <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
               {selectedPayment.type === 'mensalidade' ? 'Mensalidade' : 'Avulso'} · R$ {selectedPayment.amount} · {selectedPayment.paid ? 'Pago' : 'Pendente'}
             </p>
+            {!selectedPayment.paid && (
+              <button
+                onClick={() => confirmPayment.mutate(selectedPayment)}
+                disabled={confirmPayment.isPending}
+                className="w-full py-4 font-medium rounded-full transition-all active:scale-95 disabled:opacity-40 mt-2"
+                style={{ background: '#089527', color: '#fff', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+                {confirmPayment.isPending ? 'Confirmando...' : 'Confirmar Pagamento'}
+              </button>
+            )}
             <button
               onClick={() => deletePayment.mutate(selectedPayment)}
               disabled={deletePayment.isPending}
-              className="w-full py-4 font-medium rounded-full transition-all active:scale-95 disabled:opacity-40 mt-2"
+              className="w-full py-4 font-medium rounded-full transition-all active:scale-95 disabled:opacity-40"
               style={{ background: 'var(--color-danger)', color: '#fff', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
               {deletePayment.isPending ? 'Removendo...' : 'Excluir Pagamento'}
             </button>
             <button
               onClick={() => setSelectedPayment(null)}
+              className="w-full py-4 font-medium rounded-full transition-all active:scale-95"
+              style={{ background: 'var(--color-surface-primary)', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+              Cancelar
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Bottom sheet — avulso temporário (admin only) */}
+      {isAdmin && selectedTempAvulso && (
+        <>
+          <div className="fixed inset-0 z-60" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={() => setSelectedTempAvulso(null)} />
+          <div className="fixed bottom-0 left-0 right-0 z-70 rounded-t-3xl px-6 pt-4 pb-10 flex flex-col gap-3"
+            style={{ background: 'var(--color-bg)' }}>
+            <div className="w-10 h-1 rounded-full mx-auto mb-2" style={{ background: 'var(--color-border)' }} />
+            <p className="font-semibold" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+              {selectedTempAvulso.addedByName}
+            </p>
+            <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+              Avulso temp: {selectedTempAvulso.name} · R$ {(config?.avulsoValue ?? 22).toFixed(2)} · Pendente
+            </p>
+            <button
+              onClick={() => confirmTempAvulso.mutate(selectedTempAvulso)}
+              disabled={confirmTempAvulso.isPending}
+              className="w-full py-4 font-medium rounded-full transition-all active:scale-95 disabled:opacity-40 mt-2"
+              style={{ background: '#089527', color: '#fff', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
+              {confirmTempAvulso.isPending ? 'Confirmando...' : 'Confirmar Pagamento'}
+            </button>
+            <button
+              onClick={() => setSelectedTempAvulso(null)}
               className="w-full py-4 font-medium rounded-full transition-all active:scale-95"
               style={{ background: 'var(--color-surface-primary)', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
               Cancelar
