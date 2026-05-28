@@ -18,6 +18,7 @@ interface PaymentRequest {
   status: 'pending' | 'approved'
   created_at: string
   is_for_temp_avulso?: boolean
+  temp_avulso_ids?: string[]
   game_id?: string
 }
 
@@ -35,7 +36,8 @@ export default function NotificacoesAdminPage() {
 
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ['payment-requests'],
-    queryFn: fetchRequests
+    queryFn: fetchRequests,
+    refetchInterval: 8000
   })
 
   const toggleCheck = (id: string) => {
@@ -170,8 +172,17 @@ export default function NotificacoesAdminPage() {
           </div>
         ) : requests.map(r => {
           const isChecked = checked.has(r.id)
-          const [year, m] = r.month.split('-')
-          const monthLabel = format(new Date(Number(year), Number(m) - 1, 1), 'MMMM yyyy', { locale: ptBR })
+          // Proteção contra month undefined/nulo em requests antigos
+          const safeMonth = r.month || format(new Date(), 'yyyy-MM')
+          const parts = safeMonth.split('-')
+          const monthLabel = format(
+            new Date(Number(parts[0]), Number(parts[1]) - 1, 1),
+            'MMMM yyyy',
+            { locale: ptBR }
+          )
+          const typeLabel = r.is_for_temp_avulso
+            ? `Avulso temp${r.temp_avulso_ids?.length ? ` (${r.temp_avulso_ids.length})` : ''}`
+            : r.player_type === 'mensalista' ? 'Mensalidade' : 'Avulso'
           return (
             <button key={r.id} onClick={() => toggleCheck(r.id)}
               className="w-full flex items-center gap-3 p-4 rounded-3xl transition-all active:scale-[0.99]"
@@ -195,7 +206,7 @@ export default function NotificacoesAdminPage() {
                   {r.user_name}
                 </p>
                 <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', textTransform: 'capitalize' }}>
-                  {r.player_type} · {monthLabel}
+                  {typeLabel} · {monthLabel}
                 </p>
               </div>
               {/* Valor */}
