@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { doc, updateDoc } from 'firebase/firestore'
 import { updatePassword, getAuth } from 'firebase/auth'
@@ -32,20 +32,17 @@ export default function ProfilePage() {
   })
   const [showChinelinhoSheet, setShowChinelinhoSheet] = useState(false)
   const [uploading, setUploading] = useState(false)
-  // Estado local só para forçar re-render imediato da foto
+  // Estado local para exibir a nova foto imediatamente após upload
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null)
-  // Incrementado após cada upload para forçar re-montagem do input e garantir
-  // que onChange dispara novamente mesmo no mesmo browser/mobile
+  // Incrementado após cada upload para forçar re-montagem do input —
+  // garante que onChange dispara mesmo selecionando o mesmo arquivo
   const [inputKey, setInputKey] = useState(0)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Prioriza o estado local (recém feito upload), senão usa o do store
   const avatarUrl = localAvatarUrl ?? user?.photoURL ?? null
 
   const initials = (user?.name || user?.email || '?')
     .split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
-
-  const handleAvatarTap = () => fileInputRef.current?.click()
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -197,18 +194,17 @@ export default function ProfilePage() {
       <Header title="Atleta" />
       <div style={{ height: 80 }} />
 
-      {/*
-        IMPORTANTE: não usar display:none — no iOS Safari, inputs type="file"
-        ocultos via display:none bloqueiam o .click() programático em usos
-        repetidos (bug WebKit). Usar posicionamento off-screen como workaround.
-      */}
+      {/* Input nativo — acionado via label htmlFor (sem .click() programático).
+          display:none funciona aqui porque a abertura vem do label, não de JS.
+          key muda após cada upload para forçar re-montagem e permitir
+          selecionar o mesmo arquivo repetidamente. */}
       <input
         key={inputKey}
-        ref={fileInputRef}
+        id="avatar-upload-input"
         type="file"
         accept="image/*"
-        aria-hidden="true"
-        style={{ position: 'fixed', top: -9999, left: -9999, width: 1, height: 1, opacity: 0 }}
+        disabled={uploading}
+        style={{ display: 'none' }}
         onChange={handleFileChange}
       />
 
@@ -237,13 +233,19 @@ export default function ProfilePage() {
             )}
           </div>
 
-          <button onClick={handleAvatarTap} disabled={uploading}
-            className="flex items-center gap-2 transition-all active:scale-95 disabled:opacity-40">
+          <label
+            htmlFor={uploading ? undefined : 'avatar-upload-input'}
+            className="flex items-center gap-2 transition-all active:scale-95"
+            style={{
+              cursor: uploading ? 'default' : 'pointer',
+              opacity: uploading ? 0.4 : 1,
+              userSelect: 'none'
+            }}>
             <PencilSimple size={16} color="var(--color-fg-primary)" />
             <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
-              Editar foto
+              {uploading ? 'Enviando...' : 'Editar foto'}
             </p>
-          </button>
+          </label>
 
           <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', fontWeight: 600, lineHeight: '28px', textAlign: 'center', width: '100%' }}>
             {user?.name || 'Sem nome'}
