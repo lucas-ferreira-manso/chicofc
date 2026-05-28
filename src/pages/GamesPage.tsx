@@ -820,15 +820,15 @@ export default function GamesPage() {
               style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500 }}>
               Adicionar Avulso
             </button>
-          ) : (
+          ) : !chinelinhoActive ? (
             <button
-              onClick={() => !amDeclined && !chinelinhoActive && handleDecline.mutate()}
-              disabled={isPending || amDeclined || chinelinhoActive}
+              onClick={() => !amDeclined && handleDecline.mutate()}
+              disabled={isPending || amDeclined}
               className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-              style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500, opacity: (amDeclined || chinelinhoActive) ? 0.5 : 1 }}>
+              style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500, opacity: amDeclined ? 0.5 : 1 }}>
               {handleDecline.isPending ? '...' : 'Muié não deixa'}
             </button>
-          )}
+          ) : null}
         </div>
       )}
 
@@ -859,15 +859,15 @@ export default function GamesPage() {
               style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
               Adicionar Avulso
             </button>
-          ) : (
+          ) : !chinelinhoActive ? (
             <button
-              onClick={() => !amDeclined && !chinelinhoActive && handleDecline.mutate()}
-              disabled={isPending || amDeclined || chinelinhoActive}
+              onClick={() => !amDeclined && handleDecline.mutate()}
+              disabled={isPending || amDeclined}
               className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-              style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500, opacity: (amDeclined || chinelinhoActive) ? 0.5 : 1 }}>
+              style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500, opacity: amDeclined ? 0.5 : 1 }}>
               {handleDecline.isPending ? '...' : 'Muié não deixa'}
             </button>
-          )}
+          ) : null}
         </div>
       )}
 
