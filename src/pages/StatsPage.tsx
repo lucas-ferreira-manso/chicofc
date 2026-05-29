@@ -137,27 +137,48 @@ async function fetchVotacaoHistory(currentGameId: string): Promise<HistoryEntry[
     .filter(e => e.cheiaWinner || e.murchaWinner)
 }
 
+// As imagens são sprites 2816×1536. O Figma posiciona e recorta via CSS
+// para isolar cada bola dentro do container 52×52 (ou menor).
+// SoccerBall:    left-[-24.8%]   top-[-21.83%] w-[260.92%] h-[142.32%]
+// SoccerSquashed: left-[-133.15%] top-[-21.83%] w-[260.92%] h-[142.32%]
+
 function BolaCheiaIcon({ size = 52 }: { size?: number }) {
   return (
-    <img
-      src="/bola-cheia.png"
-      alt="Bola Cheia"
-      width={size}
-      height={size}
-      style={{ width: size, height: size, objectFit: 'contain', pointerEvents: 'none' }}
-    />
+    <div style={{ width: size, height: size, position: 'relative', overflow: 'hidden', flexShrink: 0, pointerEvents: 'none' }}>
+      <img
+        src="/bola-cheia.png"
+        alt="Bola Cheia"
+        style={{
+          position: 'absolute',
+          width: '260.92%',
+          height: '142.32%',
+          left: '-24.8%',
+          top: '-21.83%',
+          maxWidth: 'none',
+          pointerEvents: 'none'
+        }}
+      />
+    </div>
   )
 }
 
 function BolaMurchaIcon({ size = 52 }: { size?: number }) {
   return (
-    <img
-      src="/bola-murcha.png"
-      alt="Bola Murcha"
-      width={size}
-      height={size}
-      style={{ width: size, height: size, objectFit: 'contain', pointerEvents: 'none' }}
-    />
+    <div style={{ width: size, height: size, position: 'relative', overflow: 'hidden', flexShrink: 0, pointerEvents: 'none' }}>
+      <img
+        src="/bola-murcha.png"
+        alt="Bola Murcha"
+        style={{
+          position: 'absolute',
+          width: '260.92%',
+          height: '142.32%',
+          left: '-133.15%',
+          top: '-21.83%',
+          maxWidth: 'none',
+          pointerEvents: 'none'
+        }}
+      />
+    </div>
   )
 }
 
@@ -321,13 +342,13 @@ function SmallCardVotacao({ entry, onClick }: { entry: HistoryEntry; onClick: ()
         <div style={{ position: 'relative' }}>
           <MiniPhoto player={entry.cheiaWinner} />
           <div style={{ position: 'absolute', right: -1.4, top: 48, pointerEvents: 'none' }}>
-            <BolaCheiaIcon size={25} />
+            <BolaCheiaIcon size={24} />
           </div>
         </div>
         <div style={{ position: 'relative' }}>
           <MiniPhoto player={entry.murchaWinner} />
           <div style={{ position: 'absolute', right: -1.4, top: 48, pointerEvents: 'none' }}>
-            <BolaMurchaIcon size={25} />
+            <BolaMurchaIcon size={24} />
           </div>
         </div>
       </div>
