@@ -31,9 +31,12 @@ export default function ExportarRelatorioPage() {
     staleTime: 5 * 60_000
   })
 
-  // Agrupa meses disponíveis por ano
+  // Normaliza month para yyyy-MM (pagamentos de jogo usam yyyy-MM-dd)
+  const normalizeMonth = (month: string) => month.substring(0, 7)
+
+  // Agrupa meses disponíveis por ano (sem duplicatas)
   const monthsByYear = payments
-    .map(p => p.month)
+    .map(p => normalizeMonth(p.month))
     .filter((v, i, a) => a.indexOf(v) === i)
     .sort((a, b) => b.localeCompare(a))
     .reduce((acc, month) => {
@@ -57,7 +60,7 @@ export default function ExportarRelatorioPage() {
   function handleExport() {
     const filtered = selected === 'tudo'
       ? payments
-      : payments.filter(p => p.month === selected)
+      : payments.filter(p => normalizeMonth(p.month) === selected)
 
     const lines = [
       'Nome,Tipo,Mês,Valor,Status,Data Pagamento',

@@ -504,18 +504,11 @@ export default function CaixinhaPage() {
         title="Caixinha"
         subtitle={`Total de usuários: ${players.length}`}
         rightContent={isAdmin ? (
-          <div className="flex items-center gap-2">
-            <button onClick={() => generateMonth.mutate()} disabled={generateMonth.isPending}
-              className="px-4 py-2 rounded-full font-medium transition-all active:scale-95 disabled:opacity-40"
-              style={{ background: 'var(--color-surface-primary)', color: 'var(--color-fg-primary)', border: '1px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-              {generateMonth.isPending ? '...' : 'Gerar mês'}
-            </button>
-            <button onClick={() => navigate('/caixinha/exportar')}
-              className="px-4 py-2 rounded-full font-medium transition-all active:scale-95"
-              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-              Exportar Relatório
-            </button>
-          </div>
+          <button onClick={() => navigate('/caixinha/exportar')}
+            className="px-4 py-2 rounded-full font-medium transition-all active:scale-95"
+            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+            Exportar Relatório
+          </button>
         ) : undefined}
       />
       <div style={{ height: 96 }} />
