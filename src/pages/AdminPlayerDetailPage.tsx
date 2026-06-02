@@ -46,15 +46,14 @@ export default function AdminPlayerDetailPage() {
         ...(newType === 'avulso' ? { role: 'player' } : {})
       })
 
-      // 2. Busca attendance do próximo jogo
+      // 2. Busca attendance do próximo jogo (filtro simples p/ evitar índice composto)
       const attSnap = await getDocs(query(
         collection(db, 'attendances'),
-        where('user_id', '==', id!),
-        where('game_id', '==', gameId)
+        where('user_id', '==', id!)
       ))
+      const attDoc = attSnap.docs.find(d => d.data().game_id === gameId)
 
-      if (!attSnap.empty) {
-        const attDoc = attSnap.docs[0]
+      if (attDoc) {
         if (newType === 'avulso') {
           // Mensalista → Avulso: muda player_type e move para waitlist
           await updateDoc(doc(db, 'attendances', attDoc.id), {
@@ -82,7 +81,7 @@ export default function AdminPlayerDetailPage() {
         await Promise.all(mensSnap.docs.map(d => deleteDoc(d.ref)))
 
         // Cria cobrança de jogo (avulso) se tem attendance e ainda não existe
-        if (!attSnap.empty) {
+        if (attDoc) {
           const jogoSnap = await getDocs(query(
             collection(db, 'payments'),
             where('user_id', '==', id!),
