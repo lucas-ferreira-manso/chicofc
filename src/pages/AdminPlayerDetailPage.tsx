@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { doc, updateDoc, addDoc, collection } from 'firebase/firestore'
+import { doc, updateDoc, addDoc, deleteDoc, collection, getDocs, query, where } from 'firebase/firestore'
 import { getAuth, getIdToken } from 'firebase/auth'
+import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
 import { db } from '../lib/firebase'
 import { toast } from 'sonner'
 import { CaretLeft, TrashSimple, CaretDown, X } from '@phosphor-icons/react'
@@ -30,15 +31,109 @@ export default function AdminPlayerDetailPage() {
   const player = players.find(p => p.id === id)
 
   const updateType = useMutation({
-    mutationFn: async (type: 'mensalista' | 'avulso') => {
-      await updateDoc(doc(db, 'players', id!), { player_type: type })
-      // Se mudar para avulso, remove admin
-      if (type === 'avulso') {
-        await updateDoc(doc(db, 'players', id!), { role: 'player' })
+    mutationFn: async (newType: 'mensalista' | 'avulso') => {
+      const now = new Date().toISOString()
+      const currentMonth = format(new Date(), 'yyyy-MM')
+
+      // Próximo jogo (gameId)
+      const today = startOfDay(new Date())
+      const nextWed = isWednesday(today) ? today : nextWednesday(today)
+      const gameId = format(nextWed, 'yyyy-MM-dd')
+
+      // 1. Atualiza player_type (e role se virar avulso)
+      await updateDoc(doc(db, 'players', id!), {
+        player_type: newType,
+        ...(newType === 'avulso' ? { role: 'player' } : {})
+      })
+
+      // 2. Busca attendance do próximo jogo
+      const attSnap = await getDocs(query(
+        collection(db, 'attendances'),
+        where('user_id', '==', id!),
+        where('game_id', '==', gameId)
+      ))
+
+      if (!attSnap.empty) {
+        const attDoc = attSnap.docs[0]
+        if (newType === 'avulso') {
+          // Mensalista → Avulso: muda player_type e move para waitlist
+          await updateDoc(doc(db, 'attendances', attDoc.id), {
+            player_type: 'avulso',
+            status: 'waitlist'
+          })
+        } else {
+          // Avulso → Mensalista: muda player_type, mantém status
+          await updateDoc(doc(db, 'attendances', attDoc.id), {
+            player_type: 'mensalista'
+          })
+        }
+      }
+
+      // 3. Ajusta payments
+      if (newType === 'avulso') {
+        // Remove mensalidade pendente do mês atual
+        const mensSnap = await getDocs(query(
+          collection(db, 'payments'),
+          where('user_id', '==', id!),
+          where('type', '==', 'mensalidade'),
+          where('month', '==', currentMonth),
+          where('paid', '==', false)
+        ))
+        await Promise.all(mensSnap.docs.map(d => deleteDoc(d.ref)))
+
+        // Cria cobrança de jogo (avulso) se tem attendance e ainda não existe
+        if (!attSnap.empty) {
+          const jogoSnap = await getDocs(query(
+            collection(db, 'payments'),
+            where('user_id', '==', id!),
+            where('type', '==', 'jogo'),
+            where('game_id', '==', gameId)
+          ))
+          if (jogoSnap.empty) {
+            await addDoc(collection(db, 'payments'), {
+              user_id: id!,
+              amount: 22,
+              type: 'jogo',
+              game_id: gameId,
+              month: gameId,
+              paid: false,
+              created_at: now
+            })
+          }
+        }
+      } else {
+        // Avulso → Mensalista: remove pagamento de jogo pendente
+        const jogoSnap = await getDocs(query(
+          collection(db, 'payments'),
+          where('user_id', '==', id!),
+          where('type', '==', 'jogo'),
+          where('paid', '==', false)
+        ))
+        await Promise.all(jogoSnap.docs.map(d => deleteDoc(d.ref)))
+
+        // Cria mensalidade do mês se ainda não existe
+        const mensSnap = await getDocs(query(
+          collection(db, 'payments'),
+          where('user_id', '==', id!),
+          where('type', '==', 'mensalidade'),
+          where('month', '==', currentMonth)
+        ))
+        if (mensSnap.empty) {
+          await addDoc(collection(db, 'payments'), {
+            user_id: id!,
+            amount: 80,
+            type: 'mensalidade',
+            month: currentMonth,
+            paid: false,
+            created_at: now
+          })
+        }
       }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['players'] })
+      qc.invalidateQueries({ queryKey: ['payments'] })
+      qc.invalidateQueries({ queryKey: ['attendances'] })
       toast.success('Tipo atualizado!')
       setShowTypeDropdown(false)
     },
