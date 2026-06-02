@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { collection, getDocs, query, where, doc, getDoc, writeBatch, addDoc, deleteDoc } from 'firebase/firestore'
+import { collection, getDocs, query, where, doc, getDoc, writeBatch, addDoc, deleteDoc, orderBy } from 'firebase/firestore'
 import { getAuth, getIdToken } from 'firebase/auth'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { format, isAfter, nextWednesday, isWednesday, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Crown, BellRinging, CheckCircle, ShareNetwork, X } from '@phosphor-icons/react'
+import { Crown, BellRinging, CheckCircle, ShareNetwork, X, BellSimple, HandPalm } from '@phosphor-icons/react'
 import { useRef } from 'react'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
@@ -142,8 +142,25 @@ async function fetchAttendances(gameId: string): Promise<Attendance[]> {
   }))
 }
 
+async function fetchUnreadCount(userId: string, isAdmin: boolean): Promise<number> {
+  const notifQuery = query(
+    collection(db, 'notifications'),
+    where('user_id', '==', userId),
+    where('read', '==', false)
+  )
+  const notifSnap = await getDocs(notifQuery)
+  let count = notifSnap.size
+  if (isAdmin) {
+    const prQuery = query(collection(db, 'payment_requests'), where('status', '==', 'pending'))
+    const prSnap = await getDocs(prQuery)
+    count += prSnap.size
+  }
+  return count
+}
+
 export default function GamesPage() {
   const user = useAuthStore(s => s.user)
+  const isAdmin = user?.role === 'admin'
   const qc = useQueryClient()
   const navigate = useNavigate()
   const [activeTeam, setActiveTeam] = useState<'blue' | 'black'>('blue')
@@ -152,6 +169,13 @@ export default function GamesPage() {
   const [avulsoName, setAvulsoName] = useState('')
   const [selectedTempAvulso, setSelectedTempAvulso] = useState<TempAvulso | null>(null)
   const shareCardRef = useRef<HTMLDivElement>(null)
+
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ['notifications-unread', user?.id],
+    queryFn: () => fetchUnreadCount(user!.id, isAdmin),
+    enabled: !!user?.id,
+    refetchInterval: 15000
+  })
 
   const handleShare = async () => {
     if (!shareCardRef.current) return
@@ -217,7 +241,6 @@ export default function GamesPage() {
   const amDeclined = myAttendance?.status === 'declined'
   const avulsoWindowOpen = shouldShowAvulsoButton(gameDate, totalConfirmed)
   const showAvulsoBtn = amConfirmed && avulsoWindowOpen
-  const isAdmin = user?.role === 'admin'
 
   const closeTime = new Date(gameDate)
   closeTime.setHours(19, 30, 0, 0)
@@ -282,6 +305,16 @@ export default function GamesPage() {
       // Notifica avulso confirmado para lembrar de pagar
       if (shouldNotifyAvulso) {
         try {
+          // Escreve no Notification Center
+          await addDoc(collection(db, 'notifications'), {
+            user_id: user!.id,
+            title: 'Lembrete de pagamento',
+            message: 'Você confirmou presença! Não esqueça de pagar o jogo na Caixinha.',
+            type: 'message',
+            read: false,
+            created_at: new Date().toISOString()
+          })
+          // Push notification
           const authInstance = getAuth()
           const currentUser = authInstance.currentUser
           if (currentUser) {
@@ -504,24 +537,37 @@ export default function GamesPage() {
         title="Próximo Jogo"
         subtitle={`${gameDateStr} | Quarta-feira, 21:30`}
         subtitle2="Campo 9E10"
-        rightContent={(amConfirmed || amInWaitlist) ? (
-          <button
-            onClick={() => handleDecline.mutate()}
-            disabled={isPending}
-            className="transition-all active:scale-95 disabled:opacity-40"
-            style={{
-              background: 'var(--color-surface-accent-light)',
-              color: 'var(--color-fg-accent)',
-              borderRadius: 'var(--radius-pill)',
-              fontFamily: 'var(--font-primary)',
-              fontSize: 'var(--font-size-14)',
-              fontWeight: 500,
-              padding: '8px 16px',
-            }}
-          >
-            Sair da Pelada
-          </button>
-        ) : undefined}
+        rightContent={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            {/* Bell com badge de unread */}
+            <button
+              onClick={() => navigate('/notifications')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, position: 'relative', display: 'flex' }}>
+              <BellSimple size={24} color="var(--color-fg-primary)" />
+              {unreadCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: -4, right: -4,
+                  width: 16, height: 16, borderRadius: '50%',
+                  background: 'var(--color-fg-accent)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'var(--font-primary)', fontSize: 10, fontWeight: 700,
+                  color: '#fff'
+                }}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+            {/* HandPalm — sair da pelada (só quando confirmado ou em espera) */}
+            {(amConfirmed || amInWaitlist) && (
+              <button
+                onClick={() => handleDecline.mutate()}
+                disabled={isPending}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, opacity: isPending ? 0.4 : 1, display: 'flex' }}>
+                <HandPalm size={24} color="var(--color-fg-primary)" />
+              </button>
+            )}
+          </div>
+        }
       />
 
       <div style={{ height: 120 }} />

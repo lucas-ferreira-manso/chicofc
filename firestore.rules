@@ -78,6 +78,18 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
+    // Notification Center — histórico de notificações por usuário
+    match /notifications/{docId} {
+      allow read: if isAdmin() ||
+        (isAuthenticated() && resource.data.user_id == request.auth.uid);
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        request.resource.data.user_id == request.auth.uid
+      );
+      allow update: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
     // Tokens de notificação push
     match /fcm_tokens/{userId} {
       allow read: if isAdmin() || isOwner(userId);

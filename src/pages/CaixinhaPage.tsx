@@ -401,6 +401,20 @@ export default function CaixinhaPage() {
 
       if (ops.length === 0) throw new Error('Nada a notificar')
       await Promise.all(ops)
+
+      // Cria notificações no Notification Center para todos os admins
+      const adminSnap = await getDocs(query(collection(db, 'players'), where('role', '==', 'admin')))
+      const userName = user.name || user.email || 'Jogador'
+      await Promise.all(adminSnap.docs.map(adminDoc =>
+        addDoc(collection(db, 'notifications'), {
+          user_id: adminDoc.id,
+          title: 'Confirmar Pagamento',
+          message: `${userName} realizou pagamento`,
+          type: 'payment_request',
+          read: false,
+          created_at: now
+        })
+      ))
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-payment-request', user?.id] })

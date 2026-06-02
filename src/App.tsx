@@ -18,6 +18,7 @@ import NotificacoesAdminPage from './pages/NotificacoesAdminPage'
 import PresencaPage from './pages/PresencaPage'
 import RankingVotacaoPage from './pages/RankingVotacaoPage'
 import ExportarRelatorioPage from './pages/ExportarRelatorioPage'
+import NotificationCenterPage from './pages/NotificationCenterPage'
 import TermsSheet, { hasAcceptedTermsLocally } from './components/TermsSheet'
 
 export default function App() {
@@ -64,6 +65,7 @@ export default function App() {
     || location.pathname.startsWith('/admin/jogadores/')
     || location.pathname.startsWith('/admin/jogador/')
     || location.pathname === '/caixinha/exportar'
+    || location.pathname === '/notifications'
 
   return (
     <div className="flex flex-col flex-1">
@@ -82,6 +84,7 @@ export default function App() {
           <Route path="/presenca" element={<PresencaPage />} />
           <Route path="/ranking-votacao" element={<RankingVotacaoPage />} />
           <Route path="/caixinha/exportar" element={<ExportarRelatorioPage />} />
+          <Route path="/notifications" element={<NotificationCenterPage />} />
           <Route path="*" element={<Navigate to="/games" replace />} />
         </Routes>
       </main>
