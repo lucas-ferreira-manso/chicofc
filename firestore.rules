@@ -51,11 +51,13 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // Registros de pagamento (somente admin escreve)
+    // Registros de pagamento (admin gerencia; jogador pode criar o próprio ao confirmar presença)
     match /payments/{docId} {
       allow read: if isAdmin() ||
         (isAuthenticated() && resource.data.user_id == request.auth.uid);
-      allow write: if isAdmin();
+      allow create: if isAdmin() ||
+        (isAuthenticated() && request.resource.data.user_id == request.auth.uid);
+      allow update, delete: if isAdmin();
     }
 
     // Escalações dos times
