@@ -145,11 +145,10 @@ async function fetchAttendances(gameId: string): Promise<Attendance[]> {
 async function fetchUnreadCount(userId: string, isAdmin: boolean): Promise<number> {
   const notifQuery = query(
     collection(db, 'notifications'),
-    where('user_id', '==', userId),
-    where('read', '==', false)
+    where('user_id', '==', userId)
   )
   const notifSnap = await getDocs(notifQuery)
-  let count = notifSnap.size
+  let count = notifSnap.docs.filter(d => d.data().read === false).length
   if (isAdmin) {
     const prQuery = query(collection(db, 'payment_requests'), where('status', '==', 'pending'))
     const prSnap = await getDocs(prQuery)

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   collection, getDocs, query, where, doc,
-  updateDoc, addDoc, writeBatch, orderBy
+  updateDoc, addDoc, writeBatch
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
@@ -43,11 +43,12 @@ interface PaymentRequest {
 async function fetchMyNotifications(userId: string): Promise<AppNotification[]> {
   const q = query(
     collection(db, 'notifications'),
-    where('user_id', '==', userId),
-    orderBy('created_at', 'desc')
+    where('user_id', '==', userId)
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as AppNotification))
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() } as AppNotification))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
 }
 
 async function fetchPendingRequests(): Promise<PaymentRequest[]> {
