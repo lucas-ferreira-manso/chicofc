@@ -40,84 +40,66 @@ export default function AdminPlayerDetailPage() {
       const nextWed = isWednesday(today) ? today : nextWednesday(today)
       const gameId = format(nextWed, 'yyyy-MM-dd')
 
-      // 1. Atualiza player_type (e role se virar avulso)
+      // Busca todos os dados do jogador em paralelo (single-field where — sem índice composto)
+      const [attSnap, paymentsSnap] = await Promise.all([
+        getDocs(query(collection(db, 'attendances'), where('user_id', '==', id!))),
+        getDocs(query(collection(db, 'payments'),    where('user_id', '==', id!)))
+      ])
+
+      // Filtra client-side
+      const attDoc      = attSnap.docs.find(d => d.data().game_id === gameId)
+      const allPayments = paymentsSnap.docs.map(d => ({ id: d.id, ref: d.ref, ...d.data() } as any))
+
+      const mensalidadePendente = allPayments.filter(
+        p => p.type === 'mensalidade' && p.month === currentMonth && p.paid === false
+      )
+      const jogoPendente = allPayments.filter(
+        p => p.type === 'jogo' && p.paid === false
+      )
+      const jogoDoGame = allPayments.find(
+        p => p.type === 'jogo' && (p.game_id === gameId || p.month === gameId)
+      )
+      const mensalidadeDoMes = allPayments.find(
+        p => p.type === 'mensalidade' && p.month === currentMonth
+      )
+
+      // 1. Atualiza player_type no perfil (e remove admin se virar avulso)
       await updateDoc(doc(db, 'players', id!), {
         player_type: newType,
         ...(newType === 'avulso' ? { role: 'player' } : {})
       })
 
-      // 2. Busca attendance do próximo jogo (filtro simples p/ evitar índice composto)
-      const attSnap = await getDocs(query(
-        collection(db, 'attendances'),
-        where('user_id', '==', id!)
-      ))
-      const attDoc = attSnap.docs.find(d => d.data().game_id === gameId)
-
+      // 2. Atualiza attendance do próximo jogo
       if (attDoc) {
-        if (newType === 'avulso') {
-          // Mensalista → Avulso: muda player_type e move para waitlist
-          await updateDoc(doc(db, 'attendances', attDoc.id), {
-            player_type: 'avulso',
-            status: 'waitlist'
-          })
-        } else {
-          // Avulso → Mensalista: muda player_type, mantém status
-          await updateDoc(doc(db, 'attendances', attDoc.id), {
-            player_type: 'mensalista'
-          })
-        }
+        await updateDoc(doc(db, 'attendances', attDoc.id), {
+          player_type: newType,
+          ...(newType === 'avulso' ? { status: 'waitlist' } : {})
+        })
       }
 
       // 3. Ajusta payments
       if (newType === 'avulso') {
-        // Remove mensalidade pendente do mês atual
-        const mensSnap = await getDocs(query(
-          collection(db, 'payments'),
-          where('user_id', '==', id!),
-          where('type', '==', 'mensalidade'),
-          where('month', '==', currentMonth),
-          where('paid', '==', false)
-        ))
-        await Promise.all(mensSnap.docs.map(d => deleteDoc(d.ref)))
+        // Remove mensalidade(s) pendente(s) do mês atual
+        await Promise.all(mensalidadePendente.map(p => deleteDoc(p.ref)))
 
-        // Cria cobrança de jogo (avulso) se tem attendance e ainda não existe
-        if (attDoc) {
-          const jogoSnap = await getDocs(query(
-            collection(db, 'payments'),
-            where('user_id', '==', id!),
-            where('type', '==', 'jogo'),
-            where('game_id', '==', gameId)
-          ))
-          if (jogoSnap.empty) {
-            await addDoc(collection(db, 'payments'), {
-              user_id: id!,
-              amount: 22,
-              type: 'jogo',
-              game_id: gameId,
-              month: gameId,
-              paid: false,
-              created_at: now
-            })
-          }
+        // Cria payment de jogo se jogador tem attendance e ainda não existe
+        if (attDoc && !jogoDoGame) {
+          await addDoc(collection(db, 'payments'), {
+            user_id: id!,
+            amount: 22,
+            type: 'jogo',
+            game_id: gameId,
+            month: gameId,
+            paid: false,
+            created_at: now
+          })
         }
       } else {
-        // Avulso → Mensalista: remove pagamento de jogo pendente
-        const jogoSnap = await getDocs(query(
-          collection(db, 'payments'),
-          where('user_id', '==', id!),
-          where('type', '==', 'jogo'),
-          where('paid', '==', false)
-        ))
-        await Promise.all(jogoSnap.docs.map(d => deleteDoc(d.ref)))
+        // Remove pagamentos de jogo pendentes
+        await Promise.all(jogoPendente.map(p => deleteDoc(p.ref)))
 
-        // Cria mensalidade do mês se ainda não existe
-        const mensSnap = await getDocs(query(
-          collection(db, 'payments'),
-          where('user_id', '==', id!),
-          where('type', '==', 'mensalidade'),
-          where('month', '==', currentMonth)
-        ))
-        if (mensSnap.empty) {
+        // Cria mensalidade do mês se ainda não existe (paga ou não)
+        if (!mensalidadeDoMes) {
           await addDoc(collection(db, 'payments'), {
             user_id: id!,
             amount: 80,
