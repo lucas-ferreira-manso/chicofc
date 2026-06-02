@@ -80,12 +80,12 @@ service cloud.firestore {
 
     // Notification Center — histórico de notificações por usuário
     match /notifications/{docId} {
-      allow read: if isAdmin() ||
-        (isAuthenticated() && resource.data.user_id == request.auth.uid);
-      allow create: if isAuthenticated() && (
-        isAdmin() ||
-        request.resource.data.user_id == request.auth.uid
-      );
+      // Leitura: próprio usuário ou admin
+      allow read: if isAuthenticated() &&
+        (isAdmin() || resource.data.user_id == request.auth.uid);
+      // Qualquer autenticado pode criar (ex: usuário avisa admin de pagamento)
+      allow create: if isAuthenticated();
+      // Só o destinatário pode marcar como lida
       allow update: if isAuthenticated() && resource.data.user_id == request.auth.uid;
       allow delete: if isAdmin();
     }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -85,10 +85,11 @@ export default function NotificationCenterPage() {
     refetchInterval: 8000
   })
 
-  // Mark all unread as read when page opens
+  // Mark all unread as read when notifications load
   const markAllRead = useMutation({
     mutationFn: async () => {
       const unread = notifications.filter(n => !n.read)
+      if (unread.length === 0) return
       await Promise.all(unread.map(n => updateDoc(doc(db, 'notifications', n.id), { read: true })))
     },
     onSuccess: () => {
@@ -97,12 +98,11 @@ export default function NotificationCenterPage() {
     }
   })
 
-  // Mark all read on mount
-  useState(() => {
-    if (user?.id && notifications.some(n => !n.read)) {
+  useEffect(() => {
+    if (notifications.length > 0) {
       markAllRead.mutate()
     }
-  })
+  }, [notifications.length])
 
   // Approve single payment request (from bottom sheet)
   const approveRequest = useMutation({
