@@ -35,41 +35,23 @@ export default function AdminPlayerDetailPage() {
       const now = new Date().toISOString()
       const currentMonth = format(new Date(), 'yyyy-MM')
 
-      // Próximo jogo (gameId)
+      // gameId igual ao GamesPage
       const today = startOfDay(new Date())
       const nextWed = isWednesday(today) ? today : nextWednesday(today)
       const gameId = format(nextWed, 'yyyy-MM-dd')
 
-      // Busca todos os dados do jogador em paralelo (single-field where — sem índice composto)
-      const [attSnap, paymentsSnap] = await Promise.all([
-        getDocs(query(collection(db, 'attendances'), where('user_id', '==', id!))),
-        getDocs(query(collection(db, 'payments'),    where('user_id', '==', id!)))
-      ])
-
-      // Filtra client-side
-      const attDoc      = attSnap.docs.find(d => d.data().game_id === gameId)
-      const allPayments = paymentsSnap.docs.map(d => ({ id: d.id, ref: d.ref, ...d.data() } as any))
-
-      const mensalidadePendente = allPayments.filter(
-        p => p.type === 'mensalidade' && p.month === currentMonth && p.paid === false
-      )
-      const jogoPendente = allPayments.filter(
-        p => p.type === 'jogo' && p.paid === false
-      )
-      const jogoDoGame = allPayments.find(
-        p => p.type === 'jogo' && (p.game_id === gameId || p.month === gameId)
-      )
-      const mensalidadeDoMes = allPayments.find(
-        p => p.type === 'mensalidade' && p.month === currentMonth
-      )
-
-      // 1. Atualiza player_type no perfil (e remove admin se virar avulso)
+      // ── 1. Atualiza player_type no perfil ───────────────────────────────
       await updateDoc(doc(db, 'players', id!), {
         player_type: newType,
         ...(newType === 'avulso' ? { role: 'player' } : {})
       })
 
-      // 2. Atualiza attendance do próximo jogo
+      // ── 2. Atualiza attendance (query por game_id — padrão do GamesPage) ─
+      // Lê todos os attendances do jogo e filtra pelo user_id no cliente
+      const attSnap = await getDocs(
+        query(collection(db, 'attendances'), where('game_id', '==', gameId))
+      )
+      const attDoc = attSnap.docs.find(d => d.data().user_id === id!)
       if (attDoc) {
         await updateDoc(doc(db, 'attendances', attDoc.id), {
           player_type: newType,
@@ -77,36 +59,43 @@ export default function AdminPlayerDetailPage() {
         })
       }
 
-      // 3. Ajusta payments
-      if (newType === 'avulso') {
-        // Remove mensalidade(s) pendente(s) do mês atual
-        await Promise.all(mensalidadePendente.map(p => deleteDoc(p.ref)))
+      // ── 3. Ajusta payments ──────────────────────────────────────────────
+      // Busca todos os payments do usuário (single where, sem índice composto)
+      const paymentsSnap = await getDocs(
+        query(collection(db, 'payments'), where('user_id', '==', id!))
+      )
+      const allPayments = paymentsSnap.docs.map(d => ({ ref: d.ref, ...d.data() } as any))
 
-        // Cria payment de jogo se jogador tem attendance e ainda não existe
-        if (attDoc && !jogoDoGame) {
+      if (newType === 'avulso') {
+        // Remove mensalidade(s) não pagas do mês atual
+        const toDelete = allPayments.filter(
+          p => p.type === 'mensalidade' && p.month === currentMonth && p.paid === false
+        )
+        for (const p of toDelete) await deleteDoc(p.ref)
+
+        // Cria cobrança de jogo se tem attendance e ainda não existe
+        const jogoExiste = allPayments.some(
+          p => p.type === 'jogo' && (p.game_id === gameId || p.month === gameId)
+        )
+        if (attDoc && !jogoExiste) {
           await addDoc(collection(db, 'payments'), {
-            user_id: id!,
-            amount: 22,
-            type: 'jogo',
-            game_id: gameId,
-            month: gameId,
-            paid: false,
-            created_at: now
+            user_id: id!, amount: 22, type: 'jogo',
+            game_id: gameId, month: gameId, paid: false, created_at: now
           })
         }
       } else {
-        // Remove pagamentos de jogo pendentes
-        await Promise.all(jogoPendente.map(p => deleteDoc(p.ref)))
+        // Remove pagamentos de jogo não pagos
+        const toDelete = allPayments.filter(p => p.type === 'jogo' && p.paid === false)
+        for (const p of toDelete) await deleteDoc(p.ref)
 
-        // Cria mensalidade do mês se ainda não existe (paga ou não)
-        if (!mensalidadeDoMes) {
+        // Cria mensalidade do mês se ainda não existe
+        const mensExiste = allPayments.some(
+          p => p.type === 'mensalidade' && p.month === currentMonth
+        )
+        if (!mensExiste) {
           await addDoc(collection(db, 'payments'), {
-            user_id: id!,
-            amount: 80,
-            type: 'mensalidade',
-            month: currentMonth,
-            paid: false,
-            created_at: now
+            user_id: id!, amount: 80, type: 'mensalidade',
+            month: currentMonth, paid: false, created_at: now
           })
         }
       }
@@ -118,7 +107,7 @@ export default function AdminPlayerDetailPage() {
       toast.success('Tipo atualizado!')
       setShowTypeDropdown(false)
     },
-    onError: () => toast.error('Erro ao atualizar tipo.')
+    onError: (e: any) => toast.error(`Erro ao atualizar tipo: ${e?.message ?? e}`)
   })
 
   const updateRole = useMutation({
