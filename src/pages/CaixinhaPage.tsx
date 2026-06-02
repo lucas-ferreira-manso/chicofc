@@ -5,9 +5,10 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Copy, Check, PencilSimple, X, CheckCircle, Circle, BellRinging } from '@phosphor-icons/react'
+import { Copy, Check, PencilSimple, X, CheckCircle, Circle, CaretDown } from '@phosphor-icons/react'
 import Header from '../components/layout/Header'
 import { toast } from 'sonner'
+import { useNavigate } from 'react-router-dom'
 import type { Payment, Profile } from '../types'
 
 const PIX_CODE = '42c4fc79-a983-4a02-88fb-81ec76948c0f'
@@ -125,6 +126,7 @@ export default function CaixinhaPage() {
   const qc = useQueryClient()
   const user = useAuthStore(s => s.user)
   const isAdmin = user?.role === 'admin'
+  const navigate = useNavigate()
 
   const { data: payments = [] } = useQuery({ queryKey: ['payments'], queryFn: fetchPayments, refetchInterval: 8000 })
   const { data: players = [] } = useQuery({ queryKey: ['players'], queryFn: fetchPlayers })
@@ -173,6 +175,16 @@ export default function CaixinhaPage() {
   const [pixCopied, setPixCopied] = useState(false)
   const [editingField, setEditingField] = useState<EditField>(null)
   const [editValue, setEditValue] = useState('')
+  const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set())
+
+  const toggleMonth = (monthKey: string) => {
+    setCollapsedMonths(prev => {
+      const next = new Set(prev)
+      if (next.has(monthKey)) next.delete(monthKey)
+      else next.add(monthKey)
+      return next
+    })
+  }
 
   const handleCopyPix = () => {
     navigator.clipboard.writeText(PIX_CODE)
@@ -492,11 +504,18 @@ export default function CaixinhaPage() {
         title="Caixinha"
         subtitle={`Total de usuários: ${players.length}`}
         rightContent={isAdmin ? (
-          <button onClick={() => generateMonth.mutate()} disabled={generateMonth.isPending}
-            className="px-4 py-2 rounded-full font-medium transition-all active:scale-95 disabled:opacity-40"
-            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-            {generateMonth.isPending ? '...' : 'Gerar mês'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => generateMonth.mutate()} disabled={generateMonth.isPending}
+              className="px-4 py-2 rounded-full font-medium transition-all active:scale-95 disabled:opacity-40"
+              style={{ background: 'var(--color-surface-primary)', color: 'var(--color-fg-primary)', border: '1px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+              {generateMonth.isPending ? '...' : 'Gerar mês'}
+            </button>
+            <button onClick={() => navigate('/caixinha/exportar')}
+              className="px-4 py-2 rounded-full font-medium transition-all active:scale-95"
+              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+              Exportar Relatório
+            </button>
+          </div>
         ) : undefined}
       />
       <div style={{ height: 96 }} />
@@ -731,21 +750,48 @@ export default function CaixinhaPage() {
           </section>
         )}
 
-        {playerData?.player_type !== 'avulso' && Object.entries(byMonth).map(([monthKey, monthPayments]) => {
-          const [year, m] = monthKey.split('-')
-          const label = format(new Date(Number(year), Number(m) - 1, 1), 'MMMM yyyy', { locale: ptBR })
-          return (
-            <section key={monthKey}>
-              <div className="flex items-center justify-between mb-2">
-                <p className="font-semibold uppercase tracking-wider capitalize" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>{label}</p>
-                <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>{monthPayments.filter(p => p.paid).length}/{monthPayments.length}</p>
-              </div>
-              <div className="flex flex-col gap-2">
-                {monthPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => setSelectedPayment(p)} isAdmin={isAdmin} />)}
-              </div>
-            </section>
-          )
-        })}
+        {playerData?.player_type !== 'avulso' && (() => {
+          const sortedMonths = Object.keys(byMonth).sort((a, b) => b.localeCompare(a))
+          const latestMonth = sortedMonths[0]
+          return sortedMonths.map(monthKey => {
+            const monthPayments = byMonth[monthKey]
+            const [year, m] = monthKey.split('-')
+            const label = format(new Date(Number(year), Number(m) - 1, 1), 'MMMM yyyy', { locale: ptBR })
+            // Mês mais recente começa aberto; os demais começam fechados.
+            // collapsedMonths inverte o estado padrão de cada mês.
+            const open = monthKey === latestMonth
+              ? !collapsedMonths.has(monthKey)
+              : collapsedMonths.has(monthKey)
+
+            return (
+              <section key={monthKey}>
+                <button
+                  onClick={() => toggleMonth(monthKey)}
+                  className="w-full flex items-center justify-between mb-2"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  <p className="font-semibold uppercase tracking-wider capitalize" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
+                    {label}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
+                      {monthPayments.filter(p => p.paid).length}/{monthPayments.length}
+                    </p>
+                    <CaretDown
+                      size={16}
+                      color="var(--color-fg-secondary)"
+                      style={{ transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                    />
+                  </div>
+                </button>
+                {open && (
+                  <div className="flex flex-col gap-2">
+                    {monthPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => setSelectedPayment(p)} isAdmin={isAdmin} />)}
+                  </div>
+                )}
+              </section>
+            )
+          })
+        })()}
 
         {payments.length === 0 && (
           <div className="text-center py-12">

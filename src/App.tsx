@@ -17,6 +17,7 @@ import EscalacaoPage from './pages/EscalacaoPage'
 import NotificacoesAdminPage from './pages/NotificacoesAdminPage'
 import PresencaPage from './pages/PresencaPage'
 import RankingVotacaoPage from './pages/RankingVotacaoPage'
+import ExportarRelatorioPage from './pages/ExportarRelatorioPage'
 import TermsSheet, { hasAcceptedTermsLocally } from './components/TermsSheet'
 
 export default function App() {
@@ -79,6 +80,7 @@ export default function App() {
           <Route path="/admin/notificacoes" element={<NotificacoesAdminPage />} />
           <Route path="/presenca" element={<PresencaPage />} />
           <Route path="/ranking-votacao" element={<RankingVotacaoPage />} />
+          <Route path="/caixinha/exportar" element={<ExportarRelatorioPage />} />
           <Route path="*" element={<Navigate to="/games" replace />} />
         </Routes>
       </main>
