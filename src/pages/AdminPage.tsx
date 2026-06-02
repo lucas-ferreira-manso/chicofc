@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { collection, getDocs, doc, setDoc, query, where } from 'firebase/firestore'
+import { collection, getDocs, doc, setDoc, addDoc, query, where } from 'firebase/firestore'
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, getAuth, getIdToken } from 'firebase/auth'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
@@ -156,7 +156,28 @@ export default function AdminPage() {
           body: JSON.stringify({ gameId, message: notifMessage || 'Você ainda não confirmou presença no jogo de quarta!' })
         })
         if (!res.ok) throw new Error('Erro no servidor')
-        return res.json()
+        const data = await res.json()
+
+        // Salva no Notification Center para quem não confirmou presença
+        const [attendancesSnap, allPlayersSnap] = await Promise.all([
+          getDocs(query(collection(db, 'attendances'), where('game_id', '==', gameId))),
+          getDocs(query(collection(db, 'players'), where('active', '==', true)))
+        ])
+        const confirmedIds = new Set(
+          attendancesSnap.docs
+            .filter(d => ['confirmed', 'waitlist'].includes(d.data().status))
+            .map(d => d.data().user_id)
+        )
+        const title = 'Confirmação de Presença'
+        const msg = notifMessage || 'Você ainda não confirmou presença no jogo de quarta!'
+        const now = new Date().toISOString()
+        const toWrite = allPlayersSnap.docs.filter(d => !confirmedIds.has(d.id))
+        await Promise.all(toWrite.map(d =>
+          addDoc(collection(db, 'notifications'), {
+            user_id: d.id, title, message: msg, type: 'message', read: false, created_at: now
+          })
+        ))
+        return data
       } else {
         const month = format(new Date(), 'yyyy-MM')
         // Busca quem já pagou ou submeteu pedido de pagamento — para não notificar
@@ -204,6 +225,7 @@ export default function AdminPage() {
         const toNotify = [...mensalistasToNotify, ...avulsosToNotify]
         if (toNotify.length === 0) return { sent: 0 }
 
+        const now = new Date().toISOString()
         const results = await Promise.all(toNotify.map(async p => {
           const msg = notifMessage || (p.player_type === 'mensalista'
             ? 'Você ainda tem mensalidade pendente. Por favor, efetue o pagamento!'
@@ -212,6 +234,11 @@ export default function AdminPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ userId: p.id, message: msg })
+          })
+          // Salva no Notification Center do usuário
+          await addDoc(collection(db, 'notifications'), {
+            user_id: p.id, title: 'Cobrança de Pagamento', message: msg,
+            type: 'message', read: false, created_at: now
           })
           return res.ok ? 1 : 0
         }))

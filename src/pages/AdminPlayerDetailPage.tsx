@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { doc, updateDoc } from 'firebase/firestore'
+import { doc, updateDoc, addDoc, collection } from 'firebase/firestore'
 import { getAuth, getIdToken } from 'firebase/auth'
 import { db } from '../lib/firebase'
 import { toast } from 'sonner'
@@ -83,6 +83,17 @@ export default function AdminPlayerDetailPage() {
         body: JSON.stringify({ userId: player?.id, message })
       })
       if (!res.ok) throw new Error('Erro no servidor')
+
+      // Salva no Notification Center do jogador
+      await addDoc(collection(db, 'notifications'), {
+        user_id: player?.id,
+        title: 'Cobrança de Pagamento',
+        message,
+        type: 'message',
+        read: false,
+        created_at: new Date().toISOString()
+      })
+
       return res.json()
     },
     onSuccess: () => toast.success('Cobrança enviada!'),
