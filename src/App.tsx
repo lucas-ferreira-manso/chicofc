@@ -63,6 +63,7 @@ export default function App() {
     || location.pathname === '/admin/notificacoes'
     || location.pathname.startsWith('/admin/jogadores/')
     || location.pathname.startsWith('/admin/jogador/')
+    || location.pathname === '/caixinha/exportar'
 
   return (
     <div className="flex flex-col flex-1">
