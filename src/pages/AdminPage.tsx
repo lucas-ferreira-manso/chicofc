@@ -5,7 +5,7 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword, getAuth, ge
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
-import { Shield, Bell, BellSimple, X, UserPlus } from '@phosphor-icons/react'
+import { Shield, Bell, X, UserPlus } from '@phosphor-icons/react'
 import { CaretDown } from '@phosphor-icons/react'
 import Header from '../components/layout/Header'
 import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
@@ -105,15 +105,6 @@ export default function AdminPage() {
   const user = useAuthStore(s => s.user)
   const navigate = useNavigate()
 
-  const { data: pendingCount = 0 } = useQuery<number>({
-    queryKey: ['payment-requests-count'],
-    queryFn: async () => {
-      const q = query(collection(db, 'payment_requests'), where('status', '==', 'pending'))
-      const snap = await getDocs(q)
-      return snap.docs.length
-    },
-    refetchInterval: 10000
-  })
 
   const { data: players = [], isLoading } = useQuery({ queryKey: ['players'], queryFn: fetchPlayers })
 
@@ -254,26 +245,11 @@ export default function AdminPage() {
         title="Admin"
         subtitle={`${activePlayers.length} ativos`}
         rightContent={
-          <div className="flex items-center gap-2">
-            <button onClick={() => navigate('/admin/notificacoes')}
-              className="w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-95 relative"
-              style={{ background: 'var(--color-surface-primary)' }}>
-              <BellSimple size={18} color="var(--color-fg-primary)" />
-              {pendingCount > 0 && (
-                <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
-                  style={{ background: 'var(--color-danger)', border: '2px solid var(--color-bg)' }}>
-                  <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>
-                    {pendingCount > 9 ? '9+' : pendingCount}
-                  </span>
-                </div>
-              )}
-            </button>
-            <button onClick={() => { setShowAddSheet(true); setShowNotifSheet(false) }}
-              className="w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-95"
-              style={{ background: 'var(--btn-primary-bg)' }}>
-              <UserPlus size={18} color="var(--btn-primary-fg)" />
-            </button>
-          </div>
+          <button onClick={() => { setShowAddSheet(true); setShowNotifSheet(false) }}
+            className="w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-95"
+            style={{ background: 'var(--btn-primary-bg)' }}>
+            <UserPlus size={18} color="var(--btn-primary-fg)" />
+          </button>
         }
       />
       <div style={{ height: 96 }} />
