@@ -34,64 +34,71 @@ export default function AdminPlayerDetailPage() {
     mutationFn: async (newType: 'mensalista' | 'avulso') => {
       const now = new Date().toISOString()
       const currentMonth = format(new Date(), 'yyyy-MM')
+      console.log('[updateType] início', { id, newType, currentMonth })
 
       // ── 1. Atualiza player_type no perfil ───────────────────────────────
       await updateDoc(doc(db, 'players', id!), {
         player_type: newType,
         ...(newType === 'avulso' ? { role: 'player' } : {})
       })
+      console.log('[updateType] passo 1 ok — perfil atualizado')
 
-      // ── 2. Atualiza attendances activas do usuário ──────────────────────
-      // Lê todos os attendances — sem depender de gameId calculado
-      const [attSnap, paymentsSnap] = await Promise.all([
-        getDocs(collection(db, 'attendances')),
-        getDocs(collection(db, 'payments'))
-      ])
+      // ── 2. Busca attendances com where('user_id') ───────────────────────
+      const attSnap = await getDocs(
+        query(collection(db, 'attendances'), where('user_id', '==', id!))
+      )
+      console.log('[updateType] passo 2 — attendances encontrados:', attSnap.size,
+        attSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      )
 
-      // Filtra tudo client-side para evitar qualquer problema de índice
-      const userAtts = attSnap.docs.filter(d => d.data().user_id === id!)
-      const activeAtt = userAtts.find(d =>
+      const activeAtt = attSnap.docs.find(d =>
         d.data().status === 'confirmed' || d.data().status === 'waitlist'
       )
+      console.log('[updateType] activeAtt:', activeAtt ? { id: activeAtt.id, ...activeAtt.data() } : 'NÃO ENCONTRADO')
 
       if (activeAtt) {
         await updateDoc(doc(db, 'attendances', activeAtt.id), {
           player_type: newType,
           ...(newType === 'avulso' ? { status: 'waitlist' } : {})
         })
+        console.log('[updateType] passo 2 ok — attendance atualizado')
       }
 
-      // ── 3. Ajusta payments ──────────────────────────────────────────────
-      const userPayments = paymentsSnap.docs
-        .filter(d => d.data().user_id === id!)
-        .map(d => ({ ref: d.ref, ...d.data() } as any))
+      // ── 3. Busca payments com where('user_id') ──────────────────────────
+      const paymentsSnap = await getDocs(
+        query(collection(db, 'payments'), where('user_id', '==', id!))
+      )
+      const userPayments = paymentsSnap.docs.map(d => ({ ref: d.ref, ...d.data() } as any))
+      console.log('[updateType] passo 3 — payments encontrados:', userPayments.length,
+        userPayments.map(p => ({ type: p.type, month: p.month, paid: p.paid, game_id: p.game_id }))
+      )
 
       const activeGameId = activeAtt?.data().game_id as string | undefined
 
       if (newType === 'avulso') {
-        // Remove mensalidade(s) não pagas do mês atual
         for (const p of userPayments) {
-          if (p.type === 'mensalidade' && p.month === currentMonth && p.paid === false) {
+          if (p.type === 'mensalidade' && p.month === currentMonth && !p.paid) {
             await deleteDoc(p.ref)
+            console.log('[updateType] deletou mensalidade', p.month)
           }
         }
-        // Cria cobrança de jogo se não existir
         const jogoExiste = userPayments.some(p =>
-          p.type === 'jogo' &&
-          (activeGameId ? (p.game_id === activeGameId || p.month === activeGameId) : false)
+          p.type === 'jogo' && (p.game_id === activeGameId || p.month === activeGameId)
         )
         if (activeAtt && !jogoExiste && activeGameId) {
           await addDoc(collection(db, 'payments'), {
             user_id: id!, amount: 22, type: 'jogo',
             game_id: activeGameId, month: activeGameId, paid: false, created_at: now
           })
+          console.log('[updateType] criou payment de jogo para', activeGameId)
         }
       } else {
-        // Remove pagamentos de jogo não pagos
         for (const p of userPayments) {
-          if (p.type === 'jogo' && p.paid === false) await deleteDoc(p.ref)
+          if (p.type === 'jogo' && !p.paid) {
+            await deleteDoc(p.ref)
+            console.log('[updateType] deletou jogo payment')
+          }
         }
-        // Cria mensalidade do mês se não existir
         const mensExiste = userPayments.some(
           p => p.type === 'mensalidade' && p.month === currentMonth
         )
@@ -100,8 +107,10 @@ export default function AdminPlayerDetailPage() {
             user_id: id!, amount: 80, type: 'mensalidade',
             month: currentMonth, paid: false, created_at: now
           })
+          console.log('[updateType] criou mensalidade', currentMonth)
         }
       }
+      console.log('[updateType] concluído com sucesso')
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['players'] })
@@ -110,7 +119,10 @@ export default function AdminPlayerDetailPage() {
       toast.success('Tipo atualizado!')
       setShowTypeDropdown(false)
     },
-    onError: (e: any) => toast.error(`Erro: ${e?.message ?? JSON.stringify(e)}`)
+    onError: (e: any) => {
+      console.error('[updateType] ERRO:', e)
+      toast.error(`Erro: ${e?.message ?? JSON.stringify(e)}`)
+    }
   })
 
   const updateRole = useMutation({
