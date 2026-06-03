@@ -51,9 +51,11 @@ export default function AdminPlayerDetailPage() {
         attSnap.docs.map(d => ({ id: d.id, ...d.data() }))
       )
 
-      const activeAtt = attSnap.docs.find(d =>
-        d.data().status === 'confirmed' || d.data().status === 'waitlist'
-      )
+      // Ordena por game_id desc para pegar a attendance do jogo mais recente
+      const activeAtt = attSnap.docs
+        .filter(d => d.data().status === 'confirmed' || d.data().status === 'waitlist')
+        .sort((a, b) => (b.data().game_id || '').localeCompare(a.data().game_id || ''))
+        [0]
       console.log('[updateType] activeAtt:', activeAtt ? { id: activeAtt.id, ...activeAtt.data() } : 'NÃO ENCONTRADO')
 
       if (activeAtt) {
