@@ -884,29 +884,21 @@ export default function GamesPage() {
       )}
 
       {/* Botões fixos — Admin confirmado */}
-      {isAdmin && (amConfirmed || amInWaitlist || listaClosed) && (showAvulsoBtn || hasLineup || showEscalarBtn) && (
+      {isAdmin && (amConfirmed || amInWaitlist || listaClosed) && (showAvulsoBtn || showEscalarBtn) && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
           {showEscalarBtn && (
             <button onClick={() => navigate('/escalacao')}
               className="flex-1 py-4 font-medium transition-all active:scale-95"
-              style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && hasLineup ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
+              style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
               {hasLineup ? 'Editar Times' : 'Escalar Times'}
             </button>
           )}
           {showAvulsoBtn && (
             <button onClick={() => setShowAvulsoSheet(true)}
               className="flex-1 py-4 font-medium transition-all active:scale-95"
-              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && hasLineup && showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
+              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
               + Avulso Temp.
-            </button>
-          )}
-          {hasLineup && (
-            <button onClick={handleShare} disabled={sharing}
-              className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2"
-              style={{ background: (showEscalarBtn || showAvulsoBtn) ? 'var(--color-surface-secondary)' : 'var(--btn-primary-bg)', color: (showEscalarBtn || showAvulsoBtn) ? 'var(--color-fg-primary)' : 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
-              {sharing ? <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'white' }} /> : <ShareNetwork size={16} />}
-              {sharing ? '...' : 'Compartilhar'}
             </button>
           )}
         </div>
