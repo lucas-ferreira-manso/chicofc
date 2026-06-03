@@ -148,17 +148,13 @@ export default function AdminPage() {
       const currentUser = auth.currentUser
       if (!currentUser) throw new Error('Não autenticado')
       const token = await getIdToken(currentUser)
+      const now = new Date().toISOString()
+
       if (notifType === 'presenca') {
         const gameId = getNextWednesdayId()
-        const res = await fetch(`${SERVER_URL}/notify`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ gameId, message: notifMessage || 'Você ainda não confirmou presença no jogo de quarta!' })
-        })
-        if (!res.ok) throw new Error('Erro no servidor')
-        const data = await res.json()
+        const msg = notifMessage || 'Você ainda não confirmou presença no jogo de quarta!'
 
-        // Salva no Notification Center para quem não confirmou presença
+        // 1. Descobre quem não confirmou
         const [attendancesSnap, allPlayersSnap] = await Promise.all([
           getDocs(query(collection(db, 'attendances'), where('game_id', '==', gameId))),
           getDocs(query(collection(db, 'players'), where('active', '==', true)))
@@ -168,54 +164,61 @@ export default function AdminPage() {
             .filter(d => ['confirmed', 'waitlist'].includes(d.data().status))
             .map(d => d.data().user_id)
         )
-        const title = 'Confirmação de Presença'
-        const msg = notifMessage || 'Você ainda não confirmou presença no jogo de quarta!'
-        const now = new Date().toISOString()
-        const toWrite = allPlayersSnap.docs.filter(d => !confirmedIds.has(d.id))
-        await Promise.all(toWrite.map(d =>
+        const toNotify = allPlayersSnap.docs.filter(d => !confirmedIds.has(d.id))
+
+        // 2. Grava no Notification Center PRIMEIRO (independente do push)
+        await Promise.all(toNotify.map(d =>
           addDoc(collection(db, 'notifications'), {
-            user_id: d.id, title, message: msg, type: 'message', read: false, created_at: now
+            user_id: d.id, title: 'Confirmação de Presença',
+            message: msg, type: 'message', read: false, created_at: now
           })
         ))
-        return data
+
+        // 3. Tenta enviar push (falha silenciosa — in-app já foi salvo)
+        let sent = 0
+        try {
+          const res = await fetch(`${SERVER_URL}/notify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ gameId, message: msg })
+          })
+          if (res.ok) { const d = await res.json(); sent = d.sent ?? toNotify.length }
+          else sent = toNotify.length
+        } catch { sent = toNotify.length }
+
+        return { sent }
+
       } else {
         const month = format(new Date(), 'yyyy-MM')
-        // Busca quem já pagou ou submeteu pedido de pagamento — para não notificar
-        const [paidSnap, requestsSnap, unpaidJogoSnap, pendingJogoSnap] = await Promise.all([
-          getDocs(query(collection(db, 'payments'),
-            where('month', '==', month),
-            where('type', '==', 'mensalidade'),
-            where('paid', '==', true)
-          )),
-          getDocs(query(collection(db, 'payment_requests'),
-            where('month', '==', month),
-            where('player_type', '==', 'mensalista')
-          )),
-          getDocs(query(collection(db, 'payments'),
-            where('type', '==', 'jogo'),
-            where('paid', '==', false)
-          )),
-          getDocs(query(collection(db, 'payment_requests'),
-            where('player_type', '==', 'avulso'),
-            where('status', '==', 'pending')
-          )),
+
+        // Busca todos os payments e requests do mês (single where — sem índice composto)
+        const [paymentsSnap, requestsSnap] = await Promise.all([
+          getDocs(collection(db, 'payments')),
+          getDocs(collection(db, 'payment_requests'))
         ])
 
-        const paidMensalistaIds = new Set(paidSnap.docs.map(d => d.data().user_id))
-        const requestedMensalistaIds = new Set(requestsSnap.docs.map(d => d.data().user_id))
-        const avulsosWithUnpaid = new Set(unpaidJogoSnap.docs.map(d => d.data().user_id))
-        const avulsosWithPendingRequest = new Set(pendingJogoSnap.docs.map(d => d.data().user_id))
+        const payments = paymentsSnap.docs.map(d => ({ ...d.data() } as any))
+        const requests = requestsSnap.docs.map(d => ({ ...d.data() } as any))
+
+        const paidMensalistaIds = new Set(
+          payments.filter(p => p.month === month && p.type === 'mensalidade' && p.paid).map(p => p.user_id)
+        )
+        const requestedMensalistaIds = new Set(
+          requests.filter(r => r.month === month && r.player_type === 'mensalista').map(r => r.user_id)
+        )
+        const avulsosWithUnpaid = new Set(
+          payments.filter(p => p.type === 'jogo' && !p.paid).map(p => p.user_id)
+        )
+        const avulsosWithPendingRequest = new Set(
+          requests.filter(r => r.player_type === 'avulso' && r.status === 'pending').map(r => r.user_id)
+        )
 
         const activePlayers = players.filter(p => p.active)
-
-        // Mensalistas que ainda não pagaram e não submeteram pedido
         const mensalistasToNotify = activePlayers.filter(p =>
           p.player_type === 'mensalista' &&
           !paidMensalistaIds.has(p.id) &&
           !requestedMensalistaIds.has(p.id)
         )
-
-        // Avulsos com jogos pendentes e sem pedido ativo
         const avulsosToNotify = activePlayers.filter(p =>
           p.player_type === 'avulso' &&
           avulsosWithUnpaid.has(p.id) &&
@@ -225,22 +228,30 @@ export default function AdminPage() {
         const toNotify = [...mensalistasToNotify, ...avulsosToNotify]
         if (toNotify.length === 0) return { sent: 0 }
 
-        const now = new Date().toISOString()
+        // Grava no Notification Center PRIMEIRO, push depois
+        await Promise.all(toNotify.map(p => {
+          const msg = notifMessage || (p.player_type === 'mensalista'
+            ? 'Você ainda tem mensalidade pendente. Por favor, efetue o pagamento!'
+            : 'Você ainda tem pagamento de jogo pendente. Por favor, efetue o pagamento!')
+          return addDoc(collection(db, 'notifications'), {
+            user_id: p.id, title: 'Cobrança de Pagamento',
+            message: msg, type: 'message', read: false, created_at: now
+          })
+        }))
+
+        // Push em paralelo (falha silenciosa)
         const results = await Promise.all(toNotify.map(async p => {
           const msg = notifMessage || (p.player_type === 'mensalista'
             ? 'Você ainda tem mensalidade pendente. Por favor, efetue o pagamento!'
             : 'Você ainda tem pagamento de jogo pendente. Por favor, efetue o pagamento!')
-          const res = await fetch(`${SERVER_URL}/notify-cobranca`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ userId: p.id, message: msg })
-          })
-          // Salva no Notification Center do usuário
-          await addDoc(collection(db, 'notifications'), {
-            user_id: p.id, title: 'Cobrança de Pagamento', message: msg,
-            type: 'message', read: false, created_at: now
-          })
-          return res.ok ? 1 : 0
+          try {
+            const res = await fetch(`${SERVER_URL}/notify-cobranca`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ userId: p.id, message: msg })
+            })
+            return res.ok ? 1 : 0
+          } catch { return 0 }
         }))
 
         return { sent: results.reduce((a: number, b: number) => a + b, 0) }
