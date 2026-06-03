@@ -167,6 +167,7 @@ export default function GamesPage() {
   const [showAvulsoSheet, setShowAvulsoSheet] = useState(false)
   const [avulsoName, setAvulsoName] = useState('')
   const [selectedTempAvulso, setSelectedTempAvulso] = useState<TempAvulso | null>(null)
+  const [confirmRemoveAttendance, setConfirmRemoveAttendance] = useState<Attendance | null>(null)
   const shareCardRef = useRef<HTMLDivElement>(null)
 
   const { data: unreadCount = 0 } = useQuery({
@@ -525,6 +526,27 @@ export default function GamesPage() {
     onError: () => toast.error('Erro ao remover avulso')
   })
 
+  const adminRemovePlayer = useMutation({
+    mutationFn: async (attendance: Attendance) => {
+      const batch = writeBatch(db)
+      // Remove o jogador (manda para declined)
+      batch.update(doc(db, 'attendances', attendance.id), { status: 'declined' })
+      // Promove o primeiro da waitlist, se houver
+      if (waitlist.length > 0) {
+        batch.update(doc(db, 'attendances', waitlist[0].id), { status: 'confirmed' })
+      }
+      await batch.commit()
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['attendances', gameId] })
+      setConfirmRemoveAttendance(null)
+      const promoted = waitlist[0]
+      const promotedName = (promoted?.profile as any)?.name || (promoted?.profile as any)?.email
+      toast.success(promotedName ? `Jogador removido. ${promotedName} promovido da espera!` : 'Jogador removido da lista.')
+    },
+    onError: () => toast.error('Erro ao remover jogador')
+  })
+
   // Migração: cria payment para avulsos na espera que ainda não têm nenhum registro
   const paymentMigrationRef = useRef(false)
   useEffect(() => {
@@ -766,7 +788,8 @@ export default function GamesPage() {
                 </p>
               </div>
               {confirmed.map((a, i) => (
-                <PlayerRow key={a.id} attendance={a} index={i + 1} isMe={a.user_id === user?.id} />
+                <PlayerRow key={a.id} attendance={a} index={i + 1} isMe={a.user_id === user?.id}
+                  onRemove={isAdmin ? () => setConfirmRemoveAttendance(a) : undefined} />
               ))}
             </>
           )}
@@ -1048,6 +1071,59 @@ export default function GamesPage() {
       )}
 
       {/* Bottom sheet — Avulso Temporário */}
+      {/* Bottom sheet — Confirmar remoção de jogador (admin) */}
+      {confirmRemoveAttendance && (
+        <>
+          <div onClick={() => setConfirmRemoveAttendance(null)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 60 }} />
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70,
+            background: 'var(--color-bg)', borderRadius: '24px 24px 0 0',
+            padding: '24px 24px 40px', display: 'flex', flexDirection: 'column', gap: 20
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 18, color: 'var(--color-fg-primary)' }}>
+                Remover jogador
+              </p>
+              <button onClick={() => setConfirmRemoveAttendance(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
+                <X size={20} color="var(--color-fg-secondary)" />
+              </button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 16, background: 'var(--color-surface-primary)' }}>
+              <Avatar name={(confirmRemoveAttendance.profile as any)?.name || 'Jogador'} photoURL={(confirmRemoveAttendance.profile as any)?.photoURL} />
+              <div>
+                <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'var(--color-fg-primary)' }}>
+                  {(confirmRemoveAttendance.profile as any)?.name || (confirmRemoveAttendance.profile as any)?.email || 'Jogador'}
+                </p>
+                <p style={{ fontFamily: 'var(--font-primary)', fontSize: 13, color: 'var(--color-fg-secondary)', marginTop: 2 }}>
+                  {confirmRemoveAttendance.player_type === 'mensalista' ? 'Mensalista' : 'Avulso'}
+                </p>
+              </div>
+            </div>
+            <p style={{ fontFamily: 'var(--font-primary)', fontSize: 14, color: 'var(--color-fg-secondary)', lineHeight: 1.5 }}>
+              {waitlist.length > 0
+                ? `A vaga será aberta automaticamente para ${(waitlist[0].profile as any)?.name || (waitlist[0].profile as any)?.email || 'o próximo da lista de espera'}.`
+                : 'Não há ninguém na lista de espera. A vaga ficará aberta.'}
+            </p>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={() => setConfirmRemoveAttendance(null)}
+                className="flex-1 transition-all active:scale-95"
+                style={{ height: 56, borderRadius: 9999, background: 'var(--color-surface-primary)', border: 'none', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'var(--color-fg-primary)', cursor: 'pointer' }}>
+                Cancelar
+              </button>
+              <button
+                onClick={() => adminRemovePlayer.mutate(confirmRemoveAttendance)}
+                disabled={adminRemovePlayer.isPending}
+                className="flex-1 transition-all active:scale-95 disabled:opacity-40"
+                style={{ height: 56, borderRadius: 9999, background: 'var(--color-danger, #ef4444)', border: 'none', fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: '#fff', cursor: 'pointer' }}>
+                {adminRemovePlayer.isPending ? 'Removendo...' : 'Remover'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {showAvulsoSheet && (
         <>
           <div onClick={() => { setShowAvulsoSheet(false); setAvulsoName('') }}
@@ -1098,8 +1174,8 @@ export default function GamesPage() {
   )
 }
 
-function PlayerRow({ attendance, index, isMe, waitlist = false }: {
-  attendance: Attendance; index: number; isMe: boolean; waitlist?: boolean
+function PlayerRow({ attendance, index, isMe, waitlist = false, onRemove }: {
+  attendance: Attendance; index: number; isMe: boolean; waitlist?: boolean; onRemove?: () => void
 }) {
   const name = (attendance.profile as any)?.name || (attendance.profile as any)?.email || 'Jogador'
   const photoURL = (attendance.profile as any)?.photoURL
@@ -1131,6 +1207,13 @@ function PlayerRow({ attendance, index, isMe, waitlist = false }: {
           style={{ background: '#fff3cd', color: '#856404', fontFamily: 'var(--font-primary)' }}>
           Mensalista
         </span>
+      )}
+
+      {onRemove && (
+        <button onClick={onRemove}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', marginLeft: 4, flexShrink: 0 }}>
+          <X size={18} color="var(--color-fg-secondary)" />
+        </button>
       )}
     </div>
   )
