@@ -466,9 +466,13 @@ export default function CaixinhaPage() {
   const mensalistaValue = config?.mensalistaValue ?? 80
   const saldoTotal = SALDO_INICIAL + avulsoPaid + mensalistaPaid - totalDespesas - extrasCost
 
-  const byMonth = mensalidadePayments.reduce((acc, p) => {
-    if (!acc[p.month]) acc[p.month] = []
-    acc[p.month].push(p)
+  // Agrupa todos os pagamentos por mês (mensalidade + jogo pago), normalizando para yyyy-MM
+  const byMonth = payments.reduce((acc, p) => {
+    // jogo pendente (não pago) fica apenas na seção "Por jogo"
+    if (p.type === 'jogo' && !p.paid) return acc
+    const monthKey = p.month.substring(0, 7)
+    if (!acc[monthKey]) acc[monthKey] = []
+    acc[monthKey].push(p)
     return acc
   }, {} as Record<string, Payment[]>)
 
@@ -507,7 +511,7 @@ export default function CaixinhaPage() {
             style={{ background: 'var(--color-surface-accent)', color: 'white', fontFamily: 'var(--font-primary)' }}>OK</button>
         </div>
       ) : (
-        <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {value.toFixed(2)}</p>
+        <p style={{ color: 'var(--color-danger)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {value.toFixed(2)}</p>
       )}
     </div>
   )
@@ -532,7 +536,7 @@ export default function CaixinhaPage() {
         {/* Card financeiro */}
         <div className="flex flex-col gap-5 p-5 rounded-[20px]" style={{ background: 'var(--color-surface-primary)' }}>
           <div className="flex flex-col gap-2">
-            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Saldo Total</p>
+            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Saldo Caixinha</p>
             <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>R$ {saldoTotal.toFixed(2)}</p>
           </div>
           <div className="flex gap-5">
@@ -730,11 +734,12 @@ export default function CaixinhaPage() {
 
         {(jogoPayments.length > 0 || Object.keys(byMonth).length > 0) && <div style={{ height: 1, background: 'var(--color-border)' }} />}
 
-        {(jogoPayments.length > 0 || (isAdmin && allTempAvulsos.some((t: any) => !t.paid))) && !playerData?.player_type?.includes('avulso') && (
+        {/* "Por jogo" exibe apenas pagamentos de jogo PENDENTES + avulsos temp não pagos */}
+        {(jogoPayments.some(p => !p.paid) || (isAdmin && allTempAvulsos.some((t: any) => !t.paid))) && (
           <section>
             <p className="font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>Por jogo — avulsos</p>
             <div className="flex flex-col gap-2">
-              {jogoPayments.map(p => <PaymentRow key={p.id} payment={p} onToggle={() => setSelectedPayment(p)} isAdmin={isAdmin} />)}
+              {jogoPayments.filter(p => !p.paid).map(p => <PaymentRow key={p.id} payment={p} onToggle={() => setSelectedPayment(p)} isAdmin={isAdmin} />)}
               {isAdmin && allTempAvulsos.filter((t: any) => !t.paid).map((t: any) => (
                 <button key={t.id} onClick={() => setSelectedTempAvulso(t)}
                   className="w-full flex items-center gap-3 p-4 rounded-3xl transition-all active:scale-[0.99]"
@@ -757,7 +762,7 @@ export default function CaixinhaPage() {
           </section>
         )}
 
-        {playerData?.player_type !== 'avulso' && (() => {
+        {Object.keys(byMonth).length > 0 && (() => {
           const sortedMonths = Object.keys(byMonth).sort((a, b) => b.localeCompare(a))
           const latestMonth = sortedMonths[0]
           return sortedMonths.map(monthKey => {
