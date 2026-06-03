@@ -102,9 +102,9 @@ function getTuesdayAt16h(gameDate: Date): Date {
   return tuesday
 }
 
-function getWednesdayAt22h(gameDate: Date): Date {
+function getWednesdayAt9h(gameDate: Date): Date {
   const wednesday = new Date(gameDate)
-  wednesday.setHours(22, 0, 0, 0)
+  wednesday.setHours(9, 0, 0, 0)
   return wednesday
 }
 
@@ -112,7 +112,7 @@ function shouldShowAvulsoButton(gameDate: Date, totalConfirmed: number): boolean
   const now = new Date()
   return (
     isAfter(now, getTuesdayAt16h(gameDate)) &&
-    !isAfter(now, getWednesdayAt22h(gameDate)) &&
+    !isAfter(now, getWednesdayAt9h(gameDate)) &&
     totalConfirmed < 14
   )
 }
@@ -322,8 +322,7 @@ export default function GamesPage() {
   const avulsoWindowOpen = shouldShowAvulsoButton(gameDate, totalConfirmed)
   const showAvulsoBtn = amConfirmed && avulsoWindowOpen
 
-  const closeTime = new Date(gameDate)
-  closeTime.setHours(19, 30, 0, 0)
+  const closeTime = getWednesdayAt9h(gameDate)
   const listaClosed = isAfter(new Date(), closeTime)
 
   const escalacaoCloseTime = new Date(gameDate)
@@ -463,11 +462,14 @@ export default function GamesPage() {
 
       const batch = writeBatch(db)
       if (myAttendance) {
-        // Promove próximo da fila se o que saiu estava confirmado
+        // Promove próximo da fila se o que saiu estava confirmado + reseta escalação
         if (myAttendance.status === 'confirmed' && waitlist.length > 0) {
           const next = waitlist[0]
           batch.update(doc(db, 'attendances', next.id), { status: 'confirmed' })
-          // Pagamento do próximo já existe desde que entrou na espera — não cria de novo
+        }
+        // Se estava confirmado, apaga a escalação — admin precisa re-escalar
+        if (myAttendance.status === 'confirmed') {
+          batch.delete(doc(db, 'lineups', gameId))
         }
         batch.update(doc(db, 'attendances', myAttendance.id), { status: 'declined' })
         // Remove pagamento pendente ao sair da pelada
@@ -488,6 +490,7 @@ export default function GamesPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attendances', gameId] })
+      qc.invalidateQueries({ queryKey: ['lineup', gameId] })
       toast('Muié não deixou 😅')
     },
     onError: () => toast.error('Erro ao registrar ausência')
