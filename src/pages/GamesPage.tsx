@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { collection, getDocs, query, where, doc, getDoc, writeBatch, addDoc, deleteDoc, orderBy } from 'firebase/firestore'
+import { collection, getDocs, query, where, doc, getDoc, writeBatch, addDoc, deleteDoc, orderBy, updateDoc, arrayRemove } from 'firebase/firestore'
 import { getAuth, getIdToken } from 'firebase/auth'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
@@ -465,9 +465,17 @@ export default function GamesPage() {
           const next = waitlist[0]
           batch.update(doc(db, 'attendances', next.id), { status: 'confirmed' })
         }
-        // Se estava confirmado, apaga a escalação — admin precisa re-escalar
-        if (myAttendance.status === 'confirmed') {
-          batch.delete(doc(db, 'lineups', gameId))
+        // Se estava confirmado e está escalado, remove do time (blue ou black)
+        if (myAttendance.status === 'confirmed' && hasLineup) {
+          const lineupRef = doc(db, 'lineups', gameId)
+          const inBlue = lineup.blue.includes(user!.id)
+          const inBlack = lineup.black.includes(user!.id)
+          if (inBlue || inBlack) {
+            await updateDoc(lineupRef, {
+              ...(inBlue && { blue: arrayRemove(user!.id) }),
+              ...(inBlack && { black: arrayRemove(user!.id) }),
+            })
+          }
         }
         batch.update(doc(db, 'attendances', myAttendance.id), { status: 'declined' })
         // Remove pagamento pendente ao sair da pelada
