@@ -614,9 +614,11 @@ export default function GamesPage() {
     <div className="flex flex-col min-h-full pb-40" style={{ background: 'var(--color-bg)' }}>
 
       <Header
-        title="Próximo Jogo"
+        title="Nosso Jogo"
         subtitle={`${gameDateStr} | Quarta-feira, 21:30`}
         subtitle2="Campo 9E10"
+        chinelinhoActive={chinelinhoActive}
+        onChinelinhoClick={() => navigate('/profile')}
         rightContent={
           <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
             {/* Bell com badge de unread */}
@@ -637,8 +639,8 @@ export default function GamesPage() {
                 </span>
               )}
             </button>
-            {/* HandPalm — sair da pelada (só quando confirmado ou em espera) */}
-            {(amConfirmed || amInWaitlist) && (
+            {/* HandPalm — sair da pelada (só quando confirmado/espera e SEM modo chinelinho) */}
+            {(amConfirmed || amInWaitlist) && !chinelinhoActive && (
               <button
                 onClick={() => handleDecline.mutate()}
                 disabled={isPending}
@@ -650,7 +652,7 @@ export default function GamesPage() {
         }
       />
 
-      <div style={{ height: 120 }} />
+      <div style={{ height: 104 }} />
 
       {/* Counter + progress */}
       <div className="px-6 mb-4">
