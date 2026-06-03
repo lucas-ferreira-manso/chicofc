@@ -190,7 +190,7 @@ export default function EscalacaoPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-full pb-32" style={{ background: 'var(--color-bg)' }}>
+    <div className="flex flex-col min-h-screen" style={{ background: 'var(--color-bg)', paddingBottom: 'calc(120px + env(safe-area-inset-bottom))' }}>
 
       {/* Header */}
       <div className="px-6 pt-12 pb-4 flex items-center gap-3"

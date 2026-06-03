@@ -76,7 +76,7 @@ export default function RankingVotacaoPage() {
   const rest = cheiaRanking.slice(3)
 
   return (
-    <div className="flex flex-col min-h-full pb-28" style={{ background: 'var(--color-bg)' }}>
+    <div className="flex flex-col min-h-screen" style={{ background: 'var(--color-bg)', paddingBottom: 'calc(120px + env(safe-area-inset-bottom))' }}>
 
       {/* Header com back button */}
       <div className="fixed top-0 inset-x-0 z-40" style={{ background: 'var(--color-bg)', borderBottom: '1px solid var(--color-border)' }}>

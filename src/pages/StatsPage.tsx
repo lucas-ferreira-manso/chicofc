@@ -1088,7 +1088,7 @@ export default function StatsPage() {
     : (rankingUpdatedStr ? `Atualizado ${rankingUpdatedStr}` : 'Ranking geral')
 
   return (
-    <div className="flex flex-col min-h-full pb-28" style={{ background: 'var(--color-bg)' }}>
+    <div className="flex flex-col min-h-screen" style={{ background: 'var(--color-bg)', paddingBottom: 'calc(160px + env(safe-area-inset-bottom))' }}>
       <Header title="Stats" subtitle={subtitle} />
       <div style={{ height: 96 }} />
 

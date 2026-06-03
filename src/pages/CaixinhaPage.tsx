@@ -517,7 +517,7 @@ export default function CaixinhaPage() {
   )
 
   return (
-    <div className="flex flex-col min-h-full pb-28" style={{ background: 'var(--color-bg)' }}>
+    <div className="flex flex-col min-h-screen" style={{ background: 'var(--color-bg)', paddingBottom: 'calc(120px + env(safe-area-inset-bottom))' }}>
       <Header
         title="Caixinha"
         subtitle={`Total de usuários: ${players.length}`}

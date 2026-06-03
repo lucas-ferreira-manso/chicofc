@@ -204,5 +204,5 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-#root { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+#root { min-height: 100dvh; display: flex; flex-direction: column; }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
