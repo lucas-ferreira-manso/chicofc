@@ -358,11 +358,6 @@ export default function AdminPlayerDetailPage() {
                 desativação manual
               </p>
             )}
-            {!isOwnProfile && (
-              <p style={{ fontFamily: 'var(--font-primary)', fontSize: 11, color: 'var(--color-fg-secondary)' }}>
-                apenas o próprio usuário pode alterar
-              </p>
-            )}
           </div>
           {isOwnProfile ? (
             <Toggle
