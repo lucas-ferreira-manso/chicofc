@@ -177,28 +177,109 @@ export default function GamesPage() {
   })
 
   const handleShare = async () => {
-    if (!shareCardRef.current) return
     setSharing(true)
     try {
-      const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(shareCardRef.current, {
-        backgroundColor: '#ffffff', scale: 2, useCORS: true, logging: false
-      })
+      const scale = 2
+      const W = 390
+
+      // Calcula altura dinamicamente
+      const rowH = 40
+      const teamH = (ids: string[]) => 32 + ids.length * rowH + 16
+      const totalH = 72 + teamH(lineup.blue) + teamH(lineup.black) + 32
+
+      const canvas = document.createElement('canvas')
+      canvas.width = W * scale
+      canvas.height = totalH * scale
+      const ctx = canvas.getContext('2d')!
+      ctx.scale(scale, scale)
+
+      // Fundo
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, W, totalH)
+
+      // Rounded rect helper
+      const rRect = (x: number, y: number, w: number, h: number, r: number) => {
+        ctx.beginPath()
+        ctx.moveTo(x + r, y)
+        ctx.lineTo(x + w - r, y)
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+        ctx.lineTo(x + w, y + h - r)
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
+        ctx.lineTo(x + r, y + h)
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r)
+        ctx.lineTo(x, y + r)
+        ctx.quadraticCurveTo(x, y, x + r, y)
+        ctx.closePath()
+      }
+
+      // Header
+      ctx.font = 'bold 18px system-ui, -apple-system, sans-serif'
+      ctx.fillStyle = '#1a1a1a'
+      ctx.fillText('ChicoFC ⚽', 24, 42)
+      ctx.font = '13px system-ui, -apple-system, sans-serif'
+      ctx.fillStyle = '#8e8e93'
+      ctx.fillText(`${gameDateStr} | Quarta-feira, 21:30`, 24, 62)
+
+      let y = 82
+      for (const team of ['blue', 'black'] as const) {
+        const ids = team === 'blue' ? lineup.blue : lineup.black
+        const label = team === 'blue' ? '🔵 Time Azul' : '⚫ Time Preto'
+
+        ctx.font = 'bold 13px system-ui, -apple-system, sans-serif'
+        ctx.fillStyle = '#1a1a1a'
+        ctx.fillText(label, 24, y + 16)
+        y += 32
+
+        ids.forEach((uid, i) => {
+          const att = confirmed.find(a => a.user_id === uid)
+          const tempAvulso = tempAvulsos.find(t => `temp_${t.id}` === uid)
+          const name = (att as any)?.profile?.name || (att as any)?.profile?.email || tempAvulso?.name || uid
+
+          ctx.fillStyle = '#f8f8f8'
+          rRect(24, y, W - 48, 32, 10)
+          ctx.fill()
+
+          ctx.font = '12px system-ui, -apple-system, sans-serif'
+          ctx.fillStyle = '#8e8e93'
+          ctx.fillText(`${i + 1}`, 36, y + 21)
+
+          ctx.font = '500 14px system-ui, -apple-system, sans-serif'
+          ctx.fillStyle = '#1a1a1a'
+          ctx.fillText(name, 58, y + 21)
+
+          y += rowH
+        })
+        y += 16
+      }
+
+      // Footer
+      ctx.font = '11px system-ui, -apple-system, sans-serif'
+      ctx.fillStyle = '#c7c7cc'
+      ctx.textAlign = 'center'
+      ctx.fillText('chicofc.vercel.app', W / 2, totalH - 12)
+
       canvas.toBlob(async (blob) => {
-        if (!blob) return
+        setSharing(false)
+        if (!blob) { toast.error('Erro ao gerar imagem'); return }
         const file = new File([blob], 'escalacao-chicofc.png', { type: 'image/png' })
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: 'Escalação ChicoFC ⚽' })
-        } else {
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url; a.download = 'escalacao-chicofc.png'; a.click()
-          URL.revokeObjectURL(url)
-          toast.success('Imagem salva!')
-        }
+        try {
+          if (navigator.share && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: 'Escalação ChicoFC ⚽' })
+          } else {
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url; a.download = 'escalacao-chicofc.png'; a.click()
+            URL.revokeObjectURL(url)
+            toast.success('Imagem salva!')
+          }
+        } catch { /* usuário cancelou o share */ }
       }, 'image/png')
-    } catch { toast.error('Erro ao gerar imagem') }
-    finally { setSharing(false) }
+
+    } catch (e) {
+      console.error(e)
+      toast.error('Erro ao gerar imagem')
+      setSharing(false)
+    }
   }
 
   const gameDate = getNextWednesday()
