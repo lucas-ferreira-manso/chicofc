@@ -102,9 +102,9 @@ function getTuesdayAt16h(gameDate: Date): Date {
   return tuesday
 }
 
-function getWednesdayAt9h(gameDate: Date): Date {
+function getWednesdayAt21h(gameDate: Date): Date {
   const wednesday = new Date(gameDate)
-  wednesday.setHours(9, 0, 0, 0)
+  wednesday.setHours(21, 0, 0, 0)
   return wednesday
 }
 
@@ -112,7 +112,7 @@ function shouldShowAvulsoButton(gameDate: Date, totalConfirmed: number): boolean
   const now = new Date()
   return (
     isAfter(now, getTuesdayAt16h(gameDate)) &&
-    !isAfter(now, getWednesdayAt9h(gameDate)) &&
+    !isAfter(now, getWednesdayAt21h(gameDate)) &&
     totalConfirmed < 14
   )
 }
@@ -322,14 +322,12 @@ export default function GamesPage() {
   const avulsoWindowOpen = shouldShowAvulsoButton(gameDate, totalConfirmed)
   const showAvulsoBtn = amConfirmed && avulsoWindowOpen
 
-  const closeTime = getWednesdayAt9h(gameDate)
+  const closeTime = getWednesdayAt21h(gameDate)
   const listaClosed = isAfter(new Date(), closeTime)
 
-  const escalacaoCloseTime = new Date(gameDate)
-  escalacaoCloseTime.setHours(21, 30, 0, 0)
-  const escalacaoClosed = isAfter(new Date(), escalacaoCloseTime)
+  const escalacaoClosed = isAfter(new Date(), getWednesdayAt21h(gameDate))
 
-  // "Escalar Times" só aparece: quarta-feira, após 16h, mínimo 12 confirmados, antes das 21h30
+  // "Escalar Times" só aparece: quarta-feira, após 16h, mínimo 12 confirmados, antes das 21h
   const escalacaoOpenTime = new Date(gameDate)
   escalacaoOpenTime.setHours(16, 0, 0, 0)
   const showEscalarBtn = isWednesday(startOfDay(new Date()))
