@@ -1218,11 +1218,33 @@ export default function GamesPage() {
   )
 }
 
+function ChinelinhoTag() {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      height: 24, padding: '1px 8px',
+      background: 'var(--color-surface-primary)',
+      border: '1px solid var(--color-border)',
+      borderRadius: 16, flexShrink: 0, whiteSpace: 'nowrap'
+    }}>
+      <span style={{ fontFamily: 'var(--font-primary)', fontSize: 11, fontWeight: 400, color: 'var(--color-fg-primary)', lineHeight: 1 }}>
+        Modo Chinelinho
+      </span>
+      <span style={{ fontSize: 13, lineHeight: 1 }}>🩴</span>
+    </span>
+  )
+}
+
+function isChinelinho(profile: any): boolean {
+  return !!(profile?.chinelinhoActive && (!profile?.chinelinhoUntil || new Date(profile.chinelinhoUntil) > new Date()))
+}
+
 function PlayerRow({ attendance, index, isMe, waitlist = false, onRemove }: {
   attendance: Attendance; index: number; isMe: boolean; waitlist?: boolean; onRemove?: () => void
 }) {
   const name = (attendance.profile as any)?.name || (attendance.profile as any)?.email || 'Jogador'
   const photoURL = (attendance.profile as any)?.photoURL
+  const chinelinho = isChinelinho(attendance.profile)
 
   return (
     <div className="flex items-center gap-3 p-4 rounded-3xl"
@@ -1240,13 +1262,15 @@ function PlayerRow({ attendance, index, isMe, waitlist = false, onRemove }: {
         {isMe && <span className="ml-1" style={{ color: 'var(--color-fg-secondary)', fontSize: 'var(--font-size-14)' }}>(você)</span>}
       </p>
 
-      {attendance.player_type === 'avulso' && (
+      {chinelinho && <ChinelinhoTag />}
+
+      {!chinelinho && attendance.player_type === 'avulso' && (
         <span className="px-2 py-0.5 rounded-full text-xs font-medium"
           style={{ background: '#e6f4ea', color: '#166634', fontFamily: 'var(--font-primary)' }}>
           R$22
         </span>
       )}
-      {attendance.player_type === 'mensalista' && !waitlist && (
+      {!chinelinho && attendance.player_type === 'mensalista' && !waitlist && (
         <span className="px-2 py-0.5 rounded-full text-xs font-medium"
           style={{ background: '#fff3cd', color: '#856404', fontFamily: 'var(--font-primary)' }}>
           Mensalista

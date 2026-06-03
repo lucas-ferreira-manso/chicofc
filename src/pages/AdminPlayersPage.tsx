@@ -16,7 +16,12 @@ function getInitials(name: string): string {
   return name.trim().split(' ').filter(Boolean).slice(0, 2).map(n => n[0].toUpperCase()).join('')
 }
 
+function isChinelinho(player: Profile): boolean {
+  return !!((player as any).chinelinhoActive && (!(player as any).chinelinhoUntil || new Date((player as any).chinelinhoUntil) > new Date()))
+}
+
 function PlayerRow({ player, onClick }: { player: Profile; onClick: () => void }) {
+  const chinelinho = isChinelinho(player)
   return (
     <button onClick={onClick} style={{
       width: '100%', background: 'var(--color-surface-primary)',
@@ -43,6 +48,20 @@ function PlayerRow({ player, onClick }: { player: Profile; onClick: () => void }
       }}>
         {player.name}
       </p>
+      {chinelinho && (
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          height: 24, padding: '1px 8px',
+          background: 'var(--color-surface-secondary)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 16, flexShrink: 0, whiteSpace: 'nowrap'
+        }}>
+          <span style={{ fontFamily: 'var(--font-primary)', fontSize: 11, fontWeight: 400, color: 'var(--color-fg-primary)', lineHeight: 1 }}>
+            Modo Chinelinho
+          </span>
+          <span style={{ fontSize: 13, lineHeight: 1 }}>🩴</span>
+        </span>
+      )}
     </button>
   )
 }

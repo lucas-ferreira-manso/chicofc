@@ -5,6 +5,7 @@ import { doc, updateDoc, addDoc, deleteDoc, collection, getDocs, query, where, g
 import { getAuth, getIdToken } from 'firebase/auth'
 import { format, isWednesday, nextWednesday, startOfDay, isAfter } from 'date-fns'
 import { db } from '../lib/firebase'
+import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
 import { CaretLeft, TrashSimple, CaretDown, X } from '@phosphor-icons/react'
 import Toggle from '../components/Toggle'
@@ -22,6 +23,8 @@ export default function AdminPlayerDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const currentUser = useAuthStore(s => s.user)
+  const isOwnProfile = currentUser?.id === id
 
   const [showDeleteSheet, setShowDeleteSheet] = useState(false)
   const [showTypeDropdown, setShowTypeDropdown] = useState(false)
@@ -336,7 +339,7 @@ export default function AdminPlayerDetailPage() {
           </div>
         )}
 
-        {/* Toggle Modo Chinelinho */}
+        {/* Toggle Modo Chinelinho — só editável pelo próprio usuário */}
         <div style={{
           background: 'var(--color-surface-primary)', borderRadius: 24, height: 64,
           padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
@@ -355,15 +358,24 @@ export default function AdminPlayerDetailPage() {
                 desativação manual
               </p>
             )}
+            {!isOwnProfile && (
+              <p style={{ fontFamily: 'var(--font-primary)', fontSize: 11, color: 'var(--color-fg-secondary)' }}>
+                apenas o próprio usuário pode alterar
+              </p>
+            )}
           </div>
-          <Toggle
-            active={isChinelinhoActive}
-            onChange={v => {
-              if (v) setShowChinelinhoSheet(true)
-              else updateChinelinho.mutate({ active: false, until: null })
-            }}
-            disabled={updateChinelinho.isPending}
-          />
+          {isOwnProfile ? (
+            <Toggle
+              active={isChinelinhoActive}
+              onChange={v => {
+                if (v) setShowChinelinhoSheet(true)
+                else updateChinelinho.mutate({ active: false, until: null })
+              }}
+              disabled={updateChinelinho.isPending}
+            />
+          ) : (
+            <Toggle active={isChinelinhoActive} onChange={() => {}} disabled />
+          )}
         </div>
 
         {/* Botão Cobrar */}
