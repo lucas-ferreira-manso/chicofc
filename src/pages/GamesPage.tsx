@@ -907,7 +907,7 @@ export default function GamesPage() {
       )}
 
       {/* Botões fixos — Admin NÃO confirmado: [Escalar] + Confirmar Presença + Muié não deixa */}
-      {isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && (
+      {isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && (showEscalarBtn || !chinelinhoActive) && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
           {showEscalarBtn && (
@@ -917,14 +917,7 @@ export default function GamesPage() {
               {hasLineup ? 'Editar Times' : 'Escalar Times'}
             </button>
           )}
-          {chinelinhoActive ? (
-            <button
-              disabled
-              className="flex-1 py-4 font-medium"
-              style={{ background: 'var(--color-surface-secondary)', color: 'var(--color-fg-secondary)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500, border: 'none', cursor: 'default' }}>
-              🩴 Chinelinho ativo
-            </button>
-          ) : (
+          {!chinelinhoActive && (
             <button
               onClick={() => handleConfirm.mutate()}
               disabled={isPending}
@@ -953,25 +946,16 @@ export default function GamesPage() {
       )}
 
       {/* Botões fixos — Jogador não confirmado: Bora Jogar / Muié não deixa */}
-      {!isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && (
+      {!isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && !chinelinhoActive && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
-          {chinelinhoActive ? (
-            <button
-              disabled
-              className="flex-1 py-4 font-medium"
-              style={{ background: 'var(--color-surface-secondary)', color: 'var(--color-fg-secondary)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500, border: 'none', cursor: 'default' }}>
-              🩴 Modo Chinelinho ativo
-            </button>
-          ) : (
-            <button
-              onClick={() => handleConfirm.mutate()}
-              disabled={isPending}
-              className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
-              {handleConfirm.isPending ? '...' : 'Bora Jogar'}
-            </button>
-          )}
+          <button
+            onClick={() => handleConfirm.mutate()}
+            disabled={isPending}
+            className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
+            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+            {handleConfirm.isPending ? '...' : 'Bora Jogar'}
+          </button>
           {amDeclined && avulsoWindowOpen ? (
             <button
               onClick={() => setShowAvulsoSheet(true)}
@@ -979,7 +963,7 @@ export default function GamesPage() {
               style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
               Adicionar Avulso
             </button>
-          ) : !chinelinhoActive ? (
+          ) : (
             <button
               onClick={() => !amDeclined && handleDecline.mutate()}
               disabled={isPending || amDeclined}
@@ -987,7 +971,7 @@ export default function GamesPage() {
               style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500, opacity: amDeclined ? 0.5 : 1 }}>
               {handleDecline.isPending ? '...' : 'Muié não deixa'}
             </button>
-          ) : null}
+          )}
         </div>
       )}
 
