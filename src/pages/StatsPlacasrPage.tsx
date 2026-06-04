@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useLockBodyScroll } from '../lib/useLockBodyScroll'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { format } from 'date-fns'
@@ -27,6 +28,7 @@ export default function StatsPlacasrPage() {
   const qc = useQueryClient()
 
   const [showSheet, setShowSheet] = useState(false)
+  useLockBodyScroll(showSheet)
   const [blueGoals, setBlueGoals] = useState('')
   const [yellowGoals, setYellowGoals] = useState('')
 

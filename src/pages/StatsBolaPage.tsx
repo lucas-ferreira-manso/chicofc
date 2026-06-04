@@ -9,6 +9,7 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
 import type { PlayerInfo, HistoryEntry } from '../lib/playerStats'
+import { useLockBodyScroll } from '../lib/useLockBodyScroll'
 import {
   BadgeVotacao, BigCard, SmallCardVotacao, VotingSheet,
   computeWinner, getLastWednesdayId, isVotingOpen
@@ -69,6 +70,7 @@ export default function StatsBolaPage() {
   const [pendingCheia, setPendingCheia] = useState<string | null>(null)
   const [pendingMurcha, setPendingMurcha] = useState<string | null>(null)
   const [historySheet, setHistorySheet] = useState<HistoryEntry | null>(null)
+  useLockBodyScroll(!!(sheetType || historySheet))
   const [sharing, setSharing] = useState(false)
   const shareCardRef = useRef<HTMLDivElement>(null)
   const historyShareRef = useRef<HTMLDivElement>(null)

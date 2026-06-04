@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 import type { Attendance } from '../types'
 import Header from '../components/layout/Header'
+import { useLockBodyScroll } from '../lib/useLockBodyScroll'
 
 const MAX_PLAYERS = 16
 const SERVER_URL = 'https://chicofc-server.onrender.com'
@@ -168,6 +169,7 @@ export default function GamesPage() {
   const [avulsoName, setAvulsoName] = useState('')
   const [selectedTempAvulso, setSelectedTempAvulso] = useState<TempAvulso | null>(null)
   const [confirmRemoveAttendance, setConfirmRemoveAttendance] = useState<Attendance | null>(null)
+  useLockBodyScroll(!!(showAvulsoSheet || selectedTempAvulso || confirmRemoveAttendance))
   const shareCardRef = useRef<HTMLDivElement>(null)
 
   const { data: unreadCount = 0 } = useQuery({

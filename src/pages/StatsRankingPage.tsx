@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { CaretLeft, CaretRight, Info, SoccerBall, X } from '@phosphor-icons/react'
 import { useAuthStore } from '../store/authStore'
 import { fetchFullRanking, type RankingEntry } from '../lib/playerStats'
+import { useLockBodyScroll } from '../lib/useLockBodyScroll'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -220,6 +221,7 @@ export default function StatsRankingPage() {
   const navigate = useNavigate()
   const [selected, setSelected] = useState<{ entry: RankingEntry; position: number } | null>(null)
   const [showFormula, setShowFormula] = useState(false)
+  useLockBodyScroll(!!(selected || showFormula))
 
   const { data: ranking = [], isLoading } = useQuery({
     queryKey: ['full-ranking'],
