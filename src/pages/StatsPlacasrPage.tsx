@@ -104,24 +104,22 @@ export default function StatsPlacasrPage() {
           </div>
         ) : (
           <>
-            {/* Placar Atual */}
-            <div style={{ background: 'var(--color-surface-primary)', borderRadius: 24, padding: '24px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                  <img src="/team-blue.png" alt="Time Azul" style={{ width: 56, height: 56, objectFit: 'contain' }} />
-                  <div style={{ textAlign: 'center' }}>
-                    <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 36, color: 'var(--color-fg-primary)', lineHeight: 1 }}>{String(blueWins).padStart(2, '0')}</p>
-                    <p style={{ fontFamily: 'var(--font-primary)', fontSize: 13, color: 'var(--color-fg-secondary)', marginTop: 4 }}>Vitórias</p>
-                  </div>
+            {/* Placar Atual — fiel ao Figma: logo + número lado a lado, p-16 */}
+            <div style={{ background: 'var(--color-surface-primary)', borderRadius: 20, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
+                <img src="/team-blue.png" alt="Time Azul" style={{ width: 56, height: 56, objectFit: 'contain', flexShrink: 0 }} />
+                <div>
+                  <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)', lineHeight: 1 }}>{String(blueWins).padStart(2, '0')}</p>
+                  <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 400, fontSize: 11, color: 'var(--color-fg-primary)', textAlign: 'center' }}>Vitórias</p>
                 </div>
-                <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 28, color: 'var(--color-fg-secondary)' }}>×</p>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                  <img src="/team-yellow.png" alt="Time Preto" style={{ width: 56, height: 56, objectFit: 'contain' }} />
-                  <div style={{ textAlign: 'center' }}>
-                    <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 36, color: 'var(--color-fg-primary)', lineHeight: 1 }}>{String(yellowWins).padStart(2, '0')}</p>
-                    <p style={{ fontFamily: 'var(--font-primary)', fontSize: 13, color: 'var(--color-fg-secondary)', marginTop: 4 }}>Vitórias</p>
-                  </div>
+              </div>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)' }}>x</p>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)', lineHeight: 1 }}>{String(yellowWins).padStart(2, '0')}</p>
+                  <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 400, fontSize: 11, color: 'var(--color-fg-primary)', textAlign: 'center' }}>Vitórias</p>
                 </div>
+                <img src="/team-yellow.png" alt="Time Preto" style={{ width: 56, height: 56, objectFit: 'contain', flexShrink: 0 }} />
               </div>
             </div>
 
