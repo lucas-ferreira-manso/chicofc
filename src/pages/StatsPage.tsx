@@ -4,10 +4,11 @@ import { doc, getDoc, collection, getDocs } from 'firebase/firestore'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { CaretRight, SoccerBall } from '@phosphor-icons/react'
+import { useRef } from 'react'
 import { db } from '../lib/firebase'
 import Header from '../components/layout/Header'
 import { fetchFullRanking, type RankingEntry } from '../lib/playerStats'
-import { getLastWednesdayId, computeWinner } from '../components/stats/VotacaoComponents'
+import { getLastWednesdayId, computeWinner, BigCard } from '../components/stats/VotacaoComponents'
 import type { HistoryEntry } from '../lib/playerStats'
 
 // ─── Data ──────────────────────────────────────────────────────────────────────
@@ -97,26 +98,13 @@ function RankingPreviewRow({ entry, position }: { entry: RankingEntry; position:
   )
 }
 
-// Foto mini do vencedor para o card de votação
-function MiniPhoto({ player }: { player: { name: string; photoURL?: string } | null }) {
-  return (
-    <div style={{ width: 63, height: 71, borderRadius: 16, overflow: 'hidden', flexShrink: 0, background: 'var(--color-surface-secondary)', position: 'relative' }}>
-      {player?.photoURL ? (
-        <img src={player.photoURL} alt={player.name} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
-      ) : player ? (
-        <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 22, color: 'var(--color-badge-initials)', opacity: 0.5 }}>
-          {getInitials(player.name)}
-        </span>
-      ) : null}
-    </div>
-  )
-}
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function StatsPage() {
   const navigate = useNavigate()
   const gameId = getLastWednesdayId()
+  const dummyCardRef = useRef<HTMLDivElement>(null)
 
   const { data: score } = useQuery({ queryKey: ['score'], queryFn: fetchScoreData, staleTime: 60_000 })
   const { data: ranking = [] } = useQuery({ queryKey: ['full-ranking'], queryFn: fetchFullRanking, staleTime: 5 * 60_000 })
@@ -140,37 +128,17 @@ export default function StatsPage() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '16px 24px 0' }}>
 
-        {/* Card Bola Cheia/Murcha — resultado da última votação */}
-        <button onClick={() => navigate('/stats/bola-cheia')} style={{ borderRadius: 16, overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '20px 16px 16px', border: 'none', cursor: 'pointer', background: 'transparent', width: '100%', minHeight: 180 }}>
-          <img src="/stadium-bg.png" aria-hidden alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.38)', pointerEvents: 'none' }} />
-
-          <img src="/team-blue.png" alt="ChicoFC" style={{ width: 48, height: 48, objectFit: 'contain', position: 'relative', flexShrink: 0 }} />
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%', textAlign: 'center', position: 'relative' }}>
-            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 18, lineHeight: '22px', color: 'white' }}>
-              {lastVotacao ? 'Parabéns aos envolvidos!' : 'Bola Cheia / Bola Murcha'}
-            </p>
-            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 14, color: 'rgba(255,255,255,0.85)' }}>
-              {lastVotacao && votacaoDateLabel ? `Pelada de ${votacaoDateLabel}` : 'Vote e veja o resultado da rodada'}
-            </p>
-          </div>
-
-          {lastVotacao && (lastVotacao.cheiaWinner || lastVotacao.murchaWinner) && (
-            <div style={{ display: 'flex', justifyContent: 'space-around', width: '100%', position: 'relative', padding: '8px 24px 0' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                <MiniPhoto player={lastVotacao.cheiaWinner} />
-                <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 12, color: 'white', lineHeight: 1 }}>Bola Cheia</p>
-                <p style={{ fontFamily: 'var(--font-primary)', fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>{lastVotacao.cheiaWinner?.name ?? '—'}</p>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                <MiniPhoto player={lastVotacao.murchaWinner} />
-                <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 12, color: 'white', lineHeight: 1 }}>Bola Murcha</p>
-                <p style={{ fontFamily: 'var(--font-primary)', fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>{lastVotacao.murchaWinner?.name ?? '—'}</p>
-              </div>
-            </div>
-          )}
-        </button>
+        {/* Card Bola Cheia/Murcha — clicável, navega para a tela completa */}
+        <div onClick={() => navigate('/stats/bola-cheia')} style={{ cursor: 'pointer', borderRadius: 24, overflow: 'hidden' }}>
+          <BigCard
+            entry={{
+              cheiaWinner: lastVotacao?.cheiaWinner ?? null,
+              murchaWinner: lastVotacao?.murchaWinner ?? null,
+              gameId: lastVotacao?.gameId
+            }}
+            cardRef={dummyCardRef}
+          />
+        </div>
 
         {/* Placar Geral */}
         <div>
