@@ -16,37 +16,39 @@ function getInitials(name: string) {
 
 function BadgeRankingFigma({ entry, rank }: { entry: RankingEntry | null; rank: 1 | 2 | 3 }) {
   const MEDAL = {
-    1: { bg: 'var(--color-surface-gold, #fad026)', fg: 'var(--color-fg-primary)', label: '1º' },
-    2: { bg: 'var(--color-surface-silver, #e9e3cc)', fg: 'var(--color-fg-primary)', label: '2º' },
-    3: { bg: 'var(--color-surface-bronze, #bb9a15)', fg: 'white', label: '3º' },
+    1: { bg: '#fad026', fg: '#1a1a1a', label: '1º' },
+    2: { bg: '#e9e3cc', fg: '#1a1a1a', label: '2º' },
+    3: { bg: '#bb9a15', fg: 'white',   label: '3º' },
   }
   const medal = MEDAL[rank]
   const initials = entry ? getInitials(entry.name) : '?'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 175, alignItems: 'center', justifyContent: 'space-between', position: 'relative', width: 90 }}>
-      {/* Foto */}
-      <div style={{ width: 90, height: 90, borderRadius: 24, background: 'var(--color-surface-secondary)', overflow: 'hidden', position: 'relative', flexShrink: 0 }}>
+    // Container: flex-col h-175 items-start justify-between, position relative — Figma exato
+    <div style={{ position: 'relative', width: 90, height: 175, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'space-between', flexShrink: 0 }}>
+
+      {/* Foto 90×90 rounded-24 */}
+      <div style={{ width: 90, height: 90, borderRadius: 24, background: 'var(--color-surface-secondary)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {entry?.photoURL ? (
-          <img src={entry.photoURL} alt={entry.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <img src={entry.photoURL} alt={entry.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
         ) : (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 28, color: 'var(--color-badge-initials)', opacity: 0.4 }}>{initials}</span>
-          </div>
+          <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 28, color: 'var(--color-badge-initials)', opacity: 0.4 }}>{initials}</span>
         )}
-        {/* Medalha sobreposta à foto */}
-        <div style={{ position: 'absolute', bottom: -22, left: '50%', transform: 'translateX(-50%)', width: 44, height: 44, borderRadius: '50%', border: '2px solid var(--color-bg)', background: medal.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
-          <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 18, color: medal.fg, lineHeight: 1 }}>{medal.label}</span>
-        </div>
       </div>
-      {/* Nome + Pontos */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '100%', paddingTop: 30 }}>
+
+      {/* Medalha — absolute top:73 left:50% translateX(-50%) relativo ao container */}
+      <div style={{ position: 'absolute', top: 73, left: '50%', transform: 'translateX(-50%)', width: 44, height: 44, borderRadius: '50%', background: medal.bg, border: '2px solid var(--color-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, overflow: 'hidden' }}>
+        <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 18, color: medal.fg, lineHeight: 1 }}>{medal.label}</span>
+      </div>
+
+      {/* Nome + Pontos na base — flex-col gap-8 items-center */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', width: '100%' }}>
         <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 12, color: 'var(--color-fg-primary)', textAlign: 'center', lineHeight: '16px', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {entry?.name ?? '—'}
         </p>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, justifyContent: 'center' }}>
           <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 12, color: 'var(--color-fg-primary)' }}>{entry?.score ?? 0}</span>
-          <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 400, fontSize: 11, color: 'var(--color-fg-secondary)' }}>pts</span>
+          <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 400, fontSize: 11, color: 'var(--color-fg-primary)' }}>pts</span>
         </div>
       </div>
     </div>
