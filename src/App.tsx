@@ -8,6 +8,9 @@ import BottomNav from './components/layout/BottomNav'
 import LoginPage from './pages/LoginPage'
 import GamesPage from './pages/GamesPage'
 import StatsPage from './pages/StatsPage'
+import StatsBolaPage from './pages/StatsBolaPage'
+import StatsPlacasrPage from './pages/StatsPlacasrPage'
+import StatsRankingPage from './pages/StatsRankingPage'
 import CaixinhaPage from './pages/CaixinhaPage'
 import ProfilePage from './pages/ProfilePage'
 import AdminPage from './pages/AdminPage'
@@ -66,6 +69,9 @@ export default function App() {
     || location.pathname.startsWith('/admin/jogador/')
     || location.pathname === '/caixinha/exportar'
     || location.pathname === '/notifications'
+    || location.pathname === '/stats/bola-cheia'
+    || location.pathname === '/stats/placar'
+    || location.pathname === '/stats/ranking'
 
   return (
     <div className="flex flex-col flex-1">
@@ -74,6 +80,9 @@ export default function App() {
           <Route path="/" element={<Navigate to="/games" replace />} />
           <Route path="/games" element={<GamesPage />} />
           <Route path="/stats" element={<StatsPage />} />
+          <Route path="/stats/bola-cheia" element={<StatsBolaPage />} />
+          <Route path="/stats/placar" element={<StatsPlacasrPage />} />
+          <Route path="/stats/ranking" element={<StatsRankingPage />} />
           <Route path="/caixinha" element={<CaixinhaPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/admin" element={<AdminPage />} />

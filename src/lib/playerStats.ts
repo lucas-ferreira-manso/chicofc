@@ -1,4 +1,5 @@
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore'
+import { format } from 'date-fns'
 import { db } from './firebase'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -248,4 +249,123 @@ export async function fetchVotingRanking(): Promise<PlayerVotingStats[]> {
   })
 
   return stats.sort((a, b) => b.bolaCheiaWins - a.bolaCheiaWins)
+}
+
+// ─── Ranking Completo ─────────────────────────────────────────────────────────
+
+export interface HistoryEntry {
+  gameId: string
+  cheiaWinner: PlayerInfo | null
+  murchaWinner: PlayerInfo | null
+}
+
+export interface RankingEntry {
+  id: string
+  name: string
+  photoURL?: string
+  player_type: string
+  wins: number
+  draws: number
+  losses: number
+  presences: number
+  bolaCheiaWins: number
+  bolaMurchaWins: number
+  score: number
+}
+
+/** Dado o ISO datetime de quando o placar foi salvo, retorna o gameId (quarta-feira) */
+function getWednesdayGameId(dateStr: string): string {
+  const d = new Date(dateStr)
+  const day = d.getDay() // 0=Dom 1=Seg 2=Ter 3=Qua 4=Qui 5=Sex 6=Sáb
+  const daysBack = [4, 5, 6, 0, 1, 2, 3][day]
+  d.setDate(d.getDate() - daysBack)
+  return format(d, 'yyyy-MM-dd')
+}
+
+export async function fetchFullRanking(): Promise<RankingEntry[]> {
+  const [playersSnap, scoreDoc, attendancesSnap, votacaoSnap] = await Promise.all([
+    getDocs(query(collection(db, 'players'), where('active', '==', true))),
+    getDoc(doc(db, 'config', 'score')),
+    getDocs(collection(db, 'attendances')),
+    getDocs(collection(db, 'votacao'))
+  ])
+
+  const players = playersSnap.docs.map(d => ({
+    id: d.id,
+    name: d.data().name || d.data().email || 'Jogador',
+    photoURL: d.data().photoURL as string | undefined,
+    player_type: (d.data().player_type as string) || 'mensalista'
+  }))
+
+  // Histórico de placares
+  const history: { blue: number; yellow: number; date: string }[] =
+    scoreDoc.exists() ? (scoreDoc.data().history ?? []) : []
+
+  // Busca lineups para cada gameId único derivado das datas do histórico
+  const gameIds = [...new Set(history.map(e => getWednesdayGameId(e.date)))]
+  const lineupDocs = await Promise.all(gameIds.map(gid => getDoc(doc(db, 'lineups', gid))))
+  const lineupMap: Record<string, { blue: string[]; black: string[] }> = {}
+  lineupDocs.forEach((snap, i) => {
+    if (snap.exists()) lineupMap[gameIds[i]] = snap.data() as { blue: string[]; black: string[] }
+  })
+
+  // V / E / D por jogador
+  const winsMap: Record<string, number> = {}
+  const drawsMap: Record<string, number> = {}
+  const lossesMap: Record<string, number> = {}
+
+  history.forEach(entry => {
+    const gid = getWednesdayGameId(entry.date)
+    const lineup = lineupMap[gid]
+    if (!lineup) return
+    const blueWon = entry.blue > entry.yellow
+    const blackWon = entry.yellow > entry.blue
+    const isDraw = entry.blue === entry.yellow
+    ;[...lineup.blue, ...lineup.black].forEach(uid => {
+      const isBlue = lineup.blue.includes(uid)
+      if (isDraw) {
+        drawsMap[uid] = (drawsMap[uid] || 0) + 1
+      } else if ((isBlue && blueWon) || (!isBlue && blackWon)) {
+        winsMap[uid] = (winsMap[uid] || 0) + 1
+      } else {
+        lossesMap[uid] = (lossesMap[uid] || 0) + 1
+      }
+    })
+  })
+
+  // Presenças confirmadas (jogos passados)
+  const today = new Date().toISOString().slice(0, 10)
+  const presenceMap: Record<string, number> = {}
+  attendancesSnap.docs.forEach(d => {
+    const data = d.data()
+    if (data.status === 'confirmed' && data.game_id <= today) {
+      presenceMap[data.user_id] = (presenceMap[data.user_id] || 0) + 1
+    }
+  })
+
+  // Bola Cheia / Murcha wins
+  const bolaCheiaWinsMap: Record<string, number> = {}
+  const bolaMurchaWinsMap: Record<string, number> = {}
+  votacaoSnap.docs.forEach(d => {
+    const votos = d.data().votos ?? {}
+    if (Object.keys(votos).length === 0) return
+    const cheiaId = pluralityWinner(votos, 'bolaCheia')
+    const murchaId = pluralityWinner(votos, 'bolaMurcha')
+    if (cheiaId) bolaCheiaWinsMap[cheiaId] = (bolaCheiaWinsMap[cheiaId] || 0) + 1
+    if (murchaId) bolaMurchaWinsMap[murchaId] = (bolaMurchaWinsMap[murchaId] || 0) + 1
+  })
+
+  return players
+    .filter(p => (presenceMap[p.id] || 0) > 0)
+    .map(p => {
+      const w = winsMap[p.id] || 0
+      const dr = drawsMap[p.id] || 0
+      const l = lossesMap[p.id] || 0
+      const pr = presenceMap[p.id] || 0
+      const bc = bolaCheiaWinsMap[p.id] || 0
+      const bm = bolaMurchaWinsMap[p.id] || 0
+      const score = w * 3 + dr + pr + bc * 5 - bm * 2
+      return { ...p, wins: w, draws: dr, losses: l, presences: pr, bolaCheiaWins: bc, bolaMurchaWins: bm, score }
+    })
+    .sort((a, b) => b.score - a.score || b.presences - a.presences)
 }
