@@ -168,7 +168,6 @@ export default function CaixinhaPage() {
   const { data: allTempAvulsos = [] } = useQuery({
     queryKey: ['all-temp-avulsos'],
     queryFn: () => fetchAllTempAvulsos(),
-    enabled: isAdmin,
     refetchInterval: 15000
   })
 
