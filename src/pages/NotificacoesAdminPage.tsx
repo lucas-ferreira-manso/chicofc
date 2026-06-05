@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { collection, getDocs, doc, updateDoc, addDoc, query, where, writeBatch } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { ref, deleteObject } from 'firebase/storage'
+import { storage } from '../lib/firebase'
 import { saveCaixinhaSummary } from './CaixinhaPage'
 import { useState } from 'react'
 import { X, CheckCircle } from '@phosphor-icons/react'
@@ -22,6 +24,7 @@ interface PaymentRequest {
   temp_avulso_ids?: string[]
   game_id?: string
   comprovante_url?: string
+  comprovante_path?: string
 }
 
 async function fetchRequests(): Promise<PaymentRequest[]> {
@@ -88,6 +91,14 @@ export default function NotificacoesAdminPage() {
           }
         }
       }))
+
+      // Após confirmar todos os pagamentos, deleta os comprovantes do Storage
+      // para proteger dados bancários dos jogadores
+      await Promise.allSettled(
+        toApprove
+          .filter(r => r.comprovante_path)
+          .map(r => deleteObject(ref(storage, r.comprovante_path!)))
+      )
   }
 
   const approveOne = useMutation({

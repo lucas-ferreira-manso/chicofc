@@ -468,7 +468,7 @@ export default function CaixinhaPage() {
   // Já paguei — busca dados frescos do Firestore na hora do clique para evitar
   // qualquer problema de cache/stale. Cobre próprio + avulsos temp adicionados.
   const submitPaymentRequest = useMutation({
-    mutationFn: async (comprovanteUrl: string) => {
+    mutationFn: async ({ comprovanteUrl, comprovantePath }: { comprovanteUrl: string; comprovantePath: string }) => {
       if (!user?.id) throw new Error('Usuário não identificado')
       const now = new Date().toISOString()
       const month = format(new Date(), 'yyyy-MM')
@@ -519,6 +519,7 @@ export default function CaixinhaPage() {
           month,
           status: 'pending',
           comprovante_url: comprovanteUrl,
+          comprovante_path: comprovantePath,
           created_at: now
         }))
       }
@@ -535,6 +536,7 @@ export default function CaixinhaPage() {
           is_for_temp_avulso: true,
           temp_avulso_ids: unpaidTemps.map((t: any) => t.id),
           comprovante_url: comprovanteUrl,
+          comprovante_path: comprovantePath,
           created_at: now
         }))
       }
@@ -1108,10 +1110,11 @@ export default function CaixinhaPage() {
                 if (!comprovanteFile || !user?.id) return
                 setUploadingComprovante(true)
                 try {
-                  const storageRef = ref(storage, `comprovantes/${user.id}/${Date.now()}_${comprovanteFile.name}`)
+                  const path = `comprovantes/${user.id}/${Date.now()}_${comprovanteFile.name}`
+                  const storageRef = ref(storage, path)
                   const snapshot = await uploadBytes(storageRef, comprovanteFile)
                   const url = await getDownloadURL(snapshot.ref)
-                  submitPaymentRequest.mutate(url)
+                  submitPaymentRequest.mutate({ comprovanteUrl: url, comprovantePath: path })
                 } catch {
                   toast.error('Erro ao enviar comprovante. Tente novamente.')
                 } finally {
