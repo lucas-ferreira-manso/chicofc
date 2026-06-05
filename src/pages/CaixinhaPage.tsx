@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { collection, getDocs, doc, updateDoc, addDoc, getDoc, setDoc, query, where, deleteDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
@@ -12,7 +12,8 @@ import { useNavigate } from 'react-router-dom'
 import type { Payment, Profile } from '../types'
 
 const PIX_CODE = '42c4fc79-a983-4a02-88fb-81ec76948c0f'
-const SALDO_INICIAL = 1082
+// Saldo inicial em caixa antes do app ser criado: R$ 1.082,00
+// Agora persistido em config/caixinha.saldoInicial
 
 async function fetchPlayers(): Promise<Profile[]> {
   const snap = await getDocs(collection(db, 'players'))
@@ -37,16 +38,19 @@ interface CaixinhaConfig {
   extrasCost: number
   mensalistaValue: number
   avulsoValue: number
+  saldoInicial: number
 }
 
 async function fetchConfig(): Promise<CaixinhaConfig> {
   const snap = await getDoc(doc(db, 'config', 'caixinha'))
-  if (!snap.exists()) return { quadraCost: 760, extrasCost: 320, mensalistaValue: 80, avulsoValue: 22 }
+  if (!snap.exists()) return { quadraCost: 760, extrasCost: 320, mensalistaValue: 80, avulsoValue: 22, saldoInicial: 1082 }
+  const d = snap.data()
   return {
-    quadraCost: snap.data().quadraCost ?? 760,
-    extrasCost: snap.data().extrasCost ?? 320,
-    mensalistaValue: snap.data().mensalistaValue ?? 80,
-    avulsoValue: snap.data().avulsoValue ?? 22
+    quadraCost: d.quadraCost ?? 760,
+    extrasCost: d.extrasCost ?? 320,
+    mensalistaValue: d.mensalistaValue ?? 80,
+    avulsoValue: d.avulsoValue ?? 22,
+    saldoInicial: d.saldoInicial ?? 1082
   }
 }
 
@@ -120,8 +124,12 @@ async function fetchAllTempAvulsos(): Promise<any[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as any))
 }
 
-/** Recalcula os totais e salva em config/caixinha-summary — lido por todos os usuários */
-async function saveCaixinhaSummary() {
+/**
+ * Recalcula os totais e salva em config/caixinha-summary.
+ * Fórmula: saldoInicial + recebido(mensalistas + avulsos) − totalDespesas debitadas
+ * Despesas são registros type='despesa' criados automaticamente no dia 6 de cada mês.
+ */
+export async function saveCaixinhaSummary() {
   const [paymentsSnap, configSnap, requestsSnap, tempsSnap] = await Promise.all([
     getDocs(collection(db, 'payments')),
     getDoc(doc(db, 'config', 'caixinha')),
@@ -131,8 +139,9 @@ async function saveCaixinhaSummary() {
 
   const cfg = configSnap.exists() ? configSnap.data() : {}
   const quadraCost: number = cfg.quadraCost ?? 760
-  const extrasCost: number = cfg.extrasCost ?? 0
+  const extrasCost: number = cfg.extrasCost ?? 320
   const avulsoValue: number = cfg.avulsoValue ?? 22
+  const saldoInicial: number = cfg.saldoInicial ?? 1082
 
   const payments = paymentsSnap.docs.map(d => d.data())
   const requests = requestsSnap.docs.map(d => d.data())
@@ -142,9 +151,11 @@ async function saveCaixinhaSummary() {
   const despesaPayments = payments.filter(p => p.type === 'despesa')
   const mensalidadePayments = payments.filter(p => p.type === 'mensalidade')
 
+  // Saldo = inicial + recebido − despesas debitadas (type='despesa' criadas no dia 6)
   const totalDespesas = despesaPayments.reduce((s, p) => s + (p.amount ?? 0), 0)
   const avulsoPaid = jogoPayments.filter(p => p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
   const mensalistaPaid = mensalidadePayments.filter(p => p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
+  const saldoTotal = saldoInicial + avulsoPaid + mensalistaPaid - totalDespesas
 
   const userIdsComPendingAvulsoRequest = new Set(
     requests.filter(r => r.player_type === 'avulso').map(r => r.user_id)
@@ -164,17 +175,36 @@ async function saveCaixinhaSummary() {
   const mensalistaPendingFromRequests = requests.filter(r => r.player_type === 'mensalista').reduce((s, r) => s + (r.amount ?? 0), 0)
   const mensalistaPending = mensalistaPendingFromPayments + mensalistaPendingFromRequests
 
-  const saldoTotal = SALDO_INICIAL + avulsoPaid + mensalistaPaid - totalDespesas - extrasCost
-
   await setDoc(doc(db, 'config', 'caixinha-summary'), {
-    saldoTotal,
-    quadraCost,
-    extrasCost,
-    mensalistaPaid,
-    mensalistaPending,
-    avulsoPaid,
-    avulsoPending,
+    saldoTotal, quadraCost, extrasCost,
+    mensalistaPaid, mensalistaPending,
+    avulsoPaid, avulsoPending,
     updatedAt: new Date().toISOString()
+  })
+}
+
+/**
+ * Auto-débito mensal: se hoje >= dia 6 e ainda não existe registro de despesa
+ * para o mês atual, cria um com quadraCost + extrasCost.
+ */
+export async function autoDebitarDespesaMensal(quadraCost: number, extrasCost: number) {
+  const today = new Date()
+  if (today.getDate() < 6) return // ainda não chegou o dia 6
+  const month = format(today, 'yyyy-MM')
+  // Verifica se já existe despesa para este mês
+  const q = query(collection(db, 'payments'), where('type', '==', 'despesa'), where('month', '==', month))
+  const snap = await getDocs(q)
+  if (!snap.empty) return // já debitado
+  // Cria o registro de despesa
+  const total = quadraCost + extrasCost
+  await addDoc(collection(db, 'payments'), {
+    type: 'despesa',
+    amount: total,
+    month,
+    description: `Despesas ${month} (Quadra R$${quadraCost} + Extras R$${extrasCost})`,
+    paid: true,
+    created_at: today.toISOString(),
+    auto: true
   })
 }
 
@@ -240,6 +270,23 @@ export default function CaixinhaPage() {
     enabled: !isAdmin,
     refetchInterval: 30000
   })
+
+  // Migração: persiste saldoInicial no Firestore se ainda não existe
+  useEffect(() => {
+    if (!isAdmin || !config) return
+    if ((config as any).saldoInicial === undefined) {
+      setDoc(doc(db, 'config', 'caixinha'), { saldoInicial: 1082 }, { merge: true })
+    }
+  }, [isAdmin, config])
+
+  // Auto-débito mensal: admin abre a página → verifica se precisa debitar despesas do dia 6
+  useEffect(() => {
+    if (!isAdmin || !config) return
+    autoDebitarDespesaMensal(config.quadraCost, config.extrasCost).then(() => {
+      qc.invalidateQueries({ queryKey: ['payments'] })
+      saveCaixinhaSummary()
+    })
+  }, [isAdmin, config?.quadraCost, config?.extrasCost])
 
   const [pixCopied, setPixCopied] = useState(false)
   const [editingField, setEditingField] = useState<EditField>(null)
@@ -540,9 +587,11 @@ export default function CaixinhaPage() {
   const mensalistaPendingFromRequests = pendingRequests.filter(r => r.player_type === 'mensalista').reduce((s: number, r: any) => s + r.amount, 0)
   const mensalistaPending = mensalistaPendingFromPayments + mensalistaPendingFromRequests
   const quadraCost = config?.quadraCost ?? 760
-  const extrasCost = config?.extrasCost ?? 0
+  const extrasCost = config?.extrasCost ?? 320
   const mensalistaValue = config?.mensalistaValue ?? 80
-  const saldoTotal = SALDO_INICIAL + avulsoPaid + mensalistaPaid - totalDespesas - extrasCost
+  const saldoInicial = config?.saldoInicial ?? 1082
+  // Fórmula: saldoInicial + recebido − despesas debitadas (type='despesa', criadas no dia 6)
+  const saldoTotal = saldoInicial + avulsoPaid + mensalistaPaid - totalDespesas
 
   // Agrupa todos os pagamentos por mês (mensalidade + jogo pago), normalizando para yyyy-MM
   const byMonth = payments.reduce((acc, p) => {

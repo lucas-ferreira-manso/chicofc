@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { collection, getDocs, doc, updateDoc, addDoc, query, where, writeBatch } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { saveCaixinhaSummary } from './CaixinhaPage'
 import { useState } from 'react'
 import { X, CheckCircle } from '@phosphor-icons/react'
 import { useNavigate } from 'react-router-dom'
@@ -132,6 +133,7 @@ export default function NotificacoesAdminPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payment-requests'] })
       qc.invalidateQueries({ queryKey: ['payments'] })
+      saveCaixinhaSummary()
       toast.success(`${checked.size} pagamento(s) aprovado(s)!`)
       navigate(-1)
     },
