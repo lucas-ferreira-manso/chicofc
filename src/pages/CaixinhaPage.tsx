@@ -5,8 +5,11 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Copy, Check, PencilSimple, X, CheckCircle, Circle, CaretDown } from '@phosphor-icons/react'
+import { Copy, Check, PencilSimple, X, CheckCircle, Circle, CaretDown, FileArrowUp } from '@phosphor-icons/react'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { storage } from '../lib/firebase'
 import Header from '../components/layout/Header'
+import { useLockBodyScroll } from '../lib/useLockBodyScroll'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 import type { Payment, Profile } from '../types'
@@ -295,6 +298,11 @@ export default function CaixinhaPage() {
 
   const [pixCopied, setPixCopied] = useState(false)
   const [editingField, setEditingField] = useState<EditField>(null)
+  const [showComprovanteSheet, setShowComprovanteSheet] = useState(false)
+  const [comprovanteFile, setComprovanteFile] = useState<File | null>(null)
+  const [comprovantePreview, setComprovantePreview] = useState<string | null>(null)
+  const [uploadingComprovante, setUploadingComprovante] = useState(false)
+  useLockBodyScroll(showComprovanteSheet)
   const [editValue, setEditValue] = useState('')
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set())
 
@@ -460,7 +468,7 @@ export default function CaixinhaPage() {
   // Já paguei — busca dados frescos do Firestore na hora do clique para evitar
   // qualquer problema de cache/stale. Cobre próprio + avulsos temp adicionados.
   const submitPaymentRequest = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (comprovanteUrl: string) => {
       if (!user?.id) throw new Error('Usuário não identificado')
       const now = new Date().toISOString()
       const month = format(new Date(), 'yyyy-MM')
@@ -510,6 +518,7 @@ export default function CaixinhaPage() {
           amount: ownAmount,
           month,
           status: 'pending',
+          comprovante_url: comprovanteUrl,
           created_at: now
         }))
       }
@@ -525,6 +534,7 @@ export default function CaixinhaPage() {
           status: 'pending',
           is_for_temp_avulso: true,
           temp_avulso_ids: unpaidTemps.map((t: any) => t.id),
+          comprovante_url: comprovanteUrl,
           created_at: now
         }))
       }
@@ -551,6 +561,9 @@ export default function CaixinhaPage() {
       qc.invalidateQueries({ queryKey: ['pending-requests'] })
       qc.invalidateQueries({ queryKey: ['my-temp-avulsos', user?.id] })
       qc.invalidateQueries({ queryKey: ['payment-requests-count'] })
+      setShowComprovanteSheet(false)
+      setComprovanteFile(null)
+      setComprovantePreview(null)
       toast.success('Admin notificado! Aguarde aprovação.')
     },
     onError: (e: any) => {
@@ -782,7 +795,7 @@ export default function CaixinhaPage() {
                     {pixCopied ? <Check size={18} /> : <Copy size={18} />}
                     {pixCopied ? 'Copiado!' : 'Copiar PIX'}
                   </button>
-                  <button onClick={() => submitPaymentRequest.mutate()} disabled={submitPaymentRequest.isPending}
+                  <button onClick={() => setShowComprovanteSheet(true)} disabled={false}
                     className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 disabled:opacity-40"
                     style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                     {submitPaymentRequest.isPending ? '...' : `Paguei Avulso Temp (+R$ ${tempTotalAmount.toFixed(2)})`}
@@ -814,7 +827,7 @@ export default function CaixinhaPage() {
                     {pixCopied ? <Check size={18} /> : <Copy size={18} />}
                     {pixCopied ? 'Copiado!' : 'Copiar PIX'}
                   </button>
-                  <button onClick={() => submitPaymentRequest.mutate()} disabled={submitPaymentRequest.isPending}
+                  <button onClick={() => setShowComprovanteSheet(true)} disabled={false}
                     className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 disabled:opacity-40"
                     style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                     {submitPaymentRequest.isPending ? '...' : `Paguei Avulso Temp (R$ ${tempTotalAmount.toFixed(2)})`}
@@ -863,7 +876,7 @@ export default function CaixinhaPage() {
                   {pixCopied ? <Check size={18} /> : <Copy size={18} />}
                   {pixCopied ? 'Copiado!' : 'Copiar PIX'}
                 </button>
-                <button onClick={() => submitPaymentRequest.mutate()} disabled={submitPaymentRequest.isPending}
+                <button onClick={() => setShowComprovanteSheet(true)} disabled={false}
                   className="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 disabled:opacity-40"
                   style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
                   {submitPaymentRequest.isPending ? '...' : 'Já Paguei'}
@@ -1025,6 +1038,89 @@ export default function CaixinhaPage() {
               className="w-full py-4 font-medium rounded-full transition-all active:scale-95"
               style={{ background: 'var(--color-surface-primary)', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
               Cancelar
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Bottom Sheet — Comprovante de Pagamento */}
+      {showComprovanteSheet && (
+        <>
+          <div onClick={() => { setShowComprovanteSheet(false); setComprovanteFile(null); setComprovantePreview(null) }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 60 }} />
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70, background: 'var(--color-bg)', borderRadius: '24px 24px 0 0', padding: '24px 24px calc(40px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* Close */}
+            <button onClick={() => { setShowComprovanteSheet(false); setComprovanteFile(null); setComprovantePreview(null) }}
+              style={{ position: 'absolute', top: 20, right: 20, width: 32, height: 32, borderRadius: '50%', background: 'var(--color-surface-primary)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <X size={16} color="var(--color-fg-secondary)" />
+            </button>
+
+            {/* Título */}
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)', lineHeight: 1 }}>
+              Confirmar pagamento
+            </p>
+
+            {/* Subtítulo */}
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'var(--color-fg-primary)', lineHeight: 1.4, marginTop: -8 }}>
+              Para confirmar, faça o upload do comprovante do PIX, seu golpista!
+            </p>
+
+            {/* Área de upload */}
+            <label htmlFor="comprovante-input" style={{ cursor: 'pointer', width: '100%' }}>
+              <div style={{ background: 'var(--color-surface-primary)', borderRadius: 16, padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', minHeight: 120, overflow: 'hidden' }}>
+                {comprovantePreview ? (
+                  <>
+                    <img src={comprovantePreview} alt="Comprovante" style={{ maxHeight: 200, maxWidth: '100%', objectFit: 'contain', borderRadius: 8 }} />
+                    <button onClick={e => { e.preventDefault(); e.stopPropagation(); setComprovanteFile(null); setComprovantePreview(null) }}
+                      style={{ position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: '50%', background: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>
+                      <X size={16} color="#ef4444" />
+                    </button>
+                  </>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', justifyContent: 'center' }}>
+                    <FileArrowUp size={32} color="var(--color-fg-accent)" />
+                    <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 14, color: 'var(--color-fg-accent)', textAlign: 'center' }}>
+                      Adicione o comprovante aqui
+                    </p>
+                  </div>
+                )}
+              </div>
+            </label>
+            <input
+              id="comprovante-input"
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                setComprovanteFile(file)
+                const reader = new FileReader()
+                reader.onload = ev => setComprovantePreview(ev.target?.result as string)
+                reader.readAsDataURL(file)
+              }}
+            />
+
+            {/* Botão Confirmar */}
+            <button
+              disabled={!comprovanteFile || uploadingComprovante || submitPaymentRequest.isPending}
+              onClick={async () => {
+                if (!comprovanteFile || !user?.id) return
+                setUploadingComprovante(true)
+                try {
+                  const storageRef = ref(storage, `comprovantes/${user.id}/${Date.now()}_${comprovanteFile.name}`)
+                  const snapshot = await uploadBytes(storageRef, comprovanteFile)
+                  const url = await getDownloadURL(snapshot.ref)
+                  submitPaymentRequest.mutate(url)
+                } catch {
+                  toast.error('Erro ao enviar comprovante. Tente novamente.')
+                } finally {
+                  setUploadingComprovante(false)
+                }
+              }}
+              className="transition-all active:scale-95 disabled:opacity-40"
+              style={{ width: '100%', height: 56, borderRadius: 9999, background: comprovanteFile ? 'var(--btn-primary-bg)' : 'var(--color-surface-secondary)', color: comprovanteFile ? 'var(--btn-primary-fg)' : 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, border: 'none', cursor: comprovanteFile ? 'pointer' : 'default' }}>
+              {uploadingComprovante || submitPaymentRequest.isPending ? 'Enviando...' : 'Confirmar'}
             </button>
           </div>
         </>

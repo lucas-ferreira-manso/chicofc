@@ -21,6 +21,7 @@ interface PaymentRequest {
   is_for_temp_avulso?: boolean
   temp_avulso_ids?: string[]
   game_id?: string
+  comprovante_url?: string
 }
 
 async function fetchRequests(): Promise<PaymentRequest[]> {
@@ -34,6 +35,7 @@ export default function NotificacoesAdminPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [checked, setChecked] = useState<Set<string>>(new Set())
+  const [selectedRequest, setSelectedRequest] = useState<PaymentRequest | null>(null)
 
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ['payment-requests'],
@@ -49,9 +51,8 @@ export default function NotificacoesAdminPage() {
     })
   }
 
-  const approveAll = useMutation({
-    mutationFn: async () => {
-      const toApprove = requests.filter(r => checked.has(r.id))
+  // Função reutilizável para aprovar um ou mais requests
+  async function approveRequests(toApprove: PaymentRequest[]) {
       await Promise.all(toApprove.map(async r => {
         await updateDoc(doc(db, 'payment_requests', r.id), {
           status: 'approved',
@@ -62,73 +63,49 @@ export default function NotificacoesAdminPage() {
 
         if (tipo === 'jogo') {
           if (r.is_for_temp_avulso && (r as any).temp_avulso_ids?.length > 0) {
-            // Request de avulso temporário: marca cada avulso_temp pelo ID exato
             const batch = writeBatch(db)
             ;(r as any).temp_avulso_ids.forEach((id: string) =>
               batch.update(doc(db, 'avulsos_temp', id), { paid: true, paid_at: new Date().toISOString() })
             )
             await batch.commit()
-            // Cria payment de jogo pago para refletir no saldo
-            await addDoc(collection(db, 'payments'), {
-              user_id: r.user_id,
-              amount: r.amount,
-              type: 'jogo',
-              month,
-              paid: true,
-              paid_at: new Date().toISOString(),
-              created_at: new Date().toISOString()
-            })
+            await addDoc(collection(db, 'payments'), { user_id: r.user_id, amount: r.amount, type: 'jogo', month, paid: true, paid_at: new Date().toISOString(), created_at: new Date().toISOString() })
           } else {
-            // Avulso jogando: payment foi criado com month = gameId (ex: 2025-05-07)
-            const q = query(collection(db, 'payments'),
-              where('user_id', '==', r.user_id),
-              where('type', '==', 'jogo'),
-              where('paid', '==', false)
-            )
+            const q = query(collection(db, 'payments'), where('user_id', '==', r.user_id), where('type', '==', 'jogo'), where('paid', '==', false))
             const existing = await getDocs(q)
             if (!existing.empty) {
-              await updateDoc(doc(db, 'payments', existing.docs[0].id), {
-                paid: true,
-                paid_at: new Date().toISOString()
-              })
+              await updateDoc(doc(db, 'payments', existing.docs[0].id), { paid: true, paid_at: new Date().toISOString() })
             } else {
-              await addDoc(collection(db, 'payments'), {
-                user_id: r.user_id,
-                amount: r.amount,
-                type: 'jogo',
-                month,
-                paid: true,
-                paid_at: new Date().toISOString(),
-                created_at: new Date().toISOString()
-              })
+              await addDoc(collection(db, 'payments'), { user_id: r.user_id, amount: r.amount, type: 'jogo', month, paid: true, paid_at: new Date().toISOString(), created_at: new Date().toISOString() })
             }
           }
         } else {
-          // Mensalista: month no formato 'yyyy-MM'
-          const q = query(collection(db, 'payments'),
-            where('user_id', '==', r.user_id),
-            where('month', '==', month),
-            where('type', '==', 'mensalidade')
-          )
+          const q = query(collection(db, 'payments'), where('user_id', '==', r.user_id), where('month', '==', month), where('type', '==', 'mensalidade'))
           const existing = await getDocs(q)
           if (!existing.empty) {
-            await updateDoc(doc(db, 'payments', existing.docs[0].id), {
-              paid: true,
-              paid_at: new Date().toISOString()
-            })
+            await updateDoc(doc(db, 'payments', existing.docs[0].id), { paid: true, paid_at: new Date().toISOString() })
           } else {
-            await addDoc(collection(db, 'payments'), {
-              user_id: r.user_id,
-              amount: r.amount,
-              type: 'mensalidade',
-              month,
-              paid: true,
-              paid_at: new Date().toISOString(),
-              created_at: new Date().toISOString()
-            })
+            await addDoc(collection(db, 'payments'), { user_id: r.user_id, amount: r.amount, type: 'mensalidade', month, paid: true, paid_at: new Date().toISOString(), created_at: new Date().toISOString() })
           }
         }
       }))
+  }
+
+  const approveOne = useMutation({
+    mutationFn: async (r: PaymentRequest) => approveRequests([r]),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payment-requests'] })
+      qc.invalidateQueries({ queryKey: ['payments'] })
+      saveCaixinhaSummary()
+      setSelectedRequest(null)
+      toast.success('Pagamento aprovado!')
+    },
+    onError: () => toast.error('Erro ao aprovar pagamento')
+  })
+
+  const approveAll = useMutation({
+    mutationFn: async () => {
+      const toApprove = requests.filter(r => checked.has(r.id))
+      await approveRequests(toApprove)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payment-requests'] })
@@ -186,7 +163,7 @@ export default function NotificacoesAdminPage() {
             ? `Avulso temp${r.temp_avulso_ids?.length ? ` (${r.temp_avulso_ids.length})` : ''}`
             : r.player_type === 'mensalista' ? 'Mensalidade' : 'Avulso'
           return (
-            <button key={r.id} onClick={() => toggleCheck(r.id)}
+            <button key={r.id} onClick={() => r.comprovante_url ? setSelectedRequest(r) : toggleCheck(r.id)}
               className="w-full flex items-center gap-3 p-4 rounded-3xl transition-all active:scale-[0.99]"
               style={{
                 background: isChecked ? 'var(--color-surface-accent-light)' : 'var(--color-surface-primary)',
@@ -211,10 +188,15 @@ export default function NotificacoesAdminPage() {
                   {typeLabel} · {monthLabel}
                 </p>
               </div>
-              {/* Valor */}
-              <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 700 }}>
-                R$ {r.amount}
-              </p>
+              {/* Valor + indicador de comprovante */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 700 }}>
+                  R$ {r.amount}
+                </p>
+                {r.comprovante_url && (
+                  <p style={{ fontFamily: 'var(--font-primary)', fontSize: 10, color: '#089527', fontWeight: 600 }}>📎 comprovante</p>
+                )}
+              </div>
             </button>
           )
         })}
@@ -242,6 +224,51 @@ export default function NotificacoesAdminPage() {
             : 'Salvar'}
         </button>
       </div>
+
+      {/* Bottom Sheet — Comprovante (admin vê ao tocar num request com comprovante) */}
+      {selectedRequest && (
+        <>
+          <div onClick={() => setSelectedRequest(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 60 }} />
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70, background: 'var(--color-bg)', borderRadius: '24px 24px 0 0', padding: '24px 24px calc(40px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Close */}
+            <button onClick={() => setSelectedRequest(null)} style={{ position: 'absolute', top: 20, right: 20, width: 32, height: 32, borderRadius: '50%', background: 'var(--color-surface-primary)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <X size={16} color="var(--color-fg-secondary)" />
+            </button>
+
+            {/* Info do jogador */}
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)' }}>
+              Confirmar pagamento
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--color-avatar-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontFamily: 'var(--font-primary)', fontSize: 16, color: 'var(--color-avatar-fg)', flexShrink: 0 }}>
+                {(selectedRequest.user_name || '?')[0].toUpperCase()}
+              </div>
+              <div>
+                <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'var(--color-fg-primary)' }}>{selectedRequest.user_name}</p>
+                <p style={{ fontFamily: 'var(--font-primary)', fontSize: 12, color: 'var(--color-fg-secondary)' }}>
+                  {selectedRequest.is_for_temp_avulso ? 'Avulso temporário' : selectedRequest.player_type === 'mensalista' ? 'Mensalidade' : 'Avulso'} · R$ {selectedRequest.amount}
+                </p>
+              </div>
+            </div>
+
+            {/* Preview comprovante */}
+            {selectedRequest.comprovante_url && (
+              <div style={{ background: 'var(--color-surface-primary)', borderRadius: 16, padding: 16, display: 'flex', justifyContent: 'center' }}>
+                <img src={selectedRequest.comprovante_url} alt="Comprovante" style={{ maxHeight: 220, maxWidth: '100%', objectFit: 'contain', borderRadius: 8 }} />
+              </div>
+            )}
+
+            {/* Botão Aprovar */}
+            <button
+              onClick={() => approveOne.mutate(selectedRequest)}
+              disabled={approveOne.isPending}
+              className="transition-all active:scale-95 disabled:opacity-40"
+              style={{ width: '100%', height: 56, borderRadius: 9999, background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, border: 'none', cursor: 'pointer' }}>
+              {approveOne.isPending ? 'Aprovando...' : 'Aprovar pagamento'}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }
