@@ -282,11 +282,16 @@ export default function CaixinhaPage() {
   // Auto-débito mensal: admin abre a página → verifica se precisa debitar despesas do dia 6
   useEffect(() => {
     if (!isAdmin || !config) return
+    // Sempre atualiza o summary quando admin abre a página
+    saveCaixinhaSummary().then(() => {
+      qc.invalidateQueries({ queryKey: ['caixinha-summary'] })
+    })
+    // E verifica auto-débito do dia 6
     autoDebitarDespesaMensal(config.quadraCost, config.extrasCost).then(() => {
       qc.invalidateQueries({ queryKey: ['payments'] })
       saveCaixinhaSummary()
     })
-  }, [isAdmin, config?.quadraCost, config?.extrasCost])
+  }, [isAdmin, !!config])
 
   const [pixCopied, setPixCopied] = useState(false)
   const [editingField, setEditingField] = useState<EditField>(null)
@@ -662,19 +667,23 @@ export default function CaixinhaPage() {
 
         {/* Card financeiro — admin usa cálculo em tempo real; não-admin usa summary salvo */}
         {(() => {
-          const s = isAdmin ? null : caixinhaSummary
-          const displaySaldo = s ? s.saldoTotal : saldoTotal
+          // Admin: usa cálculo em tempo real
+          // Não-admin: usa summary salvo pelo admin (sempre atualizado quando admin abre a página)
+          const s = isAdmin ? null : (caixinhaSummary ?? null)
+          const summaryReady = isAdmin || s !== null
+          const displaySaldo = summaryReady ? (s ? s.saldoTotal : saldoTotal) : null
           const displayQuadra = s ? s.quadraCost : quadraCost
           const displayExtras = s ? s.extrasCost : extrasCost
-          const displayMensalistaPaid = s ? s.mensalistaPaid : mensalistaPaid
-          const displayMensalistaPending = s ? s.mensalistaPending : mensalistaPending
-          const displayAvulsoPaid = s ? s.avulsoPaid : avulsoPaid
-          const displayAvulsoPending = s ? s.avulsoPending : avulsoPending
+          const displayMensalistaPaid = summaryReady ? (s ? s.mensalistaPaid : mensalistaPaid) : null
+          const displayMensalistaPending = summaryReady ? (s ? s.mensalistaPending : mensalistaPending) : null
+          const displayAvulsoPaid = summaryReady ? (s ? s.avulsoPaid : avulsoPaid) : null
+          const displayAvulsoPending = summaryReady ? (s ? s.avulsoPending : avulsoPending) : null
+          const fmt = (v: number | null) => v === null ? '...' : `R$ ${v.toFixed(2)}`
           return (
             <div className="flex flex-col gap-5 p-5 rounded-[20px]" style={{ background: 'var(--color-surface-primary)' }}>
               <div className="flex flex-col gap-2">
                 <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Saldo Caixinha</p>
-                <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>R$ {displaySaldo.toFixed(2)}</p>
+                <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>{fmt(displaySaldo)}</p>
               </div>
               <div className="flex gap-5">
                 <div className="flex-1"><EditableRow field="quadra" label="Despesa Quadra" value={displayQuadra} /></div>
@@ -683,21 +692,21 @@ export default function CaixinhaPage() {
               <div className="flex gap-5">
                 <div className="flex-1 flex flex-col gap-0.5">
                   <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Mensalista Recebido</p>
-                  <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {displayMensalistaPaid.toFixed(2)}</p>
+                  <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>{fmt(displayMensalistaPaid)}</p>
                 </div>
                 <div className="flex-1 flex flex-col gap-0.5">
                   <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Mensalista Pendente</p>
-                  <p style={{ color: displayMensalistaPending > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {displayMensalistaPending.toFixed(2)}</p>
+                  <p style={{ color: (displayMensalistaPending ?? 0) > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>{fmt(displayMensalistaPending)}</p>
                 </div>
               </div>
               <div className="flex gap-5">
                 <div className="flex-1 flex flex-col gap-0.5">
                   <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Avulso Recebido</p>
-                  <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {displayAvulsoPaid.toFixed(2)}</p>
+                  <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>{fmt(displayAvulsoPaid)}</p>
                 </div>
                 <div className="flex-1 flex flex-col gap-0.5">
                   <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Avulso Pendente</p>
-                  <p style={{ color: displayAvulsoPending > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {displayAvulsoPending.toFixed(2)}</p>
+                  <p style={{ color: (displayAvulsoPending ?? 0) > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>{fmt(displayAvulsoPending)}</p>
                 </div>
               </div>
             </div>
