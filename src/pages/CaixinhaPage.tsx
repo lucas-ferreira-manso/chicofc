@@ -120,6 +120,64 @@ async function fetchAllTempAvulsos(): Promise<any[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as any))
 }
 
+/** Recalcula os totais e salva em config/caixinha-summary — lido por todos os usuários */
+async function saveCaixinhaSummary() {
+  const [paymentsSnap, configSnap, requestsSnap, tempsSnap] = await Promise.all([
+    getDocs(collection(db, 'payments')),
+    getDoc(doc(db, 'config', 'caixinha')),
+    getDocs(query(collection(db, 'payment_requests'), where('status', '==', 'pending'))),
+    getDocs(collection(db, 'avulsos_temp'))
+  ])
+
+  const cfg = configSnap.exists() ? configSnap.data() : {}
+  const quadraCost: number = cfg.quadraCost ?? 760
+  const extrasCost: number = cfg.extrasCost ?? 0
+  const avulsoValue: number = cfg.avulsoValue ?? 22
+
+  const payments = paymentsSnap.docs.map(d => d.data())
+  const requests = requestsSnap.docs.map(d => d.data())
+  const temps = tempsSnap.docs.map(d => d.data())
+
+  const jogoPayments = payments.filter(p => p.type === 'jogo')
+  const despesaPayments = payments.filter(p => p.type === 'despesa')
+  const mensalidadePayments = payments.filter(p => p.type === 'mensalidade')
+
+  const totalDespesas = despesaPayments.reduce((s, p) => s + (p.amount ?? 0), 0)
+  const avulsoPaid = jogoPayments.filter(p => p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
+  const mensalistaPaid = mensalidadePayments.filter(p => p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
+
+  const userIdsComPendingAvulsoRequest = new Set(
+    requests.filter(r => r.player_type === 'avulso').map(r => r.user_id)
+  )
+  const avulsoFromPayments = jogoPayments
+    .filter(p => !p.paid && !userIdsComPendingAvulsoRequest.has(p.user_id))
+    .reduce((s, p) => s + (p.amount ?? 0), 0)
+  const avulsoFromRequests = requests
+    .filter(r => r.player_type === 'avulso')
+    .reduce((s, r) => s + (r.amount ?? 0), 0)
+  const avulsoFromTemps = temps
+    .filter(t => !t.paid && !userIdsComPendingAvulsoRequest.has(t.addedBy))
+    .length * avulsoValue
+  const avulsoPending = avulsoFromPayments + avulsoFromRequests + avulsoFromTemps
+
+  const mensalistaPendingFromPayments = mensalidadePayments.filter(p => !p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
+  const mensalistaPendingFromRequests = requests.filter(r => r.player_type === 'mensalista').reduce((s, r) => s + (r.amount ?? 0), 0)
+  const mensalistaPending = mensalistaPendingFromPayments + mensalistaPendingFromRequests
+
+  const saldoTotal = SALDO_INICIAL + avulsoPaid + mensalistaPaid - totalDespesas - extrasCost
+
+  await setDoc(doc(db, 'config', 'caixinha-summary'), {
+    saldoTotal,
+    quadraCost,
+    extrasCost,
+    mensalistaPaid,
+    mensalistaPending,
+    avulsoPaid,
+    avulsoPending,
+    updatedAt: new Date().toISOString()
+  })
+}
+
 type EditField = 'quadra' | 'extras' | 'mensalista' | 'avulso' | null
 
 export default function CaixinhaPage() {
@@ -168,7 +226,19 @@ export default function CaixinhaPage() {
   const { data: allTempAvulsos = [] } = useQuery({
     queryKey: ['all-temp-avulsos'],
     queryFn: () => fetchAllTempAvulsos(),
+    enabled: isAdmin,
     refetchInterval: 15000
+  })
+
+  // Resumo financeiro para não-admins (salvo em config/caixinha-summary pelo admin)
+  const { data: caixinhaSummary } = useQuery({
+    queryKey: ['caixinha-summary'],
+    queryFn: async () => {
+      const snap = await getDoc(doc(db, 'config', 'caixinha-summary'))
+      return snap.exists() ? snap.data() : null
+    },
+    enabled: !isAdmin,
+    refetchInterval: 30000
   })
 
   const [pixCopied, setPixCopied] = useState(false)
@@ -205,6 +275,7 @@ export default function CaixinhaPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['caixinha-config'] })
+      saveCaixinhaSummary()
       toast.success('Valor atualizado!')
       setEditingField(null)
     }
@@ -214,7 +285,11 @@ export default function CaixinhaPage() {
     mutationFn: async ({ id, paid }: { id: string; paid: boolean }) => {
       await updateDoc(doc(db, 'payments', id), { paid: !paid, paid_at: !paid ? new Date().toISOString() : null })
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payments'] }); toast.success('Atualizado!') }
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payments'] })
+      saveCaixinhaSummary()
+      toast.success('Atualizado!')
+    }
   })
 
   const generateMonth = useMutation({
@@ -232,6 +307,7 @@ export default function CaixinhaPage() {
     },
     onSuccess: (count) => {
       qc.invalidateQueries({ queryKey: ['payments'] })
+      saveCaixinhaSummary()
       toast.success(count > 0 ? `${count} mensalidades criadas!` : 'Todos já têm mensalidade')
     }
   })
@@ -253,6 +329,7 @@ export default function CaixinhaPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payments'] })
       qc.invalidateQueries({ queryKey: ['pending-requests'] })
+      saveCaixinhaSummary()
       setSelectedPayment(null)
       toast.success('Pagamento removido.')
     }
@@ -281,6 +358,7 @@ export default function CaixinhaPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payments'] })
       qc.invalidateQueries({ queryKey: ['pending-requests'] })
+      saveCaixinhaSummary()
       setSelectedPayment(null)
       toast.success('Pagamento confirmado!')
     },
@@ -320,6 +398,7 @@ export default function CaixinhaPage() {
       qc.invalidateQueries({ queryKey: ['payments'] })
       qc.invalidateQueries({ queryKey: ['pending-requests'] })
       qc.invalidateQueries({ queryKey: ['all-temp-avulsos'] })
+      saveCaixinhaSummary()
       setSelectedTempAvulso(null)
       toast.success('Pagamento confirmado!')
     },
@@ -532,37 +611,49 @@ export default function CaixinhaPage() {
 
             <div className="px-6 flex flex-col gap-4">
 
-        {/* Card financeiro */}
-        <div className="flex flex-col gap-5 p-5 rounded-[20px]" style={{ background: 'var(--color-surface-primary)' }}>
-          <div className="flex flex-col gap-2">
-            <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Saldo Caixinha</p>
-            <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>R$ {saldoTotal.toFixed(2)}</p>
-          </div>
-          <div className="flex gap-5">
-            <div className="flex-1"><EditableRow field="quadra" label="Despesa Quadra" value={quadraCost} /></div>
-            <div className="flex-1"><EditableRow field="extras" label="Despesas Extras" value={extrasCost} /></div>
-          </div>
-          <div className="flex gap-5">
-            <div className="flex-1 flex flex-col gap-0.5">
-              <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Mensalista Recebido</p>
-              <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {mensalistaPaid.toFixed(2)}</p>
+        {/* Card financeiro — admin usa cálculo em tempo real; não-admin usa summary salvo */}
+        {(() => {
+          const s = isAdmin ? null : caixinhaSummary
+          const displaySaldo = s ? s.saldoTotal : saldoTotal
+          const displayQuadra = s ? s.quadraCost : quadraCost
+          const displayExtras = s ? s.extrasCost : extrasCost
+          const displayMensalistaPaid = s ? s.mensalistaPaid : mensalistaPaid
+          const displayMensalistaPending = s ? s.mensalistaPending : mensalistaPending
+          const displayAvulsoPaid = s ? s.avulsoPaid : avulsoPaid
+          const displayAvulsoPending = s ? s.avulsoPending : avulsoPending
+          return (
+            <div className="flex flex-col gap-5 p-5 rounded-[20px]" style={{ background: 'var(--color-surface-primary)' }}>
+              <div className="flex flex-col gap-2">
+                <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>Saldo Caixinha</p>
+                <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-24)', lineHeight: '28px', fontWeight: 600 }}>R$ {displaySaldo.toFixed(2)}</p>
+              </div>
+              <div className="flex gap-5">
+                <div className="flex-1"><EditableRow field="quadra" label="Despesa Quadra" value={displayQuadra} /></div>
+                <div className="flex-1"><EditableRow field="extras" label="Despesas Extras" value={displayExtras} /></div>
+              </div>
+              <div className="flex gap-5">
+                <div className="flex-1 flex flex-col gap-0.5">
+                  <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Mensalista Recebido</p>
+                  <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {displayMensalistaPaid.toFixed(2)}</p>
+                </div>
+                <div className="flex-1 flex flex-col gap-0.5">
+                  <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Mensalista Pendente</p>
+                  <p style={{ color: displayMensalistaPending > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {displayMensalistaPending.toFixed(2)}</p>
+                </div>
+              </div>
+              <div className="flex gap-5">
+                <div className="flex-1 flex flex-col gap-0.5">
+                  <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Avulso Recebido</p>
+                  <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {displayAvulsoPaid.toFixed(2)}</p>
+                </div>
+                <div className="flex-1 flex flex-col gap-0.5">
+                  <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Avulso Pendente</p>
+                  <p style={{ color: displayAvulsoPending > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {displayAvulsoPending.toFixed(2)}</p>
+                </div>
+              </div>
             </div>
-            <div className="flex-1 flex flex-col gap-0.5">
-              <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Mensalista Pendente</p>
-              <p style={{ color: mensalistaPending > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {mensalistaPending.toFixed(2)}</p>
-            </div>
-          </div>
-          <div className="flex gap-5">
-            <div className="flex-1 flex flex-col gap-0.5">
-              <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Avulso Recebido</p>
-              <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {avulsoPaid.toFixed(2)}</p>
-            </div>
-            <div className="flex-1 flex flex-col gap-0.5">
-              <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Avulso Pendente</p>
-              <p style={{ color: avulsoPending > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>R$ {avulsoPending.toFixed(2)}</p>
-            </div>
-          </div>
-        </div>
+          )
+        })()}
 
         <div style={{ height: 1, background: 'var(--color-border)' }} />
 
