@@ -29,25 +29,30 @@ export default function TermsContent() {
           Termos da Pelada
         </h2>
         <p style={{ fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-13)', color: 'var(--color-fg-secondary)', marginTop: 4 }}>
-          Leia (ou finja que leu) antes de continuar
+          Atualizado. Leia (ou finja que leu) antes de continuar.
         </p>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <Section emoji="🔒" title="Seus dados, em boas mãos">
-          Usamos seu nome, e-mail e foto de perfil só dentro do app. Tudo armazenado com segurança na nuvem — mais seguro do que a nossa defesa nos primeiros 10 minutos de jogo.
+
+        <Section emoji="🔒" title="Segurança dos seus dados">
+          {'Seu nome, e-mail, foto de perfil e histórico de presença ficam guardados com segurança no Firebase (Google). São usados exclusivamente dentro do app — ninguém de fora tem acesso.\n\nNão vendemos, não compartilhamos, não fazemos nada suspeito. Os seus dados têm mais proteção do que nossa zaga no segundo tempo.'}
         </Section>
 
-        <Section emoji="📸" title="Redes sociais">
-          Você autoriza o time a postar momentos de <strong>bola cheia</strong> 🟢 e <strong>bola murcha</strong> 🔴 nas redes sociais. Fez um golaço? O mundo vai saber. Deu um frango? Também.
+        <Section emoji="💸" title="Pagamentos e Comprovantes">
+          {'A partir de agora, ao clicar em "Já paguei", você precisará enviar o comprovante do PIX. Sem comprovante, sem confirmação. Simples assim.\n\nO comprovante fica armazenado com segurança e só o admin tem acesso. Não tente mandar print de outra coisa — a gente sabe quando é photoshop, seu espertão.'}
+        </Section>
+
+        <Section emoji="📸" title="Redes Sociais">
+          {'Você autoriza o time a postar momentos de bola cheia e bola murcha nas redes sociais. Fez um golaço? O mundo vai saber. Deu um frango feio? Também. É o preço da fama.'}
         </Section>
 
         <Section emoji="🚗" title="A Regra do Carro">
-          Comprou um carro acima de R$ 500 mil? Parabéns! Você nos deve <strong>1 mês de churrasco completo</strong>, com picanha, linguiça e sem racionamento. Cláusula irrevogável.
+          Comprou um carro acima de R$ 500 mil? Parabéns! Você nos deve <strong>1 mês de churrasco completo</strong>, com picanha, linguiça e sem racionamento. Cláusula irrevogável e juridicamente duvidosa.
         </Section>
 
         <Section emoji="🍺" title="Direitos dos Admins">
-          Os admins merecem ao menos <strong>1 cerveja gelada ou 1 Coca</strong> após cada jogo. Eles organizam tudo, aguentam reclamação e ainda escalam time. Um brinde é o mínimo.
+          Os admins merecem ao menos <strong>1 cerveja gelada ou 1 Coca</strong> após cada jogo. Eles organizam tudo, aguentam reclamação, escalam time e ainda aprovam comprovante. Um brinde é o mínimo.
         </Section>
 
         <Section emoji="⏰" title="Lei do Atraso">
@@ -63,8 +68,9 @@ export default function TermsContent() {
         </Section>
 
         <Section emoji="✅" title="Ao aceitar, você confirma que">
-          {"• Leu esses termos (ou scrollou rápido — vale)\n• É uma boa pessoa\n• Vai aparecer nos jogos que confirmou\n• Não vai sumir sem dar satisfação"}
+          {'• Leu esses termos (ou scrollou rápido — vale)\n• É uma boa pessoa\n• Vai aparecer nos jogos que confirmou\n• Não vai sumir sem dar satisfação\n• Vai mandar o comprovante real ao pagar\n• Entende que seus dados estão seguros e bem guardados'}
         </Section>
+
       </div>
     </div>
   )

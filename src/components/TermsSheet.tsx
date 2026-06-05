@@ -4,17 +4,25 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import TermsContent from './TermsContent'
 
+// Incrementar este número força TODOS os jogadores a re-aceitarem os termos
+export const TERMS_VERSION = 2
+
 interface Props {
   onAccept: () => void
 }
 
-// Chave do localStorage para aceite offline/fallback
-function termsKey(userId: string) {
-  return `terms_accepted_${userId}`
+function localKey(userId: string) {
+  return `terms_v${TERMS_VERSION}_accepted_${userId}`
 }
 
 export function hasAcceptedTermsLocally(userId: string): boolean {
-  try { return localStorage.getItem(termsKey(userId)) === '1' } catch { return false }
+  try { return localStorage.getItem(localKey(userId)) === '1' } catch { return false }
+}
+
+export function needsTermsAcceptance(user: { id: string; termsAccepted?: boolean; termsVersion?: number }): boolean {
+  if (!user.termsAccepted) return true
+  if ((user.termsVersion ?? 1) < TERMS_VERSION) return true
+  return !hasAcceptedTermsLocally(user.id)
 }
 
 export default function TermsSheet({ onAccept }: Props) {
@@ -26,21 +34,21 @@ export default function TermsSheet({ onAccept }: Props) {
     if (!user) return
     setLoading(true)
 
-    // 1. Salva no localStorage imediatamente — garante que o usuário não fica preso
-    //    mesmo que o Firestore falhe (e.g. regras ainda não publicadas)
-    try { localStorage.setItem(termsKey(user.id), '1') } catch { /* ignore */ }
+    // 1. Salva no localStorage imediatamente
+    try { localStorage.setItem(localKey(user.id), '1') } catch { /* ignore */ }
 
-    // 2. Tenta persistir no Firestore (best-effort)
+    // 2. Persiste no Firestore com a versão atual
     try {
-      await updateDoc(doc(db, 'players', user.id), { termsAccepted: true })
+      await updateDoc(doc(db, 'players', user.id), {
+        termsAccepted: true,
+        termsVersion: TERMS_VERSION
+      })
     } catch {
-      // Falha silenciosa — localStorage já garante que a sheet não reaparece
-      // na mesma sessão/dispositivo até as regras serem publicadas
-      console.warn('[TermsSheet] Não foi possível salvar termsAccepted no Firestore.')
+      console.warn('[TermsSheet] Não foi possível salvar no Firestore.')
     }
 
-    // 3. Atualiza store e libera o app sempre, independente do Firestore
-    setUser({ ...user, termsAccepted: true })
+    // 3. Atualiza store e libera o app
+    setUser({ ...user, termsAccepted: true, termsVersion: TERMS_VERSION } as any)
     setLoading(false)
     onAccept()
   }

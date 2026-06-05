@@ -22,7 +22,7 @@ import PresencaPage from './pages/PresencaPage'
 import RankingVotacaoPage from './pages/RankingVotacaoPage'
 import ExportarRelatorioPage from './pages/ExportarRelatorioPage'
 import NotificationCenterPage from './pages/NotificationCenterPage'
-import TermsSheet, { hasAcceptedTermsLocally } from './components/TermsSheet'
+import TermsSheet, { needsTermsAcceptance } from './components/TermsSheet'
 
 export default function App() {
   const { user, loading, setLoading, fetchProfile } = useAuthStore()
@@ -30,9 +30,7 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return
-    // Considera aceito se: campo no Firestore OU aceite gravado no localStorage
-    const accepted = user.termsAccepted || hasAcceptedTermsLocally(user.id)
-    if (!accepted) setShowTerms(true)
+    if (needsTermsAcceptance(user as any)) setShowTerms(true)
   }, [user?.id])
 
   useEffect(() => {
