@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { doc, setDoc } from 'firebase/firestore'
-import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth'
-import { initializeApp, deleteApp } from 'firebase/app'
+import { getAuth } from 'firebase/auth'
 import { db, firebaseConfig } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
@@ -94,19 +93,27 @@ export default function AdminPlayersPage() {
 
   const createPlayer = useMutation({
     mutationFn: async () => {
-      // Usa app secundário para criar o usuário sem interromper a sessão do admin
-      const secondaryApp = initializeApp(firebaseConfig, `create-user-${Date.now()}`)
-      const secondaryAuth = getAuth(secondaryApp)
-      try {
-        const result = await createUserWithEmailAndPassword(secondaryAuth, form.email, form.password)
-        await setDoc(doc(db, 'players', result.user.uid), {
-          name: form.name, email: form.email.toLowerCase(),
-          player_type: form.player_type, role: form.role,
-          active: true, created_at: new Date().toISOString()
-        })
-      } finally {
-        deleteApp(secondaryApp).catch(() => {})
+      // Cria usuário via Firebase Auth REST API — não afeta a sessão do admin
+      const res = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${firebaseConfig.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: form.email, password: form.password, returnSecureToken: false })
+        }
+      )
+      const data = await res.json()
+      if (data.error) {
+        const code = data.error.message as string
+        const err: any = new Error(code)
+        err.code = code
+        throw err
       }
+      await setDoc(doc(db, 'players', data.localId), {
+        name: form.name, email: form.email.toLowerCase(),
+        player_type: form.player_type, role: form.role,
+        active: true, created_at: new Date().toISOString()
+      })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['players'] })
@@ -116,12 +123,13 @@ export default function AdminPlayersPage() {
     },
     onError: (e: any) => {
       console.error('[createPlayer]', e)
+      const code: string = e.code || e.message || ''
       const msg =
-        e.code === 'auth/email-already-in-use' ? 'Email já cadastrado.' :
-        e.code === 'auth/invalid-email' ? 'Email inválido. Use o formato nome@dominio.com' :
-        e.code === 'auth/weak-password' ? 'Senha fraca. Mínimo 6 caracteres.' :
-        e.code === 'auth/operation-not-allowed' ? 'Criação de usuários desativada no Firebase Console.' :
-        `Erro: ${e.code || e.message || 'desconhecido'}`
+        code.includes('EMAIL_EXISTS') ? 'Email já cadastrado.' :
+        code.includes('INVALID_EMAIL') ? 'Email inválido. Use nome@dominio.com' :
+        code.includes('WEAK_PASSWORD') ? 'Senha fraca. Mínimo 6 caracteres.' :
+        code.includes('OPERATION_NOT_ALLOWED') ? 'Criação de usuários desativada no Firebase.' :
+        `Erro: ${code || 'desconhecido'}`
       toast.error(msg)
     }
   })
