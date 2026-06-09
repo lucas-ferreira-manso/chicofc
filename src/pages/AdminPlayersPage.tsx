@@ -99,12 +99,13 @@ export default function AdminPlayersPage() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: form.email, password: form.password, returnSecureToken: false })
+          body: JSON.stringify({ email: form.email, password: form.password, returnSecureToken: true })
         }
       )
       const data = await res.json()
-      if (data.error) {
-        const code = data.error.message as string
+      if (!res.ok || data.error) {
+        console.error('[createPlayer] Firebase REST error:', JSON.stringify(data))
+        const code = data.error?.message ?? `HTTP_${res.status}`
         const err: any = new Error(code)
         err.code = code
         throw err
