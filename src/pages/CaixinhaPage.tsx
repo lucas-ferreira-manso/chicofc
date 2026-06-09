@@ -1125,8 +1125,13 @@ export default function CaixinhaPage() {
                   const snapshot = await uploadBytes(storageRef, comprovanteFile)
                   const url = await getDownloadURL(snapshot.ref)
                   submitPaymentRequest.mutate({ comprovanteUrl: url, comprovantePath: path })
-                } catch {
-                  toast.error('Erro ao enviar comprovante. Tente novamente.')
+                } catch (err: any) {
+                  console.error('[uploadComprovante]', err?.code, err?.message, err)
+                  const msg = err?.code === 'storage/unauthorized' ? 'Sem permissão no Storage. Fala com o admin.'
+                    : err?.code === 'storage/canceled' ? 'Upload cancelado.'
+                    : err?.code?.startsWith('storage/') ? `Erro Storage: ${err.code}`
+                    : `Erro ao enviar comprovante: ${err?.message ?? err?.code ?? 'desconhecido'}`
+                  toast.error(msg)
                 } finally {
                   setUploadingComprovante(false)
                 }
