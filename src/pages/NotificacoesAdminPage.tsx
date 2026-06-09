@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { collection, getDocs, doc, updateDoc, addDoc, query, where, writeBatch } from 'firebase/firestore'
+import { collection, getDocs, doc, updateDoc, addDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { ref, deleteObject } from 'firebase/storage'
 import { storage } from '../lib/firebase'
@@ -111,6 +111,33 @@ export default function NotificacoesAdminPage() {
       toast.success('Pagamento aprovado!')
     },
     onError: () => toast.error('Erro ao aprovar pagamento')
+  })
+
+  const rejectOne = useMutation({
+    mutationFn: async (r: PaymentRequest) => {
+      // Deleta o comprovante do Storage (se houver)
+      if (r.comprovante_path) {
+        await deleteObject(ref(storage, r.comprovante_path)).catch(() => {})
+      }
+      // Notifica o jogador
+      await addDoc(collection(db, 'notifications'), {
+        user_id: r.user_id,
+        title: 'Pagamento negado',
+        message: 'Seu comprovante foi recusado. Verifique e envie novamente.',
+        type: 'payment_request',
+        read: false,
+        created_at: new Date().toISOString()
+      })
+      // Remove o payment_request — jogador fica livre para submeter de novo
+      await deleteDoc(doc(db, 'payment_requests', r.id))
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payment-requests'] })
+      qc.invalidateQueries({ queryKey: ['my-payment-request'] })
+      setSelectedRequest(null)
+      toast('Pagamento negado. Jogador notificado.')
+    },
+    onError: () => toast.error('Erro ao negar pagamento')
   })
 
   const approveAll = useMutation({
@@ -269,14 +296,23 @@ export default function NotificacoesAdminPage() {
               </div>
             )}
 
-            {/* Botão Aprovar */}
-            <button
-              onClick={() => approveOne.mutate(selectedRequest)}
-              disabled={approveOne.isPending}
-              className="transition-all active:scale-95 disabled:opacity-40"
-              style={{ width: '100%', height: 56, borderRadius: 9999, background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, border: 'none', cursor: 'pointer' }}>
-              {approveOne.isPending ? 'Aprovando...' : 'Aprovar pagamento'}
-            </button>
+            {/* Botões Aprovar / Negar */}
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                onClick={() => rejectOne.mutate(selectedRequest)}
+                disabled={rejectOne.isPending || approveOne.isPending}
+                className="transition-all active:scale-95 disabled:opacity-40"
+                style={{ flex: 1, height: 56, borderRadius: 9999, background: 'var(--color-surface-primary)', color: '#ef4444', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, border: '1.5px solid #ef4444', cursor: 'pointer' }}>
+                {rejectOne.isPending ? 'Negando...' : 'Negar'}
+              </button>
+              <button
+                onClick={() => approveOne.mutate(selectedRequest)}
+                disabled={approveOne.isPending || rejectOne.isPending}
+                className="transition-all active:scale-95 disabled:opacity-40"
+                style={{ flex: 1, height: 56, borderRadius: 9999, background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, border: 'none', cursor: 'pointer' }}>
+                {approveOne.isPending ? 'Aprovando...' : 'Aprovar'}
+              </button>
+            </div>
           </div>
         </>
       )}

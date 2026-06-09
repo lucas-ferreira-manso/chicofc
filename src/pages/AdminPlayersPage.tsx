@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { doc, setDoc } from 'firebase/firestore'
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, getAuth } from 'firebase/auth'
-import { db } from '../lib/firebase'
+import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth'
+import { initializeApp, deleteApp } from 'firebase/app'
+import { db, firebaseConfig } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
 import { CaretLeft, UserPlus, X } from '@phosphor-icons/react'
@@ -93,16 +94,19 @@ export default function AdminPlayersPage() {
 
   const createPlayer = useMutation({
     mutationFn: async () => {
-      const adminEmail = user!.email
-      const adminPassword = window.prompt('Digite sua senha para confirmar:')
-      if (!adminPassword) throw new Error('cancelled')
-      const result = await createUserWithEmailAndPassword(auth, form.email, form.password)
-      await setDoc(doc(db, 'players', result.user.uid), {
-        name: form.name, email: form.email.toLowerCase(),
-        player_type: form.player_type, role: form.role,
-        active: true, created_at: new Date().toISOString()
-      })
-      await signInWithEmailAndPassword(auth, adminEmail, adminPassword)
+      // Usa app secundário para criar o usuário sem interromper a sessão do admin
+      const secondaryApp = initializeApp(firebaseConfig, `create-user-${Date.now()}`)
+      const secondaryAuth = getAuth(secondaryApp)
+      try {
+        const result = await createUserWithEmailAndPassword(secondaryAuth, form.email, form.password)
+        await setDoc(doc(db, 'players', result.user.uid), {
+          name: form.name, email: form.email.toLowerCase(),
+          player_type: form.player_type, role: form.role,
+          active: true, created_at: new Date().toISOString()
+        })
+      } finally {
+        await deleteApp(secondaryApp)
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['players'] })
@@ -111,7 +115,6 @@ export default function AdminPlayersPage() {
       setShowAddSheet(false)
     },
     onError: (e: any) => {
-      if (e.message === 'cancelled') return
       toast.error(e.code === 'auth/email-already-in-use' ? 'Email já cadastrado.' : 'Erro ao adicionar.')
     }
   })

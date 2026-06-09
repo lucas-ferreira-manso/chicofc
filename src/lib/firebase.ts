@@ -3,7 +3,7 @@ import { getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyA50geUxPHTq9F0QEjndJCY_CNFLs-BMBU",
   authDomain: "chico-fc.firebaseapp.com",
   projectId: "chico-fc",
