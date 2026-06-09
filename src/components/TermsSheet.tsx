@@ -22,7 +22,9 @@ export function hasAcceptedTermsLocally(userId: string): boolean {
 export function needsTermsAcceptance(user: { id: string; termsAccepted?: boolean; termsVersion?: number }): boolean {
   if (!user.termsAccepted) return true
   if ((user.termsVersion ?? 1) < TERMS_VERSION) return true
-  return !hasAcceptedTermsLocally(user.id)
+  // Firestore já confirma aceitação da versão atual — não depende de localStorage
+  // (localStorage é só cache local; se limpo/outro device, não deve exibir termos de novo)
+  return false
 }
 
 export default function TermsSheet({ onAccept }: Props) {
