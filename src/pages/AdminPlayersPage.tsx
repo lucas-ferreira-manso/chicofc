@@ -105,7 +105,7 @@ export default function AdminPlayersPage() {
           active: true, created_at: new Date().toISOString()
         })
       } finally {
-        await deleteApp(secondaryApp)
+        deleteApp(secondaryApp).catch(() => {})
       }
     },
     onSuccess: () => {
@@ -115,7 +115,14 @@ export default function AdminPlayersPage() {
       setShowAddSheet(false)
     },
     onError: (e: any) => {
-      toast.error(e.code === 'auth/email-already-in-use' ? 'Email já cadastrado.' : 'Erro ao adicionar.')
+      console.error('[createPlayer]', e)
+      const msg =
+        e.code === 'auth/email-already-in-use' ? 'Email já cadastrado.' :
+        e.code === 'auth/invalid-email' ? 'Email inválido. Use o formato nome@dominio.com' :
+        e.code === 'auth/weak-password' ? 'Senha fraca. Mínimo 6 caracteres.' :
+        e.code === 'auth/operation-not-allowed' ? 'Criação de usuários desativada no Firebase Console.' :
+        `Erro: ${e.code || e.message || 'desconhecido'}`
+      toast.error(msg)
     }
   })
 
