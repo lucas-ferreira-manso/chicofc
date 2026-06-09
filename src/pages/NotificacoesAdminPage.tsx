@@ -1,8 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { collection, getDocs, doc, updateDoc, addDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import { ref, deleteObject } from 'firebase/storage'
-import { storage } from '../lib/firebase'
+
 import { saveCaixinhaSummary } from './CaixinhaPage'
 import { useState } from 'react'
 import { X, CheckCircle } from '@phosphor-icons/react'
@@ -25,6 +24,7 @@ interface PaymentRequest {
   game_id?: string
   comprovante_url?: string
   comprovante_path?: string
+  comprovante_base64?: string
 }
 
 async function fetchRequests(): Promise<PaymentRequest[]> {
@@ -92,13 +92,7 @@ export default function NotificacoesAdminPage() {
         }
       }))
 
-      // Após confirmar todos os pagamentos, deleta os comprovantes do Storage
-      // para proteger dados bancários dos jogadores
-      await Promise.allSettled(
-        toApprove
-          .filter(r => r.comprovante_path)
-          .map(r => deleteObject(ref(storage, r.comprovante_path!)))
-      )
+      // Comprovantes ficam no Firestore — não há Storage para limpar
   }
 
   const approveOne = useMutation({
@@ -115,10 +109,6 @@ export default function NotificacoesAdminPage() {
 
   const rejectOne = useMutation({
     mutationFn: async (r: PaymentRequest) => {
-      // Deleta o comprovante do Storage (se houver)
-      if (r.comprovante_path) {
-        await deleteObject(ref(storage, r.comprovante_path)).catch(() => {})
-      }
       // Notifica o jogador
       await addDoc(collection(db, 'notifications'), {
         user_id: r.user_id,
@@ -201,7 +191,7 @@ export default function NotificacoesAdminPage() {
             ? `Avulso temp${r.temp_avulso_ids?.length ? ` (${r.temp_avulso_ids.length})` : ''}`
             : r.player_type === 'mensalista' ? 'Mensalidade' : 'Avulso'
           return (
-            <button key={r.id} onClick={() => r.comprovante_url ? setSelectedRequest(r) : toggleCheck(r.id)}
+            <button key={r.id} onClick={() => (r.comprovante_url || r.comprovante_base64) ? setSelectedRequest(r) : toggleCheck(r.id)}
               className="w-full flex items-center gap-3 p-4 rounded-3xl transition-all active:scale-[0.99]"
               style={{
                 background: isChecked ? 'var(--color-surface-accent-light)' : 'var(--color-surface-primary)',
@@ -231,7 +221,7 @@ export default function NotificacoesAdminPage() {
                 <p style={{ color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 700 }}>
                   R$ {r.amount}
                 </p>
-                {r.comprovante_url && (
+                {(r.comprovante_url || r.comprovante_base64) && (
                   <p style={{ fontFamily: 'var(--font-primary)', fontSize: 10, color: '#089527', fontWeight: 600 }}>📎 comprovante</p>
                 )}
               </div>
@@ -290,9 +280,9 @@ export default function NotificacoesAdminPage() {
             </div>
 
             {/* Preview comprovante */}
-            {selectedRequest.comprovante_url && (
+            {(selectedRequest.comprovante_url || selectedRequest.comprovante_base64) && (
               <div style={{ background: 'var(--color-surface-primary)', borderRadius: 16, padding: 16, display: 'flex', justifyContent: 'center' }}>
-                <img src={selectedRequest.comprovante_url} alt="Comprovante" style={{ maxHeight: 220, maxWidth: '100%', objectFit: 'contain', borderRadius: 8 }} />
+                <img src={selectedRequest.comprovante_base64 || selectedRequest.comprovante_url} alt="Comprovante" style={{ maxHeight: 220, maxWidth: '100%', objectFit: 'contain', borderRadius: 8 }} />
               </div>
             )}
 

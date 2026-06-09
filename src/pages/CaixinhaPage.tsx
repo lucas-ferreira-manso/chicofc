@@ -6,13 +6,32 @@ import { useAuthStore } from '../store/authStore'
 import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Copy, Check, PencilSimple, X, CheckCircle, Circle, CaretDown, FileArrowUp } from '@phosphor-icons/react'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { storage } from '../lib/firebase'
+
 import Header from '../components/layout/Header'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 import type { Payment, Profile } from '../types'
+
+// Comprime imagem e retorna base64 (max ~200KB para caber no Firestore)
+async function compressImageToBase64(file: File, maxWidth = 1200, quality = 0.7): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const scale = Math.min(1, maxWidth / img.width)
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width * scale
+      canvas.height = img.height * scale
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      resolve(canvas.toDataURL('image/jpeg', quality))
+    }
+    img.onerror = reject
+    img.src = url
+  })
+}
 
 const PIX_CODE = '42c4fc79-a983-4a02-88fb-81ec76948c0f'
 // Saldo inicial em caixa antes do app ser criado: R$ 1.082,00
@@ -468,7 +487,7 @@ export default function CaixinhaPage() {
   // Já paguei — busca dados frescos do Firestore na hora do clique para evitar
   // qualquer problema de cache/stale. Cobre próprio + avulsos temp adicionados.
   const submitPaymentRequest = useMutation({
-    mutationFn: async ({ comprovanteUrl, comprovantePath }: { comprovanteUrl: string; comprovantePath: string }) => {
+    mutationFn: async ({ comprovanteBase64 }: { comprovanteBase64: string }) => {
       if (!user?.id) throw new Error('Usuário não identificado')
       const now = new Date().toISOString()
       const month = format(new Date(), 'yyyy-MM')
@@ -518,8 +537,7 @@ export default function CaixinhaPage() {
           amount: ownAmount,
           month,
           status: 'pending',
-          comprovante_url: comprovanteUrl,
-          comprovante_path: comprovantePath,
+          comprovante_base64: comprovanteBase64,
           created_at: now
         }))
       }
@@ -535,8 +553,7 @@ export default function CaixinhaPage() {
           status: 'pending',
           is_for_temp_avulso: true,
           temp_avulso_ids: unpaidTemps.map((t: any) => t.id),
-          comprovante_url: comprovanteUrl,
-          comprovante_path: comprovantePath,
+          comprovante_base64: comprovanteBase64,
           created_at: now
         }))
       }
@@ -791,7 +808,7 @@ export default function CaixinhaPage() {
                 <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Aguardando aprovação do admin</p>
               </div>
               {/* Comprovante ainda não enviado (request criado antes da feature existir) */}
-              {!(myRequest as any)?.comprovante_url && (
+              {!(myRequest as any)?.comprovante_url && !(myRequest as any)?.comprovante_base64 && (
                 <button onClick={() => setShowComprovanteSheet(true)}
                   className="w-full py-3 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 rounded-full"
                   style={{ background: 'var(--color-surface-secondary)', color: 'var(--color-fg-primary)', border: '1px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
@@ -1120,18 +1137,11 @@ export default function CaixinhaPage() {
                 if (!comprovanteFile || !user?.id) return
                 setUploadingComprovante(true)
                 try {
-                  const path = `comprovantes/${user.id}/${Date.now()}_${comprovanteFile.name}`
-                  const storageRef = ref(storage, path)
-                  const snapshot = await uploadBytes(storageRef, comprovanteFile)
-                  const url = await getDownloadURL(snapshot.ref)
-                  submitPaymentRequest.mutate({ comprovanteUrl: url, comprovantePath: path })
+                  const base64 = await compressImageToBase64(comprovanteFile)
+                  submitPaymentRequest.mutate({ comprovanteBase64: base64 })
                 } catch (err: any) {
-                  console.error('[uploadComprovante]', err?.code, err?.message, err)
-                  const msg = err?.code === 'storage/unauthorized' ? 'Sem permissão no Storage. Fala com o admin.'
-                    : err?.code === 'storage/canceled' ? 'Upload cancelado.'
-                    : err?.code?.startsWith('storage/') ? `Erro Storage: ${err.code}`
-                    : `Erro ao enviar comprovante: ${err?.message ?? err?.code ?? 'desconhecido'}`
-                  toast.error(msg)
+                  console.error('[uploadComprovante]', err)
+                  toast.error('Erro ao processar imagem. Tente outra foto.')
                 } finally {
                   setUploadingComprovante(false)
                 }
