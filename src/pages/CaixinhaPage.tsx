@@ -589,8 +589,10 @@ export default function CaixinhaPage() {
   const userIdsComPendingAvulsoRequest = new Set(
     (pendingRequests as any[]).filter(r => r.player_type === 'avulso').map(r => r.user_id)
   )
+  // IDs dos players que são atualmente avulsos — exclui pagamentos orphaned de quem mudou de tipo
+  const currentAvulsoIds = new Set(players.filter(p => (p as any).player_type === 'avulso').map(p => p.id))
   const avulsoFromPayments = jogoPayments
-    .filter(p => !p.paid && !userIdsComPendingAvulsoRequest.has(p.user_id))
+    .filter(p => !p.paid && !userIdsComPendingAvulsoRequest.has(p.user_id) && currentAvulsoIds.has(p.user_id))
     .reduce((s, p) => s + p.amount, 0)
   // Requests de avulso pendentes (cobrem jogo próprio e/ou temps) — somamos o amount direto
   const avulsoFromRequests = (pendingRequests as any[])
@@ -788,6 +790,14 @@ export default function CaixinhaPage() {
               <div className="w-full py-3 flex items-center justify-center gap-2 rounded-full" style={{ background: 'var(--color-surface-primary)', border: '1px solid var(--color-border)' }}>
                 <p style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>Aguardando aprovação do admin</p>
               </div>
+              {/* Comprovante ainda não enviado (request criado antes da feature existir) */}
+              {!(myRequest as any)?.comprovante_url && (
+                <button onClick={() => setShowComprovanteSheet(true)}
+                  className="w-full py-3 flex items-center justify-center gap-2 font-medium transition-all active:scale-95 rounded-full"
+                  style={{ background: 'var(--color-surface-secondary)', color: 'var(--color-fg-primary)', border: '1px solid var(--color-border)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+                  📎 Enviar comprovante
+                </button>
+              )}
               {/* Se temp ainda não foi submetido (ex: adicionou após já ter enviado o próprio) */}
               {hasTempAvulsoPending && (
                 <div className="flex gap-3">

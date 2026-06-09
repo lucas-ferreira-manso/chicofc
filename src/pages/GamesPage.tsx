@@ -352,14 +352,40 @@ export default function GamesPage() {
       const batch = writeBatch(db)
       let shouldNotifyAvulso = false
 
-      const playerType = user!.player_type ?? 'avulso'
+      // Busca tipo atualizado do Firestore — evita usar cache stale do auth store
+      // (ex: admin mudou player_type enquanto usuário estava logado)
+      const freshSnap = await getDoc(doc(db, 'players', user!.id))
+      const playerType: string = freshSnap.exists() ? (freshSnap.data().player_type ?? 'avulso') : 'avulso'
 
       if (myAttendance) {
-        // Movendo da espera para confirmado (após terça 13h)
-        batch.update(doc(db, 'attendances', myAttendance.id), { status: 'confirmed' })
-        // Pagamento já existe desde que entrou na espera — só notifica
-        if (playerType === 'avulso' && myAttendance.status === 'waitlist' && !priorityOpen) {
-          shouldNotifyAvulso = true
+        // Caso especial: player mudou de tipo (era avulso, agora é mensalista)
+        // → descarta attendance antiga + pagamento orphaned, recria como mensalista
+        if (playerType === 'mensalista' && myAttendance.player_type === 'avulso') {
+          batch.delete(doc(db, 'attendances', myAttendance.id))
+          // Remove pagamento de jogo não pago que ficou orphaned
+          const orphanedPay = await getDocs(query(
+            collection(db, 'payments'),
+            where('user_id', '==', user!.id),
+            where('game_id', '==', gameId),
+            where('paid', '==', false)
+          ))
+          orphanedPay.docs.forEach(d => batch.delete(d.ref))
+          // Cria nova attendance de mensalista
+          const newAttRef = doc(collection(db, 'attendances'))
+          batch.set(newAttRef, {
+            game_id: gameId,
+            user_id: user!.id,
+            player_type: 'mensalista',
+            status: isFull ? 'waitlist' : 'confirmed',
+            confirmed_at: new Date().toISOString()
+          })
+        } else {
+          // Movendo da espera para confirmado (após terça 13h)
+          batch.update(doc(db, 'attendances', myAttendance.id), { status: 'confirmed' })
+          // Pagamento já existe desde que entrou na espera — só notifica
+          if (playerType === 'avulso' && myAttendance.status === 'waitlist' && !priorityOpen) {
+            shouldNotifyAvulso = true
+          }
         }
       } else {
         // Avulsos sempre vão para a lista de espera; mensalistas confirmam direto (se não lotado)
