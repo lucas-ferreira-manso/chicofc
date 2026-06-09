@@ -352,17 +352,23 @@ export default function GamesPage() {
       const batch = writeBatch(db)
       let shouldNotifyAvulso = false
 
-      // Busca tipo atualizado do Firestore — evita usar cache stale do auth store
-      // (ex: admin mudou player_type enquanto usuário estava logado)
-      const freshSnap = await getDoc(doc(db, 'players', user!.id))
-      const playerType: string = freshSnap.exists() ? (freshSnap.data().player_type ?? 'avulso') : 'avulso'
+      // Busca dados frescos do Firestore — evita usar cache stale que causa attendances duplicadas
+      // (cenário: resposta demorou, mutation pareceu falhar, usuário tocou de novo)
+      const [freshPlayerSnap, freshAttSnap] = await Promise.all([
+        getDoc(doc(db, 'players', user!.id)),
+        getDocs(query(collection(db, 'attendances'), where('game_id', '==', gameId), where('user_id', '==', user!.id)))
+      ])
+      const playerType: string = freshPlayerSnap.exists() ? (freshPlayerSnap.data().player_type ?? 'avulso') : 'avulso'
+      const freshAttendance = freshAttSnap.empty ? null : { id: freshAttSnap.docs[0].id, ...freshAttSnap.docs[0].data() } as any
 
-      if (myAttendance) {
+      // Idempotência: se já está confirmado, não faz nada
+      if (freshAttendance?.status === 'confirmed') return
+
+      if (freshAttendance) {
         // Caso especial: player mudou de tipo (era avulso, agora é mensalista)
         // → descarta attendance antiga + pagamento orphaned, recria como mensalista
-        if (playerType === 'mensalista' && myAttendance.player_type === 'avulso') {
-          batch.delete(doc(db, 'attendances', myAttendance.id))
-          // Remove pagamento de jogo não pago que ficou orphaned
+        if (playerType === 'mensalista' && freshAttendance.player_type === 'avulso') {
+          batch.delete(doc(db, 'attendances', freshAttendance.id))
           const orphanedPay = await getDocs(query(
             collection(db, 'payments'),
             where('user_id', '==', user!.id),
@@ -370,35 +376,25 @@ export default function GamesPage() {
             where('paid', '==', false)
           ))
           orphanedPay.docs.forEach(d => batch.delete(d.ref))
-          // Cria nova attendance de mensalista
-          const newAttRef = doc(collection(db, 'attendances'))
-          batch.set(newAttRef, {
-            game_id: gameId,
-            user_id: user!.id,
-            player_type: 'mensalista',
+          batch.set(doc(collection(db, 'attendances')), {
+            game_id: gameId, user_id: user!.id, player_type: 'mensalista',
             status: isFull ? 'waitlist' : 'confirmed',
             confirmed_at: new Date().toISOString()
           })
         } else {
-          // Movendo da espera para confirmado (após terça 13h)
-          batch.update(doc(db, 'attendances', myAttendance.id), { status: 'confirmed' })
-          // Pagamento já existe desde que entrou na espera — só notifica
-          if (playerType === 'avulso' && myAttendance.status === 'waitlist' && !priorityOpen) {
+          // Movendo da espera / declined para confirmado
+          batch.update(doc(db, 'attendances', freshAttendance.id), { status: 'confirmed' })
+          if (playerType === 'avulso' && freshAttendance.status === 'waitlist' && !priorityOpen) {
             shouldNotifyAvulso = true
           }
         }
       } else {
-        // Avulsos sempre vão para a lista de espera; mensalistas confirmam direto (se não lotado)
+        // Sem attendance prévia — cria nova
         const status: 'confirmed' | 'waitlist' = (isFull || playerType === 'avulso') ? 'waitlist' : 'confirmed'
-        const attRef = doc(collection(db, 'attendances'))
-        batch.set(attRef, {
-          game_id: gameId,
-          user_id: user!.id,
-          player_type: playerType,
-          status,
-          confirmed_at: new Date().toISOString()
+        batch.set(doc(collection(db, 'attendances')), {
+          game_id: gameId, user_id: user!.id, player_type: playerType,
+          status, confirmed_at: new Date().toISOString()
         })
-        // Cria pagamento imediatamente ao entrar (espera ou confirmado)
         if (playerType === 'avulso') {
           batch.set(doc(collection(db, 'payments')), {
             user_id: user!.id, amount: 22, type: 'jogo',
