@@ -222,7 +222,7 @@ export function BigCard({ entry, cardRef, onShare, sharing }: BigCardProps) {
     : null
 
   return (
-    <div ref={cardRef} style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', padding: '24px 16px 16px', borderRadius: 24, position: 'relative', overflow: 'hidden', aspectRatio: '1/1', width: '100%' }}>
+    <div ref={cardRef} style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', padding: '24px 16px 16px', borderRadius: 24, position: 'relative', overflow: 'hidden', ...(onShare ? {} : { aspectRatio: '1/1' }), width: '100%' }}>
       <img src="/stadium-bg.png" aria-hidden alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', pointerEvents: 'none' }} />
       <img src="/team-blue.png" alt="ChicoFC" style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0, position: 'relative' }} />
