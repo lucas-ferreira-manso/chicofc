@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   collection, getDocs, query, where, doc,
-  updateDoc, addDoc, writeBatch
+  updateDoc, addDoc, writeBatch, deleteDoc
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
@@ -36,6 +36,9 @@ interface PaymentRequest {
   created_at: string
   is_for_temp_avulso?: boolean
   temp_avulso_ids?: string[]
+  comprovante_url?: string
+  comprovante_path?: string
+  comprovante_base64?: string
 }
 
 // ─── Fetchers ─────────────────────────────────────────────────────────────────
@@ -166,6 +169,26 @@ export default function NotificationCenterPage() {
     onError: () => toast.error('Erro ao confirmar pagamento')
   })
 
+  const rejectRequest = useMutation({
+    mutationFn: async (r: PaymentRequest) => {
+      await addDoc(collection(db, 'notifications'), {
+        user_id: r.user_id,
+        title: 'Pagamento negado',
+        message: 'Seu comprovante foi recusado. Verifique e envie novamente.',
+        type: 'payment_request',
+        read: false,
+        created_at: new Date().toISOString()
+      })
+      await deleteDoc(doc(db, 'payment_requests', r.id))
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payment-requests'] })
+      setSelectedRequest(null)
+      toast('Pagamento negado. Jogador notificado.')
+    },
+    onError: () => toast.error('Erro ao negar pagamento')
+  })
+
   const isEmpty = notifications.length === 0 && (!isAdmin || pendingRequests.length === 0)
 
   return (
@@ -258,50 +281,60 @@ export default function NotificationCenterPage() {
               Confirmar pagamento
             </p>
 
-            <p style={{
-              fontFamily: 'var(--font-primary)', fontWeight: 600,
-              fontSize: 'var(--font-size-16)', color: 'var(--color-fg-primary)'
-            }}>
-              Tem certeza de que o <span style={{ color: 'var(--color-fg-accent)' }}>{selectedRequest.user_name}</span> fez o pagamento?
-            </p>
-
-            {/* Amount info */}
-            <div className="px-4 py-3 rounded-2xl" style={{ background: 'var(--color-surface-primary)' }}>
-              <p style={{ fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', color: 'var(--color-fg-secondary)' }}>
-                {selectedRequest.is_for_temp_avulso
-                  ? `Avulso temp${selectedRequest.temp_avulso_ids?.length ? ` (${selectedRequest.temp_avulso_ids.length})` : ''}`
-                  : selectedRequest.player_type === 'mensalista' ? 'Mensalidade' : 'Avulso'
-                }
-                {' · '}
-                {(() => {
-                  const m = (selectedRequest.month || '').split('-')
-                  try {
-                    return format(new Date(Number(m[0]), Number(m[1]) - 1, 1), 'MMMM yyyy', { locale: ptBR })
-                  } catch { return selectedRequest.month }
-                })()}
-              </p>
-              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 'var(--font-size-24)', color: 'var(--color-fg-accent)' }}>
-                R$ {selectedRequest.amount}
-              </p>
+            {/* Info do jogador */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--color-avatar-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 16, color: 'var(--color-avatar-fg)', flexShrink: 0 }}>
+                {(selectedRequest.user_name || '?')[0].toUpperCase()}
+              </div>
+              <div>
+                <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 'var(--font-size-16)', color: 'var(--color-fg-primary)' }}>
+                  {selectedRequest.user_name}
+                </p>
+                <p style={{ fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', color: 'var(--color-fg-secondary)' }}>
+                  {selectedRequest.is_for_temp_avulso
+                    ? `Avulso temp${selectedRequest.temp_avulso_ids?.length ? ` (${selectedRequest.temp_avulso_ids.length})` : ''}`
+                    : selectedRequest.player_type === 'mensalista' ? 'Mensalidade' : 'Avulso'
+                  }
+                  {' · R$ '}{selectedRequest.amount}
+                  {' · '}
+                  {(() => {
+                    const m = (selectedRequest.month || '').split('-')
+                    try { return format(new Date(Number(m[0]), Number(m[1]) - 1, 1), 'MMMM yyyy', { locale: ptBR }) }
+                    catch { return selectedRequest.month }
+                  })()}
+                </p>
+              </div>
             </div>
+
+            {/* Comprovante */}
+            {(selectedRequest.comprovante_base64 || selectedRequest.comprovante_url) && (
+              <div style={{ background: 'var(--color-surface-primary)', borderRadius: 16, padding: 16, display: 'flex', justifyContent: 'center' }}>
+                <img
+                  src={selectedRequest.comprovante_base64 || selectedRequest.comprovante_url}
+                  alt="Comprovante"
+                  style={{ maxHeight: 260, maxWidth: '100%', objectFit: 'contain', borderRadius: 8 }}
+                />
+              </div>
+            )}
 
             {/* Buttons */}
             <div className="flex gap-2">
               <button
-                onClick={() => setSelectedRequest(null)}
-                className="flex-1 py-4 rounded-full font-medium transition-all active:scale-95"
+                onClick={() => rejectRequest.mutate(selectedRequest)}
+                disabled={rejectRequest.isPending || approveRequest.isPending}
+                className="flex-1 py-4 rounded-full font-medium transition-all active:scale-95 disabled:opacity-40"
                 style={{
-                  background: 'var(--color-surface-accent-light)',
-                  color: 'var(--color-fg-accent)',
+                  background: 'var(--color-surface-primary)',
+                  color: '#ef4444',
                   fontFamily: 'var(--font-primary)',
                   fontSize: 'var(--font-size-16)',
-                  border: 'none'
+                  border: '1.5px solid #ef4444'
                 }}>
-                Cancelar
+                {rejectRequest.isPending ? 'Negando...' : 'Negar'}
               </button>
               <button
                 onClick={() => approveRequest.mutate(selectedRequest)}
-                disabled={approveRequest.isPending}
+                disabled={approveRequest.isPending || rejectRequest.isPending}
                 className="flex-1 py-4 rounded-full font-medium transition-all active:scale-95 disabled:opacity-40"
                 style={{
                   background: 'var(--btn-primary-bg)',
@@ -310,7 +343,7 @@ export default function NotificationCenterPage() {
                   fontSize: 'var(--font-size-16)',
                   border: 'none'
                 }}>
-                {approveRequest.isPending ? 'Confirmando...' : 'Confirmar'}
+                {approveRequest.isPending ? 'Aprovando...' : 'Aprovar'}
               </button>
             </div>
           </div>
