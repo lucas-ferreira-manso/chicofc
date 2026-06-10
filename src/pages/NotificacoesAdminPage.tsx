@@ -191,7 +191,7 @@ export default function NotificacoesAdminPage() {
             ? `Avulso temp${r.temp_avulso_ids?.length ? ` (${r.temp_avulso_ids.length})` : ''}`
             : r.player_type === 'mensalista' ? 'Mensalidade' : 'Avulso'
           return (
-            <button key={r.id} onClick={() => (r.comprovante_url || r.comprovante_base64) ? setSelectedRequest(r) : toggleCheck(r.id)}
+            <button key={r.id} onClick={() => setSelectedRequest(r)}
               className="w-full flex items-center gap-3 p-4 rounded-3xl transition-all active:scale-[0.99]"
               style={{
                 background: isChecked ? 'var(--color-surface-accent-light)' : 'var(--color-surface-primary)',
