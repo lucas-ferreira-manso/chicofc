@@ -22,7 +22,7 @@ import PresencaPage from './pages/PresencaPage'
 import RankingVotacaoPage from './pages/RankingVotacaoPage'
 import ExportarRelatorioPage from './pages/ExportarRelatorioPage'
 import NotificationCenterPage from './pages/NotificationCenterPage'
-import TermsSheet, { needsTermsAcceptance } from './components/TermsSheet'
+import TermsSheet, { needsTermsAcceptance, hasAcceptedTermsLocally } from './components/TermsSheet'
 
 export default function App() {
   const { user, loading, setLoading, fetchProfile } = useAuthStore()
@@ -30,6 +30,9 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return
+    // localStorage é verificado primeiro para evitar falso positivo quando
+    // o Firestore retorna cache desatualizado no pull-to-refresh
+    if (hasAcceptedTermsLocally(user.id)) return
     if (needsTermsAcceptance(user as any)) setShowTerms(true)
   }, [user?.id])
 
