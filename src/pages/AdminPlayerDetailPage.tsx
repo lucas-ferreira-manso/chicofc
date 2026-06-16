@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { doc, updateDoc, addDoc, deleteDoc, collection, getDocs, query, where, getDoc } from 'firebase/firestore'
-import { getAuth, getIdToken } from 'firebase/auth'
+import { getAuth, getIdToken, sendPasswordResetEmail } from 'firebase/auth'
 import { format, isWednesday, nextWednesday, startOfDay, isAfter } from 'date-fns'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
@@ -135,6 +135,15 @@ export default function AdminPlayerDetailPage() {
       navigate(-1)
     },
     onError: () => toast.error('Erro ao remover jogador.')
+  })
+
+  const resetPassword = useMutation({
+    mutationFn: async () => {
+      if (!player?.email) throw new Error('Email não encontrado')
+      await sendPasswordResetEmail(auth, player.email)
+    },
+    onSuccess: () => toast.success('Email de redefinição enviado!'),
+    onError: () => toast.error('Erro ao enviar email de redefinição.')
   })
 
   const cobrar = useMutation({
@@ -373,8 +382,8 @@ export default function AdminPlayerDetailPage() {
           )}
         </div>
 
-        {/* Botão Cobrar */}
-        <div style={{ marginTop: 'auto', paddingTop: 24 }}>
+        {/* Botões de ação */}
+        <div style={{ marginTop: 'auto', paddingTop: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button
             onClick={() => cobrar.mutate()}
             disabled={cobrar.isPending}
@@ -387,6 +396,19 @@ export default function AdminPlayerDetailPage() {
               fontSize: 'var(--font-size-16)', color: 'var(--color-fg-accent)'
             }}>
             {cobrar.isPending ? 'Enviando...' : isMensalista ? 'Cobrar Mensalidade' : 'Cobrar Jogo'}
+          </button>
+          <button
+            onClick={() => resetPassword.mutate()}
+            disabled={resetPassword.isPending}
+            className="w-full transition-all active:scale-95 disabled:opacity-40"
+            style={{
+              background: 'var(--color-surface-secondary)',
+              border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)',
+              padding: '16px 24px',
+              fontFamily: 'var(--font-primary)', fontWeight: 500,
+              fontSize: 'var(--font-size-16)', color: 'var(--color-fg-secondary)'
+            }}>
+            {resetPassword.isPending ? 'Enviando...' : '🔑 Redefinir senha'}
           </button>
         </div>
       </div>
