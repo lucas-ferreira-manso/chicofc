@@ -1,16 +1,14 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { doc, setDoc } from 'firebase/firestore'
 import { getAuth } from 'firebase/auth'
-import { db, firebaseConfig } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
 import { CaretLeft, UserPlus, X } from '@phosphor-icons/react'
 import { fetchPlayers } from './AdminPage'
 import type { Profile } from '../types'
 
-const auth = getAuth()
+const SERVER_URL = 'https://chicofc-server.onrender.com'
 
 function getInitials(name: string): string {
   return name.trim().split(' ').filter(Boolean).slice(0, 2).map(n => n[0].toUpperCase()).join('')
@@ -93,69 +91,24 @@ export default function AdminPlayersPage() {
 
   const createPlayer = useMutation({
     mutationFn: async () => {
-      const apiKey = firebaseConfig.apiKey
-      let localId: string
+      // Usa o servidor backend com Firebase Admin SDK — evita problemas de
+      // regras do Firestore client-side e não afeta a sessão do admin
+      const token = await getAuth().currentUser?.getIdToken()
+      if (!token) throw new Error('Sessão expirada. Faça login novamente.')
 
-      // 1. Tenta criar no Firebase Auth via REST (não afeta sessão do admin)
-      const signUpRes = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: form.email.trim(), password: form.password, returnSecureToken: true })
-        }
-      )
-      const signUpData = await signUpRes.json()
-      console.log('[createPlayer] signUp response:', JSON.stringify(signUpData))
-
-      if (!signUpRes.ok || signUpData.error) {
-        const code: string = signUpData.error?.message ?? `HTTP_${signUpRes.status}`
-
-        if (code.includes('EMAIL_EXISTS')) {
-          // Auth já tem o email — tenta signIn para recuperar o UID
-          const signInRes = await fetch(
-            `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email: form.email.trim(), password: form.password, returnSecureToken: true })
-            }
-          )
-          const signInData = await signInRes.json()
-          console.log('[createPlayer] signIn (recovery) response:', JSON.stringify(signInData))
-          if (!signInRes.ok || signInData.error) {
-            const err: any = new Error('EMAIL_EXISTS_WRONG_PASSWORD')
-            err.code = 'EMAIL_EXISTS_WRONG_PASSWORD'
-            throw err
-          }
-          localId = signInData.localId
-        } else {
-          const err: any = new Error(code)
-          err.code = code
-          throw err
-        }
-      } else {
-        localId = signUpData.localId
-      }
-
-      // 2. Cria documento no Firestore com o UID obtido
-      try {
-        await setDoc(doc(db, 'players', localId), {
+      const res = await fetch(`${SERVER_URL}/create-player`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          email: form.email.trim(),
+          password: form.password,
           name: form.name.trim(),
-          email: form.email.trim().toLowerCase(),
           player_type: form.player_type,
-          role: form.role,
-          active: true,
-          termsAccepted: false,
-          created_at: new Date().toISOString()
+          role: form.role
         })
-      } catch (firestoreErr: any) {
-        console.error('[createPlayer] setDoc error:', firestoreErr?.code, firestoreErr?.message, firestoreErr)
-        const err: any = new Error(`FIRESTORE_${firestoreErr?.code ?? 'UNKNOWN'}`)
-        err.code = `FIRESTORE_${firestoreErr?.code ?? 'UNKNOWN'}`
-        err.localId = localId
-        throw err
-      }
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `HTTP_${res.status}`)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['players'] })
@@ -164,18 +117,15 @@ export default function AdminPlayersPage() {
       setShowAddSheet(false)
     },
     onError: (e: any) => {
-      console.error('[createPlayer] final error:', e?.code, e?.message, e)
-      const code: string = e.code || e.message || ''
-      const msg =
-        code.includes('EMAIL_EXISTS_WRONG_PASSWORD') ? 'Jogador já existe no sistema mas com outra senha. Encontre-o na lista e use "Redefinir senha".' :
-        code.includes('FIRESTORE_permission-denied') ? 'Erro de permissão ao salvar jogador. Verifique as regras do Firestore.' :
-        code.startsWith('FIRESTORE_') ? `Erro ao salvar no banco: ${code.replace('FIRESTORE_', '')}` :
-        code.includes('INVALID_EMAIL') ? 'Email inválido. Use nome@dominio.com' :
-        code.includes('WEAK_PASSWORD') ? 'Senha fraca. Mínimo 6 caracteres.' :
-        code.includes('OPERATION_NOT_ALLOWED') ? 'Criação de usuários desativada no Firebase.' :
-        code.includes('TOO_MANY_ATTEMPTS') ? 'Muitas tentativas. Aguarde alguns minutos.' :
-        `Erro: ${code || 'desconhecido'}`
-      toast.error(msg)
+      console.error('[createPlayer]', e?.message)
+      const msg = e?.message || ''
+      const toast_msg =
+        msg.includes('email-already-exists') || msg.includes('EMAIL_EXISTS') ? 'Email já cadastrado.' :
+        msg.includes('invalid-email') || msg.includes('INVALID_EMAIL') ? 'Email inválido.' :
+        msg.includes('weak-password') || msg.includes('WEAK_PASSWORD') ? 'Senha fraca. Mínimo 6 caracteres.' :
+        msg.includes('Sessão expirada') ? msg :
+        `Erro ao adicionar: ${msg || 'tente novamente'}`
+      toast.error(toast_msg)
     }
   })
 
