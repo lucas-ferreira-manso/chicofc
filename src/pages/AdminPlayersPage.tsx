@@ -93,24 +93,53 @@ export default function AdminPlayersPage() {
 
   const createPlayer = useMutation({
     mutationFn: async () => {
-      // Cria usuário via Firebase Auth REST API — não afeta a sessão do admin
-      const res = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${firebaseConfig.apiKey}`,
+      const apiKey = firebaseConfig.apiKey
+      let localId: string
+
+      // Tenta criar o usuário no Firebase Auth via REST
+      const signUpRes = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: form.email, password: form.password, returnSecureToken: true })
         }
       )
-      const data = await res.json()
-      if (!res.ok || data.error) {
-        console.error('[createPlayer] Firebase REST error:', JSON.stringify(data))
-        const code = data.error?.message ?? `HTTP_${res.status}`
-        const err: any = new Error(code)
-        err.code = code
-        throw err
+      const signUpData = await signUpRes.json()
+
+      if (!signUpRes.ok || signUpData.error) {
+        const code: string = signUpData.error?.message ?? `HTTP_${signUpRes.status}`
+
+        // EMAIL_EXISTS: Auth já tem o usuário mas Firestore pode não ter — recupera o UID via signIn
+        if (code.includes('EMAIL_EXISTS')) {
+          const signInRes = await fetch(
+            `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: form.email, password: form.password, returnSecureToken: true })
+            }
+          )
+          const signInData = await signInRes.json()
+          if (!signInRes.ok || signInData.error) {
+            // Senha diferente da que foi criada — não consegue recuperar
+            const err: any = new Error('EMAIL_EXISTS_WRONG_PASSWORD')
+            err.code = 'EMAIL_EXISTS_WRONG_PASSWORD'
+            throw err
+          }
+          localId = signInData.localId
+        } else {
+          console.error('[createPlayer] Firebase REST error:', JSON.stringify(signUpData))
+          const err: any = new Error(code)
+          err.code = code
+          throw err
+        }
+      } else {
+        localId = signUpData.localId
       }
-      await setDoc(doc(db, 'players', data.localId), {
+
+      // Cria/atualiza o documento no Firestore
+      await setDoc(doc(db, 'players', localId), {
         name: form.name, email: form.email.toLowerCase(),
         player_type: form.player_type, role: form.role,
         active: true, created_at: new Date().toISOString()
@@ -126,7 +155,7 @@ export default function AdminPlayersPage() {
       console.error('[createPlayer]', e)
       const code: string = e.code || e.message || ''
       const msg =
-        code.includes('EMAIL_EXISTS') ? 'Email já cadastrado.' :
+        code.includes('EMAIL_EXISTS_WRONG_PASSWORD') ? 'Email já existe no sistema mas com outra senha. Use "Redefinir senha" na tela do jogador.' :
         code.includes('INVALID_EMAIL') ? 'Email inválido. Use nome@dominio.com' :
         code.includes('WEAK_PASSWORD') ? 'Senha fraca. Mínimo 6 caracteres.' :
         code.includes('OPERATION_NOT_ALLOWED') ? 'Criação de usuários desativada no Firebase.' :
