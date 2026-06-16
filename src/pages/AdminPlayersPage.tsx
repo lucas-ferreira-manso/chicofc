@@ -236,19 +236,19 @@ export default function AdminPlayersPage() {
                 <X size={20} color="var(--color-fg-secondary)" />
               </button>
             </div>
-            <input type="text" placeholder="Nome" value={form.name}
+            <input id="new-player-name" name="name" type="text" placeholder="Nome" value={form.name} autoComplete="off"
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={inputStyle} />
-            <input type="email" placeholder="Email" value={form.email}
+            <input id="new-player-email" name="email" type="email" placeholder="Email" value={form.email} autoComplete="off"
               onChange={e => setForm(f => ({ ...f, email: e.target.value }))} style={inputStyle} />
-            <input type="text" placeholder="Senha inicial" value={form.password}
+            <input id="new-player-password" name="new-password" type="text" placeholder="Senha inicial" value={form.password} autoComplete="new-password"
               onChange={e => setForm(f => ({ ...f, password: e.target.value }))} style={inputStyle} />
             <div className="flex gap-3">
-              <select value={form.player_type} onChange={e => setForm(f => ({ ...f, player_type: e.target.value as any }))}
+              <select id="new-player-type" name="player_type" value={form.player_type} onChange={e => setForm(f => ({ ...f, player_type: e.target.value as any }))}
                 style={{ ...inputStyle, borderRadius: 'var(--radius-tag)' }}>
                 <option value="mensalista">Mensalista</option>
                 <option value="avulso">Avulso</option>
               </select>
-              <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as any }))}
+              <select id="new-player-role" name="role" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as any }))}
                 style={{ ...inputStyle, borderRadius: 'var(--radius-tag)' }}>
                 <option value="player">Jogador</option>
                 <option value="admin">Admin</option>
