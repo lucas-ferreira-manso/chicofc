@@ -91,24 +91,30 @@ export default function AdminPlayersPage() {
 
   const createPlayer = useMutation({
     mutationFn: async () => {
-      // Usa o servidor backend com Firebase Admin SDK — evita problemas de
-      // regras do Firestore client-side e não afeta a sessão do admin
-      const token = await getAuth().currentUser?.getIdToken()
-      if (!token) throw new Error('Sessão expirada. Faça login novamente.')
+      const currentUser = getAuth().currentUser
+      if (!currentUser) throw new Error('Sessão expirada. Faça login novamente.')
 
-      const res = await fetch(`${SERVER_URL}/create-player`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          email: form.email.trim(),
-          password: form.password,
-          name: form.name.trim(),
-          player_type: form.player_type,
-          role: form.role
+      const token = await currentUser.getIdToken(true)
+
+      let res: Response
+      try {
+        res = await fetch(`${SERVER_URL}/create-player`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            email: form.email.trim(),
+            password: form.password,
+            name: form.name.trim(),
+            player_type: form.player_type,
+            role: form.role
+          })
         })
-      })
+      } catch (networkErr: any) {
+        throw new Error(`Sem conexão com o servidor: ${networkErr?.message || 'verifique sua internet'}`)
+      }
+
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || `HTTP_${res.status}`)
+      if (!res.ok) throw new Error(data.error || `Erro do servidor (${res.status})`)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['players'] })
