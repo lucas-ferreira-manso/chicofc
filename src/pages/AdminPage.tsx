@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { collection, getDocs, doc, setDoc, addDoc, query, where } from 'firebase/firestore'
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, getAuth, getIdToken } from 'firebase/auth'
-import { db } from '../lib/firebase'
+import { collection, getDocs, addDoc, query, where } from 'firebase/firestore'
+import { getIdToken } from 'firebase/auth'
+import { auth, db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
 import { Shield, Bell, X, UserPlus } from '@phosphor-icons/react'
@@ -12,7 +12,6 @@ import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
 import { useNavigate } from 'react-router-dom'
 import type { Profile } from '../types'
 
-const auth = getAuth()
 const SERVER_URL = 'https://chicofc-server.onrender.com'
 
 function getNextWednesdayId(): string {
@@ -120,16 +119,22 @@ export default function AdminPage() {
 
   const createPlayer = useMutation({
     mutationFn: async () => {
-      const adminEmail = user!.email
-      const adminPassword = window.prompt('Digite sua senha para confirmar:')
-      if (!adminPassword) throw new Error('cancelled')
-      const result = await createUserWithEmailAndPassword(auth, form.email, form.password)
-      await setDoc(doc(db, 'players', result.user.uid), {
-        name: form.name, email: form.email.toLowerCase(),
-        player_type: form.player_type, role: form.role,
-        active: true, created_at: new Date().toISOString()
+      const currentUser = auth.currentUser
+      if (!currentUser) throw new Error('Sessão expirada. Faça login novamente.')
+      const token = await getIdToken(currentUser, true)
+      const res = await fetch(`${SERVER_URL}/create-player`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          email: form.email.trim(),
+          password: form.password,
+          name: form.name.trim(),
+          player_type: form.player_type,
+          role: form.role
+        })
       })
-      await signInWithEmailAndPassword(auth, adminEmail, adminPassword)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `Erro do servidor (${res.status})`)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['players'] })
@@ -138,8 +143,13 @@ export default function AdminPage() {
       setShowAddSheet(false)
     },
     onError: (e: any) => {
-      if (e.message === 'cancelled') return
-      toast.error(e.code === 'auth/email-already-in-use' ? 'Email já cadastrado.' : 'Erro ao adicionar.')
+      const msg = e?.message || ''
+      toast.error(
+        msg.includes('email-already-exists') ? 'Email já cadastrado.' :
+        msg.includes('weak-password') ? 'Senha fraca. Mínimo 6 caracteres.' :
+        msg.includes('invalid-email') ? 'Email inválido.' :
+        `Erro: ${msg || 'tente novamente'}`
+      )
     }
   })
 
