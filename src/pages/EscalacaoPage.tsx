@@ -195,6 +195,7 @@ export default function EscalacaoPage() {
         }
       }, 'image/png')
     } catch (e) {
+      console.error('[handleShare] erro:', e)
       toast.error('Erro ao gerar imagem')
     } finally {
       setSharing(false)
