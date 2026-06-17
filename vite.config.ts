@@ -46,8 +46,21 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Só faz precache de assets estáticos (imagens, fontes, html, css)
+        // JS fica fora do precache — é servido via NetworkFirst para evitar
+        // 404 quando o hash muda a cada deploy
+        globPatterns: ['**/*.{css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
+          {
+            // JS chunks: sempre busca na rede, cache só como fallback offline
+            urlPattern: /\.js$/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'js-chunks',
+              networkTimeoutSeconds: 10,
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 }
+            }
+          },
           {
             urlPattern: /^https:\/\/.*\.firebaseio\.com\/.*/i,
             handler: 'NetworkFirst',
