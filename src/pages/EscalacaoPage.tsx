@@ -161,11 +161,23 @@ export default function EscalacaoPage() {
     setSharing(true)
     try {
       const html2canvas = (await import('html2canvas')).default
+      const root = document.documentElement
+      const getVar = (v: string) => getComputedStyle(root).getPropertyValue(v).trim()
       const canvas = await html2canvas(shareCardRef.current, {
-        backgroundColor: null,
+        backgroundColor: getVar('--color-bg') || '#ffffff',
         scale: 2,
         useCORS: true,
-        logging: false
+        logging: false,
+        onclone: (_doc, el) => {
+          const vars: Record<string, string> = {
+            '--color-bg': getVar('--color-bg'),
+            '--color-fg-primary': getVar('--color-fg-primary'),
+            '--color-fg-secondary': getVar('--color-fg-secondary'),
+            '--color-surface-primary': getVar('--color-surface-primary'),
+            '--font-primary': getVar('--font-primary'),
+          }
+          Object.entries(vars).forEach(([k, v]) => el.style.setProperty(k, v))
+        }
       })
       canvas.toBlob(async (blob) => {
         if (!blob) return
