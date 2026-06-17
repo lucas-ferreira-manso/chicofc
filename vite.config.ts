@@ -8,7 +8,8 @@ import { execSync } from 'child_process'
 
 const { version } = JSON.parse(readFileSync('./package.json', 'utf-8'))
 const [major, minor] = version.split('.')
-const commitCount = execSync('git rev-list --count HEAD').toString().trim()
+let commitCount = '0'
+try { commitCount = execSync('git rev-list --count HEAD').toString().trim() } catch {}
 const autoVersion = `${major}.${minor}.${commitCount}`
 
 export default defineConfig({
