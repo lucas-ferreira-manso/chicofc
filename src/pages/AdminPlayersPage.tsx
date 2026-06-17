@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getAuth } from 'firebase/auth'
+import { auth } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
 import { CaretLeft, UserPlus, X } from '@phosphor-icons/react'
@@ -91,10 +91,18 @@ export default function AdminPlayersPage() {
 
   const createPlayer = useMutation({
     mutationFn: async () => {
-      const currentUser = getAuth().currentUser
+      const currentUser = auth.currentUser
+      console.log('[addPlayer] currentUser:', currentUser?.uid ?? 'null')
       if (!currentUser) throw new Error('Sessão expirada. Faça login novamente.')
 
-      const token = await currentUser.getIdToken(true)
+      let token: string
+      try {
+        token = await currentUser.getIdToken(true)
+        console.log('[addPlayer] token ok, length:', token.length)
+      } catch (tokenErr: any) {
+        console.error('[addPlayer] getIdToken error:', tokenErr)
+        throw new Error(`Erro ao obter token: ${tokenErr?.message || 'desconhecido'}`)
+      }
 
       let res: Response
       try {
@@ -110,10 +118,12 @@ export default function AdminPlayersPage() {
           })
         })
       } catch (networkErr: any) {
+        console.error('[addPlayer] fetch error:', networkErr)
         throw new Error(`Sem conexão com o servidor: ${networkErr?.message || 'verifique sua internet'}`)
       }
 
       const data = await res.json()
+      console.log('[addPlayer] server response:', res.status, JSON.stringify(data))
       if (!res.ok) throw new Error(data.error || `Erro do servidor (${res.status})`)
     },
     onSuccess: () => {
@@ -123,14 +133,13 @@ export default function AdminPlayersPage() {
       setShowAddSheet(false)
     },
     onError: (e: any) => {
-      console.error('[createPlayer]', e?.message)
-      const msg = e?.message || ''
+      const msg = e?.message || 'desconhecido'
+      console.error('[addPlayer] onError:', msg)
       const toast_msg =
         msg.includes('email-already-exists') || msg.includes('EMAIL_EXISTS') ? 'Email já cadastrado.' :
         msg.includes('invalid-email') || msg.includes('INVALID_EMAIL') ? 'Email inválido.' :
         msg.includes('weak-password') || msg.includes('WEAK_PASSWORD') ? 'Senha fraca. Mínimo 6 caracteres.' :
-        msg.includes('Sessão expirada') ? msg :
-        `Erro ao adicionar: ${msg || 'tente novamente'}`
+        `Erro: ${msg}`
       toast.error(toast_msg)
     }
   })
