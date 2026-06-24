@@ -1,16 +1,18 @@
 import { useState, useEffect, useRef } from 'react'
+import { Sun, Moon } from '@phosphor-icons/react'
 import {
   COLORS_SURFACE, COLORS_FOREGROUND, COLORS_SEMANTIC, COLORS_BUTTON, COLORS_SPECIAL,
   FONT_SIZES, SPACING, RADII
 } from './tokens'
 import {
-  Section, SubSection,
+  Section, SubSection, DocBlock,
   ColorGrid, TypographyRow, SpacingRow, RadiusRow, ButtonsPreview
 } from './components'
 import {
   HeaderPreview, BottomNavPreview, TabsPreview, TogglePreview,
   CardsPreview, ListItemPreview, AvatarPreview, BadgeRankingPreview, BottomSheetPreview
 } from './ui-components'
+import { DOCS } from './docs'
 
 // ─── Nav structure ────────────────────────────────────────────────────────────
 
@@ -43,9 +45,36 @@ const NAV = [
 
 const ALL_IDS = NAV.flatMap(g => g.items.map(i => i.id))
 
+// ─── Dark mode toggle ─────────────────────────────────────────────────────────
+
+function useDarkMode() {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
+
+  function toggle() {
+    const html = document.documentElement
+    if (dark) {
+      html.classList.remove('dark')
+      html.classList.add('light')
+    } else {
+      html.classList.remove('light')
+      html.classList.add('dark')
+    }
+    setDark(!dark)
+  }
+
+  // Cleanup ao sair da página
+  useEffect(() => {
+    return () => {
+      document.documentElement.classList.remove('dark', 'light')
+    }
+  }, [])
+
+  return { dark, toggle }
+}
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-function Sidebar({ active }: { active: string }) {
+function Sidebar({ active, dark, onToggleDark }: { active: string; dark: boolean; onToggleDark: () => void }) {
   function scrollTo(id: string) {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
@@ -63,19 +92,56 @@ function Sidebar({ active }: { active: string }) {
       display: 'flex',
       flexDirection: 'column',
       gap: 0,
+      background: 'var(--color-bg)',
     }}>
-      {/* Logo */}
-      <div style={{ padding: '0 20px 24px', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <img src="/team-blue.png" alt="ChicoFC" style={{ width: 28, height: 28, objectFit: 'contain' }} />
-        <div>
-          <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 13, color: 'var(--color-fg-primary)', margin: 0, lineHeight: 1.2 }}>
-            ChicoFC
-          </p>
-          <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 400, fontSize: 11, color: 'var(--color-fg-secondary)', margin: 0, lineHeight: 1.2 }}>
-            Design System
-          </p>
+      {/* Logo + dark toggle */}
+      <div style={{ padding: '0 16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <img src="/team-blue.png" alt="ChicoFC" style={{ width: 28, height: 28, objectFit: 'contain' }} />
+          <div>
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 13, color: 'var(--color-fg-primary)', margin: 0, lineHeight: 1.2 }}>
+              ChicoFC
+            </p>
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 400, fontSize: 11, color: 'var(--color-fg-secondary)', margin: 0, lineHeight: 1.2 }}>
+              Design System
+            </p>
+          </div>
         </div>
+
+        {/* Dark mode button */}
+        <button
+          onClick={onToggleDark}
+          title={dark ? 'Modo claro' : 'Modo escuro'}
+          style={{
+            width: 32, height: 32, borderRadius: 10, flexShrink: 0,
+            background: dark ? 'var(--color-surface-secondary)' : 'var(--color-surface-primary)',
+            border: '1px solid var(--color-border)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', transition: 'background 0.15s',
+          }}
+        >
+          {dark
+            ? <Sun size={16} color="var(--color-fg-primary)" weight="fill" />
+            : <Moon size={16} color="var(--color-fg-primary)" weight="fill" />
+          }
+        </button>
       </div>
+
+      {/* Dark mode badge */}
+      {dark && (
+        <div style={{
+          margin: '0 16px 16px',
+          padding: '6px 10px',
+          borderRadius: 10,
+          background: 'var(--color-surface-secondary)',
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          <Moon size={12} color="var(--color-fg-secondary)" weight="fill" />
+          <span style={{ fontFamily: 'var(--font-primary)', fontSize: 11, fontWeight: 500, color: 'var(--color-fg-secondary)' }}>
+            Dark mode ativo
+          </span>
+        </div>
+      )}
 
       {/* Nav groups */}
       {NAV.map(({ group, items }) => (
@@ -120,12 +186,41 @@ function Sidebar({ active }: { active: string }) {
 }
 
 // ─── DSSection ────────────────────────────────────────────────────────────────
-// Wrapper que injeta id + padding para o scroll-spy
 
-function DSSection({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+function DSSection({
+  id, title, docKey, preview, children
+}: {
+  id: string
+  title: string
+  docKey?: string
+  preview?: React.ReactNode
+  children?: React.ReactNode
+}) {
+  const doc = docKey ? DOCS[docKey] : undefined
+
   return (
     <div id={id} style={{ scrollMarginTop: 32 }}>
       <Section title={title}>
+        {/* Docs sempre primeiro */}
+        {doc && <DocBlock doc={doc} />}
+
+        {/* Divider entre docs e preview se há os dois */}
+        {doc && (preview || children) && (
+          <div style={{ height: 1, background: 'var(--color-border)', margin: '4px 0' }} />
+        )}
+
+        {/* Label "Preview" quando há doc */}
+        {doc && (preview || children) && (
+          <p style={{
+            fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 11,
+            color: 'var(--color-fg-secondary)', margin: 0,
+            textTransform: 'uppercase', letterSpacing: '0.07em'
+          }}>
+            Preview
+          </p>
+        )}
+
+        {preview}
         {children}
       </Section>
     </div>
@@ -137,6 +232,7 @@ function DSSection({ id, title, children }: { id: string; title: string; childre
 export default function DesignSystemPage() {
   const [activeId, setActiveId] = useState(ALL_IDS[0])
   const observerRef = useRef<IntersectionObserver | null>(null)
+  const { dark, toggle } = useDarkMode()
 
   useEffect(() => {
     const options = { rootMargin: '-20% 0px -70% 0px', threshold: 0 }
@@ -161,7 +257,7 @@ export default function DesignSystemPage() {
       background: 'var(--color-bg)',
       fontFamily: 'var(--font-primary)'
     }}>
-      <Sidebar active={activeId} />
+      <Sidebar active={activeId} dark={dark} onToggleDark={toggle} />
 
       {/* Main content */}
       <main style={{
@@ -183,26 +279,32 @@ export default function DesignSystemPage() {
           </p>
         </div>
 
-        {/* ── Foundations ── */}
+        {/* ── Colors ── */}
         <DSSection id="colors" title="Colors">
           <SubSection title="Surface">
+            <DocBlock doc={DOCS['colors-surface']} />
             <ColorGrid tokens={COLORS_SURFACE} />
           </SubSection>
           <SubSection title="Foreground">
+            <DocBlock doc={DOCS['colors-foreground']} />
             <ColorGrid tokens={COLORS_FOREGROUND} />
           </SubSection>
           <SubSection title="Semantic">
+            <DocBlock doc={DOCS['colors-semantic']} />
             <ColorGrid tokens={COLORS_SEMANTIC} />
           </SubSection>
           <SubSection title="Buttons">
+            <DocBlock doc={DOCS['colors-button']} />
             <ColorGrid tokens={COLORS_BUTTON} />
           </SubSection>
           <SubSection title="Special">
+            <DocBlock doc={DOCS['colors-special']} />
             <ColorGrid tokens={COLORS_SPECIAL} />
           </SubSection>
         </DSSection>
 
-        <DSSection id="typography" title="Typography">
+        {/* ── Typography ── */}
+        <DSSection id="typography" title="Typography" docKey="typography">
           <div style={{
             padding: '16px 20px', borderRadius: 16,
             background: 'var(--color-surface-primary)',
@@ -222,58 +324,31 @@ export default function DesignSystemPage() {
           </SubSection>
         </DSSection>
 
-        <DSSection id="spacing" title="Spacing">
+        {/* ── Spacing ── */}
+        <DSSection id="spacing" title="Spacing" docKey="spacing">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {SPACING.map(t => <SpacingRow key={t.name} token={t} />)}
           </div>
         </DSSection>
 
-        <DSSection id="border-radius" title="Border Radius">
+        {/* ── Border Radius ── */}
+        <DSSection id="border-radius" title="Border Radius" docKey="border-radius">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {RADII.map(t => <RadiusRow key={t.name} token={t} />)}
           </div>
         </DSSection>
 
         {/* ── Components ── */}
-        <DSSection id="buttons" title="Buttons">
-          <ButtonsPreview />
-        </DSSection>
-
-        <DSSection id="header" title="Header">
-          <HeaderPreview />
-        </DSSection>
-
-        <DSSection id="bottom-nav" title="Bottom Nav">
-          <BottomNavPreview />
-        </DSSection>
-
-        <DSSection id="tabs" title="Tabs">
-          <TabsPreview />
-        </DSSection>
-
-        <DSSection id="toggle" title="Toggle">
-          <TogglePreview />
-        </DSSection>
-
-        <DSSection id="avatar" title="Avatar">
-          <AvatarPreview />
-        </DSSection>
-
-        <DSSection id="cards" title="Cards">
-          <CardsPreview />
-        </DSSection>
-
-        <DSSection id="list-items" title="List Items">
-          <ListItemPreview />
-        </DSSection>
-
-        <DSSection id="badge-ranking" title="Badge Ranking">
-          <BadgeRankingPreview />
-        </DSSection>
-
-        <DSSection id="bottom-sheet" title="Bottom Sheet">
-          <BottomSheetPreview />
-        </DSSection>
+        <DSSection id="buttons"       title="Buttons"       docKey="buttons"       preview={<ButtonsPreview />} />
+        <DSSection id="header"        title="Header"        docKey="header"        preview={<HeaderPreview />} />
+        <DSSection id="bottom-nav"    title="Bottom Nav"    docKey="bottom-nav"    preview={<BottomNavPreview />} />
+        <DSSection id="tabs"          title="Tabs"          docKey="tabs"          preview={<TabsPreview />} />
+        <DSSection id="toggle"        title="Toggle"        docKey="toggle"        preview={<TogglePreview />} />
+        <DSSection id="avatar"        title="Avatar"        docKey="avatar"        preview={<AvatarPreview />} />
+        <DSSection id="cards"         title="Cards"         docKey="cards"         preview={<CardsPreview />} />
+        <DSSection id="list-items"    title="List Items"    docKey="list-items"    preview={<ListItemPreview />} />
+        <DSSection id="badge-ranking" title="Badge Ranking" docKey="badge-ranking" preview={<BadgeRankingPreview />} />
+        <DSSection id="bottom-sheet"  title="Bottom Sheet"  docKey="bottom-sheet"  preview={<BottomSheetPreview />} />
       </main>
     </div>
   )

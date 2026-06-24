@@ -187,6 +187,126 @@ export function RadiusRow({ token }: { token: Token }) {
   )
 }
 
+// ─── DocBlock ─────────────────────────────────────────────────────────────────
+
+import type { DocEntry } from './docs'
+
+export function DocBlock({ doc }: { doc: DocEntry }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* Descrição principal */}
+      <p style={{
+        fontFamily: 'var(--font-primary)', fontWeight: 400, fontSize: 14,
+        color: 'var(--color-fg-secondary)', margin: 0, lineHeight: 1.65
+      }}>
+        {doc.description}
+      </p>
+
+      {/* Variants */}
+      {doc.variants && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <p style={{
+            fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 11,
+            color: 'var(--color-fg-secondary)', margin: 0,
+            textTransform: 'uppercase', letterSpacing: '0.07em'
+          }}>
+            Variantes
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, borderRadius: 16, overflow: 'hidden', border: '1px solid var(--color-border)' }}>
+            {doc.variants.map((v, i) => (
+              <div key={i} style={{
+                display: 'flex', gap: 12, padding: '11px 16px',
+                background: 'var(--color-bg)',
+                borderBottom: i < doc.variants!.length - 1 ? '1px solid var(--color-border)' : 'none'
+              }}>
+                <span style={{
+                  fontFamily: 'monospace', fontSize: 11,
+                  color: 'var(--color-fg-accent)',
+                  background: 'var(--color-surface-accent-light)',
+                  padding: '2px 7px', borderRadius: 6,
+                  flexShrink: 0, alignSelf: 'flex-start', lineHeight: 1.6, whiteSpace: 'nowrap'
+                }}>
+                  {v.name}
+                </span>
+                <span style={{
+                  fontFamily: 'var(--font-primary)', fontSize: 13,
+                  color: 'var(--color-fg-secondary)', lineHeight: 1.6
+                }}>
+                  {v.description}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Comportamentos */}
+      {doc.behaviors && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <p style={{
+            fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 11,
+            color: 'var(--color-fg-secondary)', margin: 0,
+            textTransform: 'uppercase', letterSpacing: '0.07em'
+          }}>
+            Comportamentos
+          </p>
+          <ul style={{ margin: 0, padding: '0 0 0 18px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {doc.behaviors.map((b, i) => (
+              <li key={i} style={{
+                fontFamily: 'var(--font-primary)', fontSize: 13,
+                color: 'var(--color-fg-secondary)', lineHeight: 1.6
+              }}>
+                {b}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Do / Don't */}
+      {(doc.doList || doc.dontList) && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {doc.doList && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <p style={{
+                fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 11, margin: 0,
+                color: '#34c759', textTransform: 'uppercase', letterSpacing: '0.07em'
+              }}>
+                ✓ Use
+              </p>
+              <ul style={{ margin: 0, padding: '0 0 0 18px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {doc.doList.map((d, i) => (
+                  <li key={i} style={{ fontFamily: 'var(--font-primary)', fontSize: 13, color: 'var(--color-fg-secondary)', lineHeight: 1.6 }}>
+                    {d}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {doc.dontList && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <p style={{
+                fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 11, margin: 0,
+                color: '#ff3b30', textTransform: 'uppercase', letterSpacing: '0.07em'
+              }}>
+                ✗ Evite
+              </p>
+              <ul style={{ margin: 0, padding: '0 0 0 18px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {doc.dontList.map((d, i) => (
+                  <li key={i} style={{ fontFamily: 'var(--font-primary)', fontSize: 13, color: 'var(--color-fg-secondary)', lineHeight: 1.6 }}>
+                    {d}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── ButtonsPreview ───────────────────────────────────────────────────────────
 
 export function ButtonsPreview() {
