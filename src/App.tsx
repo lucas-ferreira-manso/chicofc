@@ -22,7 +22,7 @@ import PresencaPage from './pages/PresencaPage'
 import RankingVotacaoPage from './pages/RankingVotacaoPage'
 import ExportarRelatorioPage from './pages/ExportarRelatorioPage'
 import NotificationCenterPage from './pages/NotificationCenterPage'
-import DesignSystemPage from './pages/DesignSystemPage'
+import DesignSystemPage from './design-system'
 import TermsSheet, { needsTermsAcceptance, hasAcceptedTermsLocally } from './components/TermsSheet'
 
 export default function App() {
