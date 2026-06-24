@@ -22,6 +22,7 @@ import PresencaPage from './pages/PresencaPage'
 import RankingVotacaoPage from './pages/RankingVotacaoPage'
 import ExportarRelatorioPage from './pages/ExportarRelatorioPage'
 import NotificationCenterPage from './pages/NotificationCenterPage'
+import DesignSystemPage from './pages/DesignSystemPage'
 import TermsSheet, { needsTermsAcceptance, hasAcceptedTermsLocally } from './components/TermsSheet'
 
 export default function App() {
@@ -61,6 +62,8 @@ export default function App() {
     </div>
   )
 
+  if (window.location.pathname === '/design-system') return <DesignSystemPage />
+
   if (!user) return <LoginPage />
 
   const location = useLocation()
@@ -95,6 +98,7 @@ export default function App() {
           <Route path="/ranking-votacao" element={<RankingVotacaoPage />} />
           <Route path="/caixinha/exportar" element={<ExportarRelatorioPage />} />
           <Route path="/notifications" element={<NotificationCenterPage />} />
+          <Route path="/design-system" element={<DesignSystemPage />} />
           <Route path="*" element={<Navigate to="/games" replace />} />
         </Routes>
       </main>
