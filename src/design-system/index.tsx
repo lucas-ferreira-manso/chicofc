@@ -6,6 +6,10 @@ import {
   Section, SubSection,
   ColorGrid, TypographyRow, SpacingRow, RadiusRow, ButtonsPreview
 } from './components'
+import {
+  HeaderPreview, BottomNavPreview, TabsPreview, TogglePreview,
+  CardsPreview, ListItemPreview, AvatarPreview, BadgeRankingPreview, BottomSheetPreview
+} from './ui-components'
 
 export default function DesignSystemPage() {
   return (
@@ -88,6 +92,51 @@ export default function DesignSystemPage() {
       {/* Buttons */}
       <Section title="Buttons">
         <ButtonsPreview />
+      </Section>
+
+      {/* Header */}
+      <Section title="Header">
+        <HeaderPreview />
+      </Section>
+
+      {/* Bottom Nav */}
+      <Section title="Bottom Nav">
+        <BottomNavPreview />
+      </Section>
+
+      {/* Tabs */}
+      <Section title="Tabs">
+        <TabsPreview />
+      </Section>
+
+      {/* Toggle */}
+      <Section title="Toggle">
+        <TogglePreview />
+      </Section>
+
+      {/* Avatar */}
+      <Section title="Avatar">
+        <AvatarPreview />
+      </Section>
+
+      {/* Cards */}
+      <Section title="Cards">
+        <CardsPreview />
+      </Section>
+
+      {/* List Items */}
+      <Section title="List Items">
+        <ListItemPreview />
+      </Section>
+
+      {/* Badge Ranking */}
+      <Section title="Badge Ranking">
+        <BadgeRankingPreview />
+      </Section>
+
+      {/* Bottom Sheet */}
+      <Section title="Bottom Sheet">
+        <BottomSheetPreview />
       </Section>
 
     </div>
