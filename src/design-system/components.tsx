@@ -71,10 +71,9 @@ export function ColorSwatch({ token }: { token: Token }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
       <div style={{
-        height: 64, borderRadius: 12, border: '1px solid var(--color-border)',
-        background: checkered
-          ? 'repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 0 / 12px 12px'
-          : token.value,
+        height: 64, borderRadius: 12,
+        border: checkered ? '1.5px solid var(--color-border)' : '1px solid transparent',
+        background: token.value,
         display: 'flex', alignItems: 'flex-end', padding: '6px 8px', flexShrink: 0
       }}>
         <span style={{
