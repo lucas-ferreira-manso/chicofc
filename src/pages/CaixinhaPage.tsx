@@ -5,7 +5,7 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Copy, Check, PencilSimple, X, CheckCircle, Circle, CaretDown, FileArrowUp } from '@phosphor-icons/react'
+import { Copy, Check, PencilSimple, X, CheckCircle, Circle, CaretDown, FileArrowUp, CurrencyCircleDollar } from '@phosphor-icons/react'
 
 import Header from '../components/layout/Header'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll'
@@ -314,6 +314,36 @@ export default function CaixinhaPage() {
       saveCaixinhaSummary()
     })
   }, [isAdmin, !!config])
+
+  const [showCustoExtraSheet, setShowCustoExtraSheet] = useState(false)
+  const [custoNome, setCustoNome] = useState('')
+  const [custoValor, setCustoValor] = useState('')
+  useLockBodyScroll(showCustoExtraSheet)
+
+  const addCustoExtra = useMutation({
+    mutationFn: async () => {
+      const valor = parseFloat(custoValor.replace(',', '.'))
+      if (!custoNome.trim() || isNaN(valor) || valor <= 0) throw new Error('Dados inválidos')
+      const month = format(new Date(), 'yyyy-MM')
+      await addDoc(collection(db, 'payments'), {
+        type: 'despesa',
+        amount: valor,
+        description: custoNome.trim(),
+        month,
+        paid: true,
+        created_at: new Date().toISOString(),
+      })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payments'] })
+      saveCaixinhaSummary().then(() => qc.invalidateQueries({ queryKey: ['caixinha-summary'] }))
+      toast.success('Custo extra adicionado!')
+      setShowCustoExtraSheet(false)
+      setCustoNome('')
+      setCustoValor('')
+    },
+    onError: () => toast.error('Erro ao adicionar custo extra.'),
+  })
 
   const [pixCopied, setPixCopied] = useState(false)
   const [editingField, setEditingField] = useState<EditField>(null)
@@ -688,11 +718,19 @@ export default function CaixinhaPage() {
         title="Caixinha"
         subtitle={`Total de usuários: ${players.length}`}
         rightContent={isAdmin ? (
-          <button onClick={() => navigate('/caixinha/exportar')}
-            className="px-4 py-2 rounded-full font-medium transition-all active:scale-95"
-            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
-            Exportar Relatório
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              onClick={() => setShowCustoExtraSheet(true)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+            >
+              <CurrencyCircleDollar size={28} color="var(--color-fg-accent)" weight="fill" />
+            </button>
+            <button onClick={() => navigate('/caixinha/exportar')}
+              className="px-4 py-2 rounded-full font-medium transition-all active:scale-95"
+              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+              Exportar Relatório
+            </button>
+          </div>
         ) : undefined}
       />
       <div style={{ height: 96 }} />
@@ -1068,6 +1106,90 @@ export default function CaixinhaPage() {
               style={{ background: 'var(--color-surface-primary)', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>
               Cancelar
             </button>
+          </div>
+        </>
+      )}
+
+      {/* Bottom Sheet — Custo Extra */}
+      {showCustoExtraSheet && (
+        <>
+          <div
+            onClick={() => { setShowCustoExtraSheet(false); setCustoNome(''); setCustoValor('') }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 60 }}
+          />
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70,
+            background: 'var(--color-bg)',
+            borderRadius: '24px 24px 0 0',
+            padding: '24px 24px calc(40px + env(safe-area-inset-bottom))',
+            display: 'flex', flexDirection: 'column', gap: 24,
+          }}>
+            {/* Close */}
+            <button
+              onClick={() => { setShowCustoExtraSheet(false); setCustoNome(''); setCustoValor('') }}
+              style={{ position: 'absolute', top: 20, right: 20, width: 32, height: 32, borderRadius: '50%', background: 'var(--color-surface-primary)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <X size={16} color="var(--color-fg-secondary)" />
+            </button>
+
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)', lineHeight: 1 }}>
+              Adicionar custo extra
+            </p>
+
+            {/* Input Nome */}
+            <input
+              type="text"
+              placeholder="Nome"
+              value={custoNome}
+              onChange={e => setCustoNome(e.target.value)}
+              style={{
+                width: '100%', height: 56, borderRadius: 9999,
+                background: 'var(--color-surface-primary)', border: 'none', outline: 'none',
+                paddingInline: 24,
+                fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16,
+                color: custoNome ? 'var(--color-fg-primary)' : 'var(--color-fg-secondary)',
+                boxSizing: 'border-box',
+              }}
+            />
+
+            {/* Input Valor */}
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="Valor"
+              value={custoValor}
+              onChange={e => setCustoValor(e.target.value)}
+              style={{
+                width: '100%', height: 56, borderRadius: 9999,
+                background: 'var(--color-surface-primary)', border: 'none', outline: 'none',
+                paddingInline: 24,
+                fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16,
+                color: custoValor ? 'var(--color-fg-primary)' : 'var(--color-fg-secondary)',
+                boxSizing: 'border-box',
+              }}
+            />
+
+            {/* Botão Confirmar */}
+            {(() => {
+              const enabled = custoNome.trim().length > 0 && custoValor.trim().length > 0 && parseFloat(custoValor.replace(',', '.')) > 0
+              return (
+                <button
+                  disabled={!enabled || addCustoExtra.isPending}
+                  onClick={() => addCustoExtra.mutate()}
+                  className="transition-all active:scale-95 disabled:opacity-40"
+                  style={{
+                    width: '100%', height: 56, borderRadius: 9999,
+                    background: enabled ? 'var(--btn-primary-bg)' : 'var(--color-surface-secondary)',
+                    color: enabled ? 'var(--btn-primary-fg)' : 'var(--color-fg-secondary)',
+                    fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16,
+                    border: 'none', cursor: enabled ? 'pointer' : 'default',
+                    transition: 'background 0.15s, color 0.15s',
+                  }}
+                >
+                  {addCustoExtra.isPending ? 'Salvando...' : 'Confirmar'}
+                </button>
+              )
+            })()}
           </div>
         </>
       )}
