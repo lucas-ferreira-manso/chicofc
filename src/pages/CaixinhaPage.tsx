@@ -1353,7 +1353,9 @@ export default function CaixinhaPage() {
 }
 
 function PaymentRow({ payment, onToggle, isAdmin }: { payment: Payment; onToggle: () => void; isAdmin?: boolean }) {
-  const name = (payment.profile as any)?.name || (payment.profile as any)?.email || 'Jogador'
+  const name = payment.type === 'despesa'
+    ? ((payment as any).description || 'Despesa Mensal')
+    : ((payment.profile as any)?.name || (payment.profile as any)?.email || 'Jogador')
   return (
     <button onClick={isAdmin ? onToggle : undefined}
       className="w-full flex items-center gap-3 p-4 rounded-3xl transition-all active:scale-[0.99]"
@@ -1365,7 +1367,7 @@ function PaymentRow({ payment, onToggle, isAdmin }: { payment: Payment; onToggle
           {payment.paid && payment.paid_at ? `Pago em ${format(new Date(payment.paid_at), 'd/MM/yyyy')}` : 'Pendente'}
         </p>
       </div>
-      <p className="font-semibold" style={{ color: payment.paid ? 'var(--color-success)' : 'var(--color-danger)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>R$ {payment.amount}</p>
+      <p className="font-semibold" style={{ color: payment.type === 'despesa' ? 'var(--color-danger)' : payment.paid ? 'var(--color-success)' : 'var(--color-danger)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>R$ {payment.amount}</p>
     </button>
   )
 }
