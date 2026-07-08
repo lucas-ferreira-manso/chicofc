@@ -960,6 +960,79 @@ export default function CaixinhaPage() {
           )}
         </div>
 
+        {/* ── Mensalistas pendentes (admin only) ─────────────────────────── */}
+        {isAdmin && (() => {
+          const currentMonth = format(new Date(), 'yyyy-MM')
+          const mensalistas = players.filter(p => (p as any).player_type === 'mensalista')
+
+          const pendingMensalistaRequestUserIds = new Set(
+            (pendingRequests as any[]).filter(r => r.player_type === 'mensalista').map(r => r.user_id)
+          )
+          const currentMonthMensalidadeByUser = new Map(
+            mensalidadePayments
+              .filter(p => p.month.startsWith(currentMonth))
+              .map(p => [p.user_id, p])
+          )
+
+          type MensalistaStatus = 'aguardando' | 'pendente' | 'sem-registro'
+          const pendentes: { player: Profile; status: MensalistaStatus }[] = mensalistas
+            .map(player => {
+              const payment = currentMonthMensalidadeByUser.get(player.id)
+              if (payment?.paid) return null
+              if (pendingMensalistaRequestUserIds.has(player.id)) return { player, status: 'aguardando' as MensalistaStatus }
+              if (payment && !payment.paid) return { player, status: 'pendente' as MensalistaStatus }
+              return { player, status: 'sem-registro' as MensalistaStatus }
+            })
+            .filter(Boolean) as { player: Profile; status: MensalistaStatus }[]
+
+          if (pendentes.length === 0) return null
+
+          const statusLabel: Record<MensalistaStatus, string> = {
+            'aguardando': 'Aguardando aprovação',
+            'pendente': 'Pendente',
+            'sem-registro': 'Sem registro',
+          }
+          const statusColor: Record<MensalistaStatus, string> = {
+            'aguardando': 'var(--color-warning)',
+            'pendente': 'var(--color-danger)',
+            'sem-registro': 'var(--color-fg-secondary)',
+          }
+
+          return (
+            <>
+              <div style={{ height: 1, background: 'var(--color-border)' }} />
+              <section>
+                <p className="font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
+                  Mensalistas pendentes — {format(new Date(), 'MMMM yyyy', { locale: ptBR })} ({pendentes.length})
+                </p>
+                <div className="flex flex-col gap-2">
+                  {pendentes.map(({ player, status }) => (
+                    <div key={player.id} className="flex items-center gap-3 p-4 rounded-3xl"
+                      style={{ background: 'var(--color-surface-primary)' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--color-avatar-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 13, color: 'var(--color-avatar-fg)' }}>
+                          {(player.name || player.email || '?').charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate" style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)' }}>
+                          {player.name || player.email}
+                        </p>
+                        <p style={{ color: statusColor[status], fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
+                          {statusLabel[status]}
+                        </p>
+                      </div>
+                      <p className="font-semibold" style={{ color: 'var(--color-danger)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', flexShrink: 0 }}>
+                        R$ {(config?.mensalistaValue ?? 80).toFixed(2)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </>
+          )
+        })()}
+
         {(jogoPayments.length > 0 || Object.keys(byMonth).length > 0) && <div style={{ height: 1, background: 'var(--color-border)' }} />}
 
         {/* "Por jogo" exibe apenas pagamentos de jogo PENDENTES + avulsos temp não pagos */}
