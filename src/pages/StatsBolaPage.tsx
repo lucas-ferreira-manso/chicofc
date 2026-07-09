@@ -128,8 +128,8 @@ export default function StatsBolaPage() {
   const pendingCheiaPlayer = players.find(p => p.id === pendingCheia) ?? null
   const pendingMurchaPlayer = players.find(p => p.id === pendingMurcha) ?? null
   const bothSelected = pendingCheia !== null && pendingMurcha !== null
-  const votableForCheia = players.filter(p => p.id !== user!.id && p.id !== pendingMurcha)
-  const votableForMurcha = players.filter(p => p.id !== user!.id && p.id !== pendingCheia)
+  const votableForCheia = players.filter(p => p.id !== pendingMurcha)
+  const votableForMurcha = players.filter(p => p.id !== pendingCheia)
 
   const HistorySection = () => history.length === 0 ? null : (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
