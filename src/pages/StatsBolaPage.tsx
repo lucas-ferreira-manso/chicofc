@@ -18,7 +18,7 @@ import {
 // ─── Data ──────────────────────────────────────────────────────────────────────
 
 async function fetchConfirmedPlayers(gameId: string): Promise<PlayerInfo[]> {
-  const q = query(collection(db, 'attendances'), where('game_id', '==', gameId), where('status', '==', 'confirmed'))
+  const q = query(collection(db, 'attendances'), where('game_id', '==', gameId), where('status', 'in', ['confirmed', 'waitlist']))
   const snap = await getDocs(q)
   const userIds = [...new Set(snap.docs.map(d => d.data().user_id as string))]
   const profiles = await Promise.all(userIds.map(async id => {
