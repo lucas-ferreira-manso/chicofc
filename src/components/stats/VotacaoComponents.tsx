@@ -39,16 +39,16 @@ export function isVotingOpen(): boolean {
 
 export function BolaCheiaIcon({ size = 52 }: { size?: number }) {
   return (
-    <div style={{ width: size, height: size, position: 'relative', overflow: 'hidden', flexShrink: 0, pointerEvents: 'none' }}>
-      <img src="/bola-cheia.png" alt="Bola Cheia" style={{ position: 'absolute', width: '260.92%', height: '142.32%', left: '-24.8%', top: '-21.83%', maxWidth: 'none', pointerEvents: 'none' }} />
+    <div style={{ width: size, height: size, flexShrink: 0, pointerEvents: 'none' }}>
+      <img src="/bola-cheia.png" alt="Bola Cheia" style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />
     </div>
   )
 }
 
 export function BolaMurchaIcon({ size = 52 }: { size?: number }) {
   return (
-    <div style={{ width: size, height: size, position: 'relative', overflow: 'hidden', flexShrink: 0, pointerEvents: 'none' }}>
-      <img src="/bola-murcha.png" alt="Bola Murcha" style={{ position: 'absolute', width: '260.92%', height: '142.32%', left: '-133.15%', top: '-21.83%', maxWidth: 'none', pointerEvents: 'none' }} />
+    <div style={{ width: size, height: size, flexShrink: 0, pointerEvents: 'none' }}>
+      <img src="/bola-murcha.png" alt="Bola Murcha" style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />
     </div>
   )
 }

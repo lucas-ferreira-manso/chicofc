@@ -137,8 +137,8 @@ function Stepper({ currentStep, votes }: { currentStep: number; votes: Partial<V
 
 function HubBadge({ step, winner, onClick }: { step: typeof STEPS[number]; winner: PlayerInfo | null; onClick?: () => void }) {
   const icons: Record<string, React.ReactNode> = {
-    bolaCheia:      <img src="/bola-cheia.png"  alt="" style={{ width: '130%', height: '130%', objectFit: 'contain', pointerEvents: 'none' }} />,
-    bolaMurcha:     <img src="/bola-murcha.png" alt="" style={{ width: '130%', height: '130%', objectFit: 'contain', pointerEvents: 'none' }} />,
+    bolaCheia:      <img src="/bola-cheia.png"  alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />,
+    bolaMurcha:     <img src="/bola-murcha.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />,
     melhorDefensor: <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 5.5v7C4 17 7.6 21 12 22c4.4-1 8-5 8-9.5v-7L12 2Z" fill="#fad026" opacity=".85"/><path d="M9 12l2 2 4-4" stroke="#111" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>,
     piorDefensor:   <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 5.5v7C4 17 7.6 21 12 22c4.4-1 8-5 8-9.5v-7L12 2Z" fill="#ff6b35" opacity=".8"/><path d="M9 12h6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/></svg>,
   }
@@ -211,8 +211,8 @@ function ResultSheet({ players, votos, onClose, onShare, sharing }: {
                   </div>
                   <div style={{ padding: '10px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--color-surface-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
-                      {step.key === 'bolaCheia'  && <img src="/bola-cheia.png"  alt="" style={{ width: '140%', height: '140%', objectFit: 'contain' }} />}
-                      {step.key === 'bolaMurcha' && <img src="/bola-murcha.png" alt="" style={{ width: '140%', height: '140%', objectFit: 'contain' }} />}
+                      {step.key === 'bolaCheia'  && <img src="/bola-cheia.png"  alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
+                      {step.key === 'bolaMurcha' && <img src="/bola-murcha.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
                       {step.key === 'melhorDefensor' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 5.5v7C4 17 7.6 21 12 22c4.4-1 8-5 8-9.5v-7L12 2Z" fill="#fad026"/><path d="M9 12l2 2 4-4" stroke="#111" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                       {step.key === 'piorDefensor'   && <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 5.5v7C4 17 7.6 21 12 22c4.4-1 8-5 8-9.5v-7L12 2Z" fill="#ff6b35"/><path d="M9 12h6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/></svg>}
                     </div>
