@@ -237,22 +237,39 @@ function ResultSheet({ players, votos, onClose, onShare, sharing }: {
 
 // ─── History Card ─────────────────────────────────────────────────────────────
 
-const CAT_COLORS: Record<keyof VoteV2, { bg: string; label: string }> = {
-  bolaCheia:      { bg: 'rgba(52,199,89,.10)',  label: 'Bola Cheia'    },
-  bolaMurcha:     { bg: 'rgba(255,59,48,.10)',  label: 'Bola Murcha'   },
-  melhorDefensor: { bg: 'rgba(250,208,38,.10)', label: 'Prêmio Lúcio'  },
-  piorDefensor:   { bg: 'rgba(255,107,53,.10)', label: 'Rodrigo Caio'  },
-}
-
-function HistoryAvatarSmall({ player }: { player: PlayerInfo | null }) {
-  return (
-    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--color-surface-secondary)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      {player?.photoURL
-        ? <img src={player.photoURL} alt={player.name} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
-        : <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 12, color: 'var(--color-fg-secondary)' }}>{player ? getInitials(player.name) : '?'}</span>
-      }
-    </div>
-  )
+const CAT_META: Record<keyof VoteV2, { label: string; renderIcon: () => React.ReactNode }> = {
+  bolaCheia: {
+    label: 'Bola Cheia',
+    renderIcon: () => (
+      <div style={{ width: 32, height: 32, flexShrink: 0 }}>
+        <img src="/bola-cheia.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+      </div>
+    ),
+  },
+  bolaMurcha: {
+    label: 'Bola Murcha',
+    renderIcon: () => (
+      <div style={{ width: 32, height: 32, flexShrink: 0 }}>
+        <img src="/bola-murcha.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+      </div>
+    ),
+  },
+  melhorDefensor: {
+    label: 'Prêmio Lúcio',
+    renderIcon: () => (
+      <div style={{ width: 32, height: 32, flexShrink: 0, overflow: 'hidden', borderRadius: '8px 8px 14.769px 14.769px' }}>
+        <img src="/premio-lucio.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
+      </div>
+    ),
+  },
+  piorDefensor: {
+    label: 'Rodrigo Caio',
+    renderIcon: () => (
+      <div style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <img src="/rodrigo-caio.png" alt="" style={{ width: 22.4, height: 28.8, objectFit: 'cover', objectPosition: 'center top', borderRadius: '0.8px 0.8px 37.6px 37.6px' }} />
+      </div>
+    ),
+  },
 }
 
 function HistoryCard({ entry, onClick }: { entry: HistoryEntry; onClick: () => void }) {
@@ -261,20 +278,20 @@ function HistoryCard({ entry, onClick }: { entry: HistoryEntry; onClick: () => v
   return (
     <button
       onClick={onClick}
-      style={{ width: '100%', textAlign: 'left', background: 'var(--color-surface-primary)', borderRadius: 16, padding: '14px 16px', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 12 }}
+      style={{ width: '100%', textAlign: 'left', background: 'var(--color-surface-primary)', borderRadius: 16, padding: 16, border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10 }}
     >
-      <span style={{ fontFamily: 'var(--font-primary)', fontSize: 12, color: 'var(--color-fg-secondary)', fontWeight: 500 }}>{dateLabel}</span>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+      <span style={{ fontFamily: 'var(--font-primary)', fontSize: 11, fontWeight: 400, color: 'var(--color-fg-primary)', lineHeight: '16px' }}>{dateLabel}</span>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, width: '100%' }}>
         {STEPS.map(step => {
           const winnerId = computeWinnerV2(entry.votos, step.key)
           const winner = winnerId ? (entry.playerMap.get(winnerId) ?? null) : null
-          const { bg, label } = CAT_COLORS[step.key]
+          const { label, renderIcon } = CAT_META[step.key]
           return (
-            <div key={step.key} style={{ display: 'flex', alignItems: 'center', gap: 10, background: bg, borderRadius: 10, padding: '8px 10px' }}>
-              <HistoryAvatarSmall player={winner} />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
-                <span style={{ fontFamily: 'var(--font-primary)', fontSize: 10, fontWeight: 600, color: 'var(--color-fg-secondary)', lineHeight: 1 }}>{label}</span>
-                <span style={{ fontFamily: 'var(--font-primary)', fontSize: 13, fontWeight: 500, color: 'var(--color-fg-primary)', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div key={step.key} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'white', borderRadius: 8, padding: 8 }}>
+              {renderIcon()}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                <span style={{ fontFamily: 'var(--font-primary)', fontSize: 12, fontWeight: 600, color: 'var(--color-fg-primary)', lineHeight: '16px' }}>{label}</span>
+                <span style={{ fontFamily: 'var(--font-primary)', fontSize: 11, fontWeight: 400, color: 'var(--color-fg-secondary)', lineHeight: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {winner ? winner.name.split(' ')[0] : '—'}
                 </span>
               </div>
