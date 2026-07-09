@@ -53,6 +53,32 @@ async function fetchVotacaoV2(gameId: string): Promise<VotacaoV2Data> {
   return { votos: snap.data().votos ?? {} }
 }
 
+type HistoryEntry = {
+  gameId: string
+  votos: Record<string, Partial<VoteV2>>
+  playerMap: Map<string, PlayerInfo>
+}
+
+async function fetchAllPlayers(): Promise<Map<string, PlayerInfo>> {
+  const snap = await getDocs(collection(db, 'players'))
+  return new Map(snap.docs.map(d => {
+    const data = d.data()
+    return [d.id, { id: d.id, name: data.name || data.email || 'Jogador', photoURL: data.photoURL }]
+  }))
+}
+
+async function fetchHistory(currentGameId: string): Promise<HistoryEntry[]> {
+  const [votSnap, playerMap] = await Promise.all([
+    getDocs(collection(db, 'votacao')),
+    fetchAllPlayers(),
+  ])
+  return votSnap.docs
+    .filter(d => d.id !== currentGameId && Object.keys(d.data().votos ?? {}).length > 0)
+    .sort((a, b) => b.id.localeCompare(a.id))
+    .slice(0, 8)
+    .map(d => ({ gameId: d.id, votos: d.data().votos ?? {}, playerMap }))
+}
+
 function computeWinnerV2(
   votos: Record<string, Partial<VoteV2>>,
   type: keyof VoteV2
@@ -209,6 +235,57 @@ function ResultSheet({ players, votos, onClose, onShare, sharing }: {
   )
 }
 
+// ─── History Card ─────────────────────────────────────────────────────────────
+
+const CAT_COLORS: Record<keyof VoteV2, { bg: string; label: string }> = {
+  bolaCheia:      { bg: 'rgba(52,199,89,.10)',  label: 'Bola Cheia'    },
+  bolaMurcha:     { bg: 'rgba(255,59,48,.10)',  label: 'Bola Murcha'   },
+  melhorDefensor: { bg: 'rgba(250,208,38,.10)', label: 'Prêmio Lúcio'  },
+  piorDefensor:   { bg: 'rgba(255,107,53,.10)', label: 'Rodrigo Caio'  },
+}
+
+function HistoryAvatarSmall({ player }: { player: PlayerInfo | null }) {
+  return (
+    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--color-surface-secondary)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {player?.photoURL
+        ? <img src={player.photoURL} alt={player.name} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+        : <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 12, color: 'var(--color-fg-secondary)' }}>{player ? getInitials(player.name) : '?'}</span>
+      }
+    </div>
+  )
+}
+
+function HistoryCard({ entry, onClick }: { entry: HistoryEntry; onClick: () => void }) {
+  const dateLabel = (() => { try { return format(new Date(entry.gameId + 'T12:00:00'), "d 'de' MMMM", { locale: ptBR }) } catch { return entry.gameId } })()
+
+  return (
+    <button
+      onClick={onClick}
+      style={{ width: '100%', textAlign: 'left', background: 'var(--color-surface-primary)', borderRadius: 16, padding: '14px 16px', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 12 }}
+    >
+      <span style={{ fontFamily: 'var(--font-primary)', fontSize: 12, color: 'var(--color-fg-secondary)', fontWeight: 500 }}>{dateLabel}</span>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        {STEPS.map(step => {
+          const winnerId = computeWinnerV2(entry.votos, step.key)
+          const winner = winnerId ? (entry.playerMap.get(winnerId) ?? null) : null
+          const { bg, label } = CAT_COLORS[step.key]
+          return (
+            <div key={step.key} style={{ display: 'flex', alignItems: 'center', gap: 10, background: bg, borderRadius: 10, padding: '8px 10px' }}>
+              <HistoryAvatarSmall player={winner} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+                <span style={{ fontFamily: 'var(--font-primary)', fontSize: 10, fontWeight: 600, color: 'var(--color-fg-secondary)', lineHeight: 1 }}>{label}</span>
+                <span style={{ fontFamily: 'var(--font-primary)', fontSize: 13, fontWeight: 500, color: 'var(--color-fg-primary)', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {winner ? winner.name.split(' ')[0] : '—'}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </button>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function StatsVotacaoPage() {
@@ -223,10 +300,11 @@ export default function StatsVotacaoPage() {
   const [pendingVotes, setPendingVotes] = useState<Partial<VoteV2>>({})
   const [selectedInStep, setSelectedInStep] = useState<string | null>(null)
   const [showResult, setShowResult] = useState(false)
+  const [historyEntry, setHistoryEntry] = useState<HistoryEntry | null>(null)
   const [sharing, setSharing] = useState(false)
   const resultCardRef = useRef<HTMLDivElement>(null)
 
-  useLockBodyScroll(showResult)
+  useLockBodyScroll(showResult || !!historyEntry)
 
   const { data: players = [], isLoading: loadingPlayers } = useQuery({
     queryKey: ['confirmed-players-v2', gameId],
@@ -237,6 +315,11 @@ export default function StatsVotacaoPage() {
     queryKey: ['votacao-v2', gameId],
     queryFn: () => fetchVotacaoV2(gameId),
     refetchInterval: 10_000,
+  })
+  const { data: history = [] } = useQuery({
+    queryKey: ['votacao-history'],
+    queryFn: () => fetchHistory(gameId),
+    staleTime: 5 * 60_000,
   })
 
   const saveVote = useMutation({
@@ -412,6 +495,14 @@ export default function StatsVotacaoPage() {
             ? <HubView />
             : <VotingView />
           }
+          {view === 'hub' && history.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)' }}>Histórico</p>
+              {history.map(entry => (
+                <HistoryCard key={entry.gameId} entry={entry} onClick={() => setHistoryEntry(entry)} />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -445,6 +536,37 @@ export default function StatsVotacaoPage() {
           players={players}
           votos={votacao.votos}
           onClose={() => setShowResult(false)}
+          onShare={async () => {
+            setSharing(true)
+            try {
+              const html2canvas = (await import('html2canvas')).default
+              if (!resultCardRef.current) return
+              const canvas = await html2canvas(resultCardRef.current, { backgroundColor: '#111827', scale: 2, useCORS: true, logging: false })
+              const blob = await new Promise<Blob>((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('null')), 'image/png'))
+              const file = new File([blob], 'votacao-chicofc.png', { type: 'image/png' })
+              if (navigator.share && navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title: 'Votação ChicoFC' })
+              } else {
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url; a.download = 'votacao-chicofc.png'; a.click()
+                URL.revokeObjectURL(url)
+                toast.success('Imagem salva!')
+              }
+            } catch (e: any) {
+              if (e?.name !== 'AbortError') toast.error('Não foi possível compartilhar')
+            } finally { setSharing(false) }
+          }}
+          sharing={sharing}
+        />
+      )}
+
+      {/* History result sheet (read-only) */}
+      {historyEntry && (
+        <ResultSheet
+          players={[...historyEntry.playerMap.values()]}
+          votos={historyEntry.votos}
+          onClose={() => setHistoryEntry(null)}
           onShare={async () => {
             setSharing(true)
             try {
