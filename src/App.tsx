@@ -9,6 +9,7 @@ import LoginPage from './pages/LoginPage'
 import GamesPage from './pages/GamesPage'
 import StatsPage from './pages/StatsPage'
 import StatsBolaPage from './pages/StatsBolaPage'
+import StatsVotacaoPage from './pages/StatsVotacaoPage'
 import StatsPlacasrPage from './pages/StatsPlacasrPage'
 import StatsRankingPage from './pages/StatsRankingPage'
 import CaixinhaPage from './pages/CaixinhaPage'
@@ -74,6 +75,7 @@ export default function App() {
     || location.pathname === '/caixinha/exportar'
     || location.pathname === '/notifications'
     || location.pathname === '/stats/bola-cheia'
+    || location.pathname === '/stats/votacao'
     || location.pathname === '/stats/placar'
     || location.pathname === '/stats/ranking'
 
@@ -85,6 +87,7 @@ export default function App() {
           <Route path="/games" element={<GamesPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/stats/bola-cheia" element={<StatsBolaPage />} />
+          <Route path="/stats/votacao" element={<StatsVotacaoPage />} />
           <Route path="/stats/placar" element={<StatsPlacasrPage />} />
           <Route path="/stats/ranking" element={<StatsRankingPage />} />
           <Route path="/caixinha" element={<CaixinhaPage />} />

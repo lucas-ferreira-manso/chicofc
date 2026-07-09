@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore'
@@ -9,7 +9,7 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import Header from '../components/layout/Header'
 import { fetchFullRanking, type RankingEntry } from '../lib/playerStats'
-import { getLastWednesdayId, computeWinner, BigCard } from '../components/stats/VotacaoComponents'
+import { getLastWednesdayId, computeWinner } from '../components/stats/VotacaoComponents'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll'
 import type { HistoryEntry } from '../lib/playerStats'
 
@@ -165,7 +165,6 @@ export default function StatsPage() {
   const navigate = useNavigate()
   const user = useAuthStore(s => s.user)
   const gameId = getLastWednesdayId()
-  const dummyCardRef = useRef<HTMLDivElement>(null)
   const [selectedRanking, setSelectedRanking] = useState<{ entry: RankingEntry; position: number } | null>(null)
   useLockBodyScroll(!!selectedRanking)
 
@@ -191,16 +190,49 @@ export default function StatsPage() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '16px 24px 0' }}>
 
-        {/* Card Bola Cheia/Murcha — clicável, navega para a tela completa */}
-        <div onClick={() => navigate('/stats/bola-cheia')} style={{ cursor: 'pointer', borderRadius: 24, overflow: 'hidden' }}>
-          <BigCard
-            entry={{
-              cheiaWinner: lastVotacao?.cheiaWinner ?? null,
-              murchaWinner: lastVotacao?.murchaWinner ?? null,
-              gameId: lastVotacao?.gameId
+        {/* Banner Votação — navega para a tela completa */}
+        <div
+          onClick={() => navigate('/stats/votacao')}
+          style={{
+            cursor: 'pointer',
+            borderRadius: 16,
+            overflow: 'hidden',
+            position: 'relative',
+            height: 80,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 20px 0 24px',
+          }}
+        >
+          {/* Stadium background */}
+          <img
+            src="/stadium-bg.png"
+            alt=""
+            aria-hidden
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              objectPosition: 'center center',
+              pointerEvents: 'none',
             }}
-            cardRef={dummyCardRef}
           />
+          {/* Dark overlay */}
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.30)', borderRadius: 16 }} />
+          {/* Text */}
+          <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: '#fff', lineHeight: 1, margin: 0 }}>
+              Parabéns aos envolvidos!
+            </p>
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: '16px', margin: 0 }}>
+              Confira os destaques do último jogo!
+            </p>
+          </div>
+          {/* Caret */}
+          <CaretRight size={20} color="#fff" style={{ position: 'relative', zIndex: 1, flexShrink: 0 }} />
         </div>
 
         {/* Placar Geral */}

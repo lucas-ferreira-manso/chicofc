@@ -176,8 +176,10 @@ function FormulaSheet({ onClose }: { onClose: () => void }) {
     { label: 'Empate', value: '+1 pt', desc: 'Por jogo empatado' },
     { label: 'Derrota', value: '0 pts', desc: 'Por jogo perdido' },
     { label: 'Presença', value: '+1 pt', desc: 'Por jogo confirmado' },
-    { label: 'Bola Cheia', value: '+5 pts', desc: 'Eleito melhor da rodada' },
-    { label: 'Bola Murcha', value: '-2 pts', desc: 'Eleito pior da rodada' },
+    { label: 'Bola Cheia', value: '+3 pts', desc: 'Eleito melhor jogador da rodada' },
+    { label: 'Bola Murcha', value: '-3 pts', desc: 'Eleito pior jogador da rodada' },
+    { label: 'Prêmio Lúcio', value: '+3 pts', desc: 'Melhor defensor da rodada' },
+    { label: 'Rodrigo Caio', value: '-1 pt', desc: 'Pior defensor da rodada' },
   ]
 
   return (
@@ -208,7 +210,7 @@ function FormulaSheet({ onClose }: { onClose: () => void }) {
         <div style={{ background: 'var(--color-surface-primary)', borderRadius: 16, padding: '14px 16px' }}>
           <p style={{ fontFamily: 'var(--font-primary)', fontSize: 12, color: 'var(--color-fg-secondary)', lineHeight: 1.6 }}>
             <span style={{ fontWeight: 600, color: 'var(--color-fg-primary)' }}>Fórmula: </span>
-            V×3 + E×1 + Presenças×1 + Bola Cheia×5 − Bola Murcha×2
+            V×3 + E×1 + Presenças×1 + Bola Cheia×3 + Prêmio Lúcio×3 − Bola Murcha×3 − Rodrigo Caio×1
           </p>
         </div>
       </div>
