@@ -160,12 +160,13 @@ function HubBadge({ step, winner, onClick }: { step: typeof STEPS[number]; winne
   )
 }
 
-function ResultSheet({ players, votos, onClose, onShare, sharing }: {
+function ResultSheet({ players, votos, onClose, onShare, sharing, cardRef }: {
   players: PlayerInfo[]
   votos: Record<string, Partial<VoteV2>>
   onClose: () => void
   onShare: () => void
   sharing: boolean
+  cardRef: React.RefObject<HTMLDivElement>
 }) {
   const playerMap = new Map(players.map(p => [p.id, p]))
   const winners = STEPS.map(s => ({
@@ -188,7 +189,7 @@ function ResultSheet({ players, votos, onClose, onShare, sharing }: {
         <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
         {/* Result card (shareable) */}
-        <div ref={undefined} style={{ borderRadius: 20, overflow: 'hidden', position: 'relative' }}>
+        <div ref={cardRef} style={{ borderRadius: 20, overflow: 'hidden', position: 'relative' }}>
           <img src="/stadium-bg.png" aria-hidden alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.5)', pointerEvents: 'none' }} />
           <div style={{ position: 'relative', padding: '20px 16px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -296,10 +297,10 @@ function HistoryCard({ entry, onClick }: { entry: HistoryEntry; onClick: () => v
             <div key={step.key} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'white', borderRadius: 8, padding: 8 }}>
               {renderIcon()}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                <span style={{ fontFamily: 'var(--font-primary)', fontSize: 12, fontWeight: 600, color: 'var(--color-fg-primary)', lineHeight: '16px' }}>{label}</span>
-                <span style={{ fontFamily: 'var(--font-primary)', fontSize: 11, fontWeight: 400, color: 'var(--color-fg-secondary)', lineHeight: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontFamily: 'var(--font-primary)', fontSize: 12, fontWeight: 600, color: 'var(--color-fg-primary)', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {winner ? winner.name.split(' ')[0] : '—'}
                 </span>
+                <span style={{ fontFamily: 'var(--font-primary)', fontSize: 11, fontWeight: 400, color: 'var(--color-fg-secondary)', lineHeight: '14px' }}>{label}</span>
               </div>
             </div>
           )
@@ -558,6 +559,7 @@ export default function StatsVotacaoPage() {
         <ResultSheet
           players={players}
           votos={votacao.votos}
+          cardRef={resultCardRef}
           onClose={() => setShowResult(false)}
           onShare={async () => {
             setSharing(true)
@@ -589,6 +591,7 @@ export default function StatsVotacaoPage() {
         <ResultSheet
           players={[...historyEntry.playerMap.values()]}
           votos={historyEntry.votos}
+          cardRef={resultCardRef}
           onClose={() => setHistoryEntry(null)}
           onShare={async () => {
             setSharing(true)
