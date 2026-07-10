@@ -181,8 +181,11 @@ function ResultSheet({ players, votos, onClose, onShare, sharing }: {
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 70 }} />
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 80, background: 'var(--color-bg)', borderRadius: '24px 24px 0 0', padding: '16px 16px calc(32px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '92dvh', overflowY: 'auto' }}>
-        <div style={{ width: 36, height: 4, borderRadius: 99, background: 'var(--color-surface-secondary)', margin: '0 auto 4px', flexShrink: 0 }} />
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 80, background: 'var(--color-bg)', borderRadius: '24px 24px 0 0', maxHeight: '92dvh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '16px 16px 0', flexShrink: 0 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 99, background: 'var(--color-surface-secondary)', margin: '0 auto 12px' }} />
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
         {/* Result card (shareable) */}
         <div ref={undefined} style={{ borderRadius: 20, overflow: 'hidden', position: 'relative' }}>
@@ -227,9 +230,12 @@ function ResultSheet({ players, votos, onClose, onShare, sharing }: {
           </div>
         </div>
 
-        <button onClick={onShare} disabled={sharing} style={{ width: '100%', height: 52, borderRadius: 99, background: 'var(--color-surface-primary)', color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 16, border: 'none', cursor: sharing ? 'default' : 'pointer', opacity: sharing ? .7 : 1 }}>
-          {sharing ? 'Gerando...' : 'Compartilhar'}
-        </button>
+        </div>
+        <div style={{ padding: '14px 16px calc(32px + env(safe-area-inset-bottom))', flexShrink: 0 }}>
+          <button onClick={onShare} disabled={sharing} style={{ width: '100%', height: 52, borderRadius: 99, background: 'var(--color-surface-primary)', color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 16, border: 'none', cursor: sharing ? 'default' : 'pointer', opacity: sharing ? .7 : 1 }}>
+            {sharing ? 'Gerando...' : 'Compartilhar'}
+          </button>
+        </div>
       </div>
     </>
   )
@@ -350,7 +356,7 @@ export default function StatsVotacaoPage() {
       qc.invalidateQueries({ queryKey: ['votacao-v2', gameId] })
       qc.invalidateQueries({ queryKey: ['votacao', gameId] })
       setView('hub')
-      setShowResult(true)
+      if (!votingOpen) setShowResult(true)
       toast.success('Votos registrados!')
     },
     onError: () => toast.error('Erro ao salvar votos.'),
@@ -426,7 +432,7 @@ export default function StatsVotacaoPage() {
             <span style={{ fontFamily: 'var(--font-primary)', fontSize: 13, color: 'rgba(255,255,255,.55)' }}>Você não participou deste jogo</span>
           </div>
         )}
-        {hasVotedV2 && (
+        {hasVotedV2 && !votingOpen && (
           <button onClick={() => setShowResult(true)} style={{ width: '100%', height: 50, borderRadius: 99, background: 'rgba(255,255,255,.15)', color: '#fff', fontFamily: 'var(--font-primary)', fontSize: 16, fontWeight: 600, border: '1.5px solid rgba(255,255,255,.25)', cursor: 'pointer' }}>
             Ver resultado completo
           </button>
