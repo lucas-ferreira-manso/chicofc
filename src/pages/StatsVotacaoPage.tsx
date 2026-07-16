@@ -428,6 +428,14 @@ export default function StatsVotacaoPage() {
             Votar agora!
           </button>
         )}
+        {votingOpen && hasVotedV2 && userWasConfirmed && (
+          <button
+            onClick={() => { setCurrentStep(0); setSelectedInStep(null); setPendingVotes(myVote ?? {}); setView('voting') }}
+            style={{ width: '100%', height: 50, borderRadius: 99, background: 'rgba(255,255,255,.15)', color: '#fff', fontFamily: 'var(--font-primary)', fontSize: 16, fontWeight: 600, border: '1.5px solid rgba(255,255,255,.25)', cursor: 'pointer' }}
+          >
+            Alterar voto
+          </button>
+        )}
         {!userWasConfirmed && votingOpen && (
           <div style={{ textAlign: 'center', padding: '4px 0' }}>
             <span style={{ fontFamily: 'var(--font-primary)', fontSize: 13, color: 'rgba(255,255,255,.55)' }}>Você não participou deste jogo</span>
