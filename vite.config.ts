@@ -56,7 +56,7 @@ export default defineConfig({
             urlPattern: /\.js$/,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'js-chunks',
+              cacheName: 'js-chunks-v2',
               networkTimeoutSeconds: 10,
               expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 }
             }
