@@ -430,7 +430,13 @@ export default function StatsVotacaoPage() {
         )}
         {votingOpen && hasVotedV2 && userWasConfirmed && (
           <button
-            onClick={() => { setCurrentStep(0); setSelectedInStep(null); setPendingVotes(myVote ?? {}); setView('voting') }}
+            onClick={() => {
+              const votes = myVote ?? {}
+              setCurrentStep(0)
+              setPendingVotes(votes)
+              setSelectedInStep((votes as any)[STEPS[0].key] ?? null)
+              setView('voting')
+            }}
             style={{ width: '100%', height: 50, borderRadius: 99, background: 'rgba(255,255,255,.15)', color: '#fff', fontFamily: 'var(--font-primary)', fontSize: 16, fontWeight: 600, border: '1.5px solid rgba(255,255,255,.25)', cursor: 'pointer' }}
           >
             Alterar voto
@@ -472,9 +478,12 @@ export default function StatsVotacaoPage() {
         </div>
       </div>
 
-      {/* Player list — exclui jogadores já votados em etapas anteriores */}
+      {/* Player list — exclui apenas jogadores votados em OUTROS steps */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {players.filter(p => !Object.values(pendingVotes).includes(p.id)).map(player => {
+        {players.filter(p => {
+          const otherVotes = Object.entries(pendingVotes).filter(([k]) => k !== step.key).map(([, v]) => v)
+          return !otherVotes.includes(p.id)
+        }).map(player => {
           const isSel = selectedInStep === player.id
           return (
             <button
@@ -542,13 +551,15 @@ export default function StatsVotacaoPage() {
       {view === 'voting' && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 24px calc(28px + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)', zIndex: 40 }}>
           <button
-            disabled={!selectedInStep || saveVote.isPending}
+            disabled={(!selectedInStep && !(pendingVotes as any)[step.key]) || saveVote.isPending}
             onClick={() => {
-              if (!selectedInStep) return
-              const updated = { ...pendingVotes, [step.key]: selectedInStep }
+              const chosenId = selectedInStep ?? (pendingVotes as any)[step.key]
+              if (!chosenId) return
+              const updated = { ...pendingVotes, [step.key]: chosenId }
               if (currentStep < STEPS.length - 1) {
+                const nextKey = STEPS[currentStep + 1].key
                 setPendingVotes(updated)
-                setSelectedInStep(null)
+                setSelectedInStep((updated as any)[nextKey] ?? null)
                 setCurrentStep(currentStep + 1)
               } else {
                 saveVote.mutate(updated as VoteV2)
