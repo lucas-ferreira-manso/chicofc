@@ -69,6 +69,7 @@ export default function StatsBolaPage() {
   const [sheetType, setSheetType] = useState<'bolaCheia' | 'bolaMurcha' | null>(null)
   const [pendingCheia, setPendingCheia] = useState<string | null>(null)
   const [pendingMurcha, setPendingMurcha] = useState<string | null>(null)
+  const [isEditingVote, setIsEditingVote] = useState(false)
   const [historySheet, setHistorySheet] = useState<HistoryEntry | null>(null)
   useLockBodyScroll(!!(sheetType || historySheet))
   const [sharing, setSharing] = useState(false)
@@ -84,7 +85,7 @@ export default function StatsBolaPage() {
       const current = votacao ?? { votos: {} }
       await setDoc(doc(db, 'votacao', gameId), { votos: { ...current.votos, [user!.id]: votes } })
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['votacao', gameId] }); toast.success('Voto registrado!') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['votacao', gameId] }); setIsEditingVote(false); toast.success('Voto registrado!') },
     onError: () => toast.error('Erro ao votar. Tente novamente.')
   })
 
@@ -184,21 +185,28 @@ export default function StatsBolaPage() {
             )}
             <HistorySection />
           </>
-        ) : hasVoted ? (
+        ) : hasVoted && !isEditingVote ? (
           <>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', padding: '24px 16px 16px', borderRadius: 24, position: 'relative', overflow: 'hidden', width: '100%' }}>
+            <button
+              onClick={() => {
+                setPendingCheia(myVote.bolaCheia ?? null)
+                setPendingMurcha(myVote.bolaMurcha ?? null)
+                setIsEditingVote(true)
+              }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', padding: '24px 16px 16px', borderRadius: 24, position: 'relative', overflow: 'hidden', width: '100%', border: 'none', cursor: 'pointer', background: 'transparent', textAlign: 'left' }}
+            >
               <img src="/stadium-bg.png" aria-hidden alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
               <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', pointerEvents: 'none' }} />
               <img src="/team-blue.png" alt="ChicoFC" style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0, position: 'relative' }} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'center', position: 'relative' }}>
                 <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 24, lineHeight: '28px', color: 'white' }}>Parabéns aos envolvidos!</p>
-                <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'rgba(255,255,255,0.85)' }}>Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!</p>
+                <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'rgba(255,255,255,0.85)' }}>Toque para alterar seu voto</p>
               </div>
               <div style={{ display: 'flex', gap: 12, padding: '0 4px', width: '100%', position: 'relative' }}>
                 <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled completed />
                 <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled completed />
               </div>
-            </div>
+            </button>
             <HistorySection />
           </>
         ) : !userWasConfirmed ? (

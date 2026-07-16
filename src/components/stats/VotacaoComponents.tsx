@@ -99,7 +99,7 @@ export function BadgeVotacao({ type, player, onClick, disabled, completed }: Bad
       }}>
         {player ? (
           player.photoURL ? (
-            <img src={player.photoURL} alt={player.name} crossOrigin="anonymous" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block', pointerEvents: 'none' }} />
+            <img src={player.photoURL} alt={player.name} crossOrigin="anonymous" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center center', display: 'block', pointerEvents: 'none' }} />
           ) : (
             <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 48, color: 'var(--color-badge-initials)', opacity: 0.4 }}>
               {getInitials(player.name)}
