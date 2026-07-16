@@ -143,7 +143,7 @@ export default function StatsBolaPage() {
   const HistorySheetEl = historySheet && (
     <>
       <div onClick={() => setHistorySheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 70 }} />
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70, background: 'var(--color-bg)', borderRadius: '24px 24px 0 0', padding: '16px 16px calc(40px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70, background: 'var(--color-bg)', borderRadius: '24px 24px 0 0', padding: '16px 16px calc(40px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '90dvh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px 4px' }}>
           <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)' }}>Resultado anterior</p>
           <button onClick={() => setHistorySheet(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><X size={20} color="var(--color-fg-secondary)" /></button>
@@ -194,7 +194,7 @@ export default function StatsBolaPage() {
                 <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 24, lineHeight: '28px', color: 'white' }}>Parabéns aos envolvidos!</p>
                 <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'rgba(255,255,255,0.85)' }}>Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!</p>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center', position: 'relative' }}>
+              <div style={{ display: 'flex', gap: 12, padding: '0 4px', width: '100%', position: 'relative' }}>
                 <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled completed />
                 <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled completed />
               </div>
@@ -233,7 +233,7 @@ export default function StatsBolaPage() {
                 <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 24, lineHeight: '28px', color: 'white' }}>Chegou a hora de julgar!</p>
                 <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'rgba(255,255,255,0.85)' }}>Vote no Bola Cheia e Bola murcha da rodada!</p>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 8px', position: 'relative' }}>
+              <div style={{ display: 'flex', gap: 12, padding: '16px 4px', position: 'relative' }}>
                 <BadgeVotacao type="bolaCheia" player={pendingCheiaPlayer} onClick={() => setSheetType('bolaCheia')} completed />
                 <BadgeVotacao type="bolaMurcha" player={pendingMurchaPlayer} onClick={() => setSheetType('bolaMurcha')} completed />
               </div>

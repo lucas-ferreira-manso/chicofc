@@ -86,14 +86,16 @@ export function BadgeVotacao({ type, player, onClick, disabled, completed }: Bad
   const label = isMurcha ? 'Bola Murcha' : 'Bola Cheia'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: 133, position: 'relative' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minWidth: 0 }}>
+      {/* Photo frame — strictly 1:1, bola icon contained inside */}
       <button onClick={onClick} disabled={disabled || !onClick} style={{
         aspectRatio: '1/1', borderRadius: 24, width: '100%',
         background: player ? 'var(--color-surface-secondary)' : 'white',
         border: player ? 'none' : '1.5px solid var(--color-border)',
         overflow: 'hidden', position: 'relative',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        cursor: (disabled || !onClick) ? 'default' : 'pointer', padding: 0
+        cursor: (disabled || !onClick) ? 'default' : 'pointer', padding: 0,
+        flexShrink: 0,
       }}>
         {player ? (
           player.photoURL ? (
@@ -108,17 +110,19 @@ export function BadgeVotacao({ type, player, onClick, disabled, completed }: Bad
             <path d="M12 5V19M5 12H19" stroke={accentColor} strokeWidth="2" strokeLinecap="round" />
           </svg>
         )}
+        {/* Bola icon — inside the frame, bottom-right corner */}
+        <div style={{ position: 'absolute', right: -6, bottom: -6, pointerEvents: 'none' }}>
+          {isMurcha ? <BolaMurchaIcon size={44} /> : <BolaCheiaIcon size={44} />}
+        </div>
       </button>
+      {/* Label area — separate, never overlapped */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 18, lineHeight: '18px', color: accentColor }}>
+        <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 16, lineHeight: '18px', color: accentColor }}>
           {label}
         </span>
-        <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 14, color: nameColor }}>
+        <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 13, color: nameColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {player ? player.name : 'nome atleta'}
         </span>
-      </div>
-      <div style={{ position: 'absolute', right: -3, bottom: 40, pointerEvents: 'none' }}>
-        {isMurcha ? <BolaMurchaIcon size={52} /> : <BolaCheiaIcon size={52} />}
       </div>
     </div>
   )
@@ -232,7 +236,7 @@ export function BigCard({ entry, cardRef, onShare, sharing }: BigCardProps) {
           {dateLabel ? `Pelada dia ${format(new Date(entry.gameId! + 'T12:00:00'), 'dd/MM/yyyy')}` : 'Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!'}
         </p>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center', position: 'relative', flex: 1 }}>
+      <div style={{ display: 'flex', gap: 12, padding: '0 4px', width: '100%', position: 'relative' }}>
         <BadgeVotacao type="bolaCheia" player={entry.cheiaWinner} disabled completed />
         <BadgeVotacao type="bolaMurcha" player={entry.murchaWinner} disabled completed />
       </div>
