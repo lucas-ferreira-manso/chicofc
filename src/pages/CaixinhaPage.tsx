@@ -173,11 +173,13 @@ export async function saveCaixinhaSummary() {
   const despesaPayments = payments.filter(p => p.type === 'despesa')
   const mensalidadePayments = payments.filter(p => p.type === 'mensalidade')
 
-  // Saldo = inicial + recebido − despesas debitadas (type='despesa' criadas no dia 6)
+  // Saldo = inicial + recebido + rendas − despesas
   const totalDespesas = despesaPayments.reduce((s, p) => s + (p.amount ?? 0), 0)
+  const rendaPaymentsSummary = payments.filter(p => p.type === 'renda')
+  const totalRendas = rendaPaymentsSummary.reduce((s, p) => s + (p.amount ?? 0), 0)
   const avulsoPaid = jogoPayments.filter(p => p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
   const mensalistaPaid = mensalidadePayments.filter(p => p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
-  const saldoTotal = saldoInicial + avulsoPaid + mensalistaPaid - totalDespesas
+  const saldoTotal = saldoInicial + avulsoPaid + mensalistaPaid + totalRendas - totalDespesas
 
   const userIdsComPendingAvulsoRequest = new Set(
     requests.filter(r => r.player_type === 'avulso').map(r => r.user_id)
@@ -315,20 +317,23 @@ export default function CaixinhaPage() {
     })
   }, [isAdmin, !!config])
 
-  const [showCustoExtraSheet, setShowCustoExtraSheet] = useState(false)
-  const [custoNome, setCustoNome] = useState('')
-  const [custoValor, setCustoValor] = useState('')
-  useLockBodyScroll(showCustoExtraSheet)
+  const [showExtraSheet, setShowExtraSheet] = useState(false)
+  const [extraTipo, setExtraTipo] = useState<'custo' | 'renda'>('custo')
+  const [extraNome, setExtraNome] = useState('')
+  const [extraValor, setExtraValor] = useState('')
+  useLockBodyScroll(showExtraSheet)
 
-  const addCustoExtra = useMutation({
+  const closeExtraSheet = () => { setShowExtraSheet(false); setExtraNome(''); setExtraValor(''); setExtraTipo('custo') }
+
+  const addExtra = useMutation({
     mutationFn: async () => {
-      const valor = parseFloat(custoValor.replace(',', '.'))
-      if (!custoNome.trim() || isNaN(valor) || valor <= 0) throw new Error('Dados inválidos')
+      const valor = parseFloat(extraValor.replace(',', '.'))
+      if (!extraNome.trim() || isNaN(valor) || valor <= 0) throw new Error('Dados inválidos')
       const month = format(new Date(), 'yyyy-MM')
       await addDoc(collection(db, 'payments'), {
-        type: 'despesa',
+        type: extraTipo === 'custo' ? 'despesa' : 'renda',
         amount: valor,
-        description: custoNome.trim(),
+        description: extraNome.trim(),
         month,
         paid: true,
         created_at: new Date().toISOString(),
@@ -337,12 +342,10 @@ export default function CaixinhaPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payments'] })
       saveCaixinhaSummary().then(() => qc.invalidateQueries({ queryKey: ['caixinha-summary'] }))
-      toast.success('Custo extra adicionado!')
-      setShowCustoExtraSheet(false)
-      setCustoNome('')
-      setCustoValor('')
+      toast.success(extraTipo === 'custo' ? 'Custo extra adicionado!' : 'Renda extra adicionada!')
+      closeExtraSheet()
     },
-    onError: () => toast.error('Erro ao adicionar custo extra.'),
+    onError: () => toast.error('Erro ao adicionar extra.'),
   })
 
   const [pixCopied, setPixCopied] = useState(false)
@@ -627,7 +630,9 @@ export default function CaixinhaPage() {
   // Cálculos
   const jogoPayments = payments.filter(p => p.type === 'jogo')
   const despesaPayments = payments.filter(p => p.type === 'despesa')
+  const rendaPayments = payments.filter(p => p.type === 'renda')
   const totalDespesas = despesaPayments.reduce((s, p) => s + p.amount, 0)
+  const totalRendas = rendaPayments.reduce((s, p) => s + p.amount, 0)
   const mensalidadePayments = payments.filter(p => p.type === 'mensalidade')
   const avulsoValue = config?.avulsoValue ?? 22
   const avulsoPaid = jogoPayments.filter(p => p.paid).reduce((s, p) => s + p.amount, 0)
@@ -659,8 +664,8 @@ export default function CaixinhaPage() {
   const extrasCost = config?.extrasCost ?? 320
   const mensalistaValue = config?.mensalistaValue ?? 80
   const saldoInicial = config?.saldoInicial ?? 1082
-  // Fórmula: saldoInicial + recebido − despesas debitadas (type='despesa', criadas no dia 6)
-  const saldoTotal = saldoInicial + avulsoPaid + mensalistaPaid - totalDespesas
+  // Fórmula: saldoInicial + recebido + rendas − despesas
+  const saldoTotal = saldoInicial + avulsoPaid + mensalistaPaid + totalRendas - totalDespesas
 
   // Agrupa todos os pagamentos por mês (mensalidade + jogo pago), normalizando para yyyy-MM
   const byMonth = payments.reduce((acc, p) => {
@@ -720,7 +725,7 @@ export default function CaixinhaPage() {
         rightContent={isAdmin ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button
-              onClick={() => setShowCustoExtraSheet(true)}
+              onClick={() => setShowExtraSheet(true)}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
             >
               <CurrencyCircleDollar size={28} color="var(--color-fg-accent)" weight="fill" />
@@ -1183,11 +1188,10 @@ export default function CaixinhaPage() {
         </>
       )}
 
-      {/* Bottom Sheet — Custo Extra */}
-      {showCustoExtraSheet && (
+      {/* Bottom Sheet — Extras */}
+      {showExtraSheet && (
         <>
-          <div
-            onClick={() => { setShowCustoExtraSheet(false); setCustoNome(''); setCustoValor('') }}
+          <div onClick={closeExtraSheet}
             style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 60 }}
           />
           <div style={{
@@ -1195,32 +1199,60 @@ export default function CaixinhaPage() {
             background: 'var(--color-bg)',
             borderRadius: '24px 24px 0 0',
             padding: '24px 24px calc(40px + env(safe-area-inset-bottom))',
-            display: 'flex', flexDirection: 'column', gap: 24,
+            display: 'flex', flexDirection: 'column', gap: 20,
           }}>
             {/* Close */}
-            <button
-              onClick={() => { setShowCustoExtraSheet(false); setCustoNome(''); setCustoValor('') }}
+            <button onClick={closeExtraSheet}
               style={{ position: 'absolute', top: 20, right: 20, width: 32, height: 32, borderRadius: '50%', background: 'var(--color-surface-primary)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
               <X size={16} color="var(--color-fg-secondary)" />
             </button>
 
-            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)', lineHeight: 1 }}>
-              Adicionar custo extra
-            </p>
+            {/* Header */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)', lineHeight: 1 }}>
+                Extras
+              </p>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 400, fontSize: 13, color: 'var(--color-fg-secondary)', lineHeight: 1.3 }}>
+                Defina o tipo e valor de extra.
+              </p>
+            </div>
+
+            {/* Tipo: Custo / Renda */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              {(['custo', 'renda'] as const).map(tipo => {
+                const selected = extraTipo === tipo
+                return (
+                  <button
+                    key={tipo}
+                    onClick={() => setExtraTipo(tipo)}
+                    style={{
+                      flex: 1, height: 48, borderRadius: 9999,
+                      background: selected ? 'var(--btn-primary-bg)' : 'var(--color-surface-primary)',
+                      color: selected ? 'var(--btn-primary-fg)' : 'var(--color-fg-secondary)',
+                      fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 15,
+                      border: 'none', cursor: 'pointer',
+                      transition: 'background 0.15s, color 0.15s',
+                    }}
+                  >
+                    {tipo === 'custo' ? 'Custo' : 'Renda'}
+                  </button>
+                )
+              })}
+            </div>
 
             {/* Input Nome */}
             <input
               type="text"
               placeholder="Nome"
-              value={custoNome}
-              onChange={e => setCustoNome(e.target.value)}
+              value={extraNome}
+              onChange={e => setExtraNome(e.target.value)}
               style={{
                 width: '100%', height: 56, borderRadius: 9999,
                 background: 'var(--color-surface-primary)', border: 'none', outline: 'none',
                 paddingInline: 24,
                 fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16,
-                color: custoNome ? 'var(--color-fg-primary)' : 'var(--color-fg-secondary)',
+                color: extraNome ? 'var(--color-fg-primary)' : 'var(--color-fg-secondary)',
                 boxSizing: 'border-box',
               }}
             />
@@ -1228,27 +1260,27 @@ export default function CaixinhaPage() {
             {/* Input Valor */}
             <input
               type="number"
-              inputMode="decimal"
+              inputMode="numeric"
               placeholder="Valor"
-              value={custoValor}
-              onChange={e => setCustoValor(e.target.value)}
+              value={extraValor}
+              onChange={e => setExtraValor(e.target.value)}
               style={{
                 width: '100%', height: 56, borderRadius: 9999,
                 background: 'var(--color-surface-primary)', border: 'none', outline: 'none',
                 paddingInline: 24,
                 fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16,
-                color: custoValor ? 'var(--color-fg-primary)' : 'var(--color-fg-secondary)',
+                color: extraValor ? 'var(--color-fg-primary)' : 'var(--color-fg-secondary)',
                 boxSizing: 'border-box',
               }}
             />
 
-            {/* Botão Confirmar */}
+            {/* Botão Salvar */}
             {(() => {
-              const enabled = custoNome.trim().length > 0 && custoValor.trim().length > 0 && parseFloat(custoValor.replace(',', '.')) > 0
+              const enabled = extraNome.trim().length > 0 && extraValor.trim().length > 0 && parseFloat(extraValor.replace(',', '.')) > 0
               return (
                 <button
-                  disabled={!enabled || addCustoExtra.isPending}
-                  onClick={() => addCustoExtra.mutate()}
+                  disabled={!enabled || addExtra.isPending}
+                  onClick={() => addExtra.mutate()}
                   className="transition-all active:scale-95 disabled:opacity-40"
                   style={{
                     width: '100%', height: 56, borderRadius: 9999,
@@ -1259,7 +1291,7 @@ export default function CaixinhaPage() {
                     transition: 'background 0.15s, color 0.15s',
                   }}
                 >
-                  {addCustoExtra.isPending ? 'Salvando...' : 'Confirmar'}
+                  {addExtra.isPending ? 'Salvando...' : 'Salvar'}
                 </button>
               )
             })()}
