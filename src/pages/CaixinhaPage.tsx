@@ -1385,9 +1385,16 @@ export default function CaixinhaPage() {
 }
 
 function PaymentRow({ payment, onToggle, isAdmin }: { payment: Payment; onToggle: () => void; isAdmin?: boolean }) {
-  const name = payment.type === 'despesa'
-    ? ((payment as any).description || 'Despesa Mensal')
+  const isExtra = payment.type === 'despesa' || payment.type === 'renda'
+  const name = isExtra
+    ? ((payment as any).description || (payment.type === 'renda' ? 'Renda Extra' : 'Despesa Mensal'))
     : ((payment.profile as any)?.name || (payment.profile as any)?.email || 'Jogador')
+  const amountColor = payment.type === 'despesa'
+    ? 'var(--color-danger)'
+    : payment.type === 'renda'
+      ? 'var(--color-success)'
+      : payment.paid ? 'var(--color-success)' : 'var(--color-danger)'
+  const amountPrefix = payment.type === 'renda' ? '+' : payment.type === 'despesa' ? '-' : ''
   return (
     <button onClick={isAdmin ? onToggle : undefined}
       className="w-full flex items-center gap-3 p-4 rounded-3xl transition-all active:scale-[0.99]"
@@ -1399,7 +1406,7 @@ function PaymentRow({ payment, onToggle, isAdmin }: { payment: Payment; onToggle
           {payment.paid && payment.paid_at ? `Pago em ${format(new Date(payment.paid_at), 'd/MM/yyyy')}` : 'Pendente'}
         </p>
       </div>
-      <p className="font-semibold" style={{ color: payment.type === 'despesa' ? 'var(--color-danger)' : payment.paid ? 'var(--color-success)' : 'var(--color-danger)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>R$ {payment.amount}</p>
+      <p className="font-semibold" style={{ color: amountColor, fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)' }}>{amountPrefix}R$ {payment.amount}</p>
     </button>
   )
 }
