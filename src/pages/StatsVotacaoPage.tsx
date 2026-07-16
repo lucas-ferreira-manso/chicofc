@@ -205,9 +205,9 @@ function ResultSheet({ players, votos, onClose, onShare, sharing, cardRef }: {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {winners.map(({ step, player }) => (
                 <div key={step.key} style={{ borderRadius: 20, overflow: 'hidden', background: 'var(--color-bg)' }}>
-                  <div style={{ height: 150, overflow: 'hidden', background: 'var(--color-surface-secondary)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ aspectRatio: '1/1', width: '100%', overflow: 'hidden', background: 'var(--color-surface-secondary)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {player?.photoURL
-                      ? <img src={player.photoURL} alt={player.name} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
+                      ? <img src={player.photoURL} alt={player.name} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center center' }} />
                       : player
                         ? <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 44, color: 'var(--color-badge-initials)', opacity: .35 }}>{getInitials(player.name)}</span>
                         : <span style={{ fontFamily: 'var(--font-primary)', fontSize: 13, color: 'var(--color-fg-secondary)' }}>—</span>
