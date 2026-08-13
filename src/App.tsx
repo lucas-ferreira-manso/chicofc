@@ -29,6 +29,7 @@ import TermsSheet, { needsTermsAcceptance, hasAcceptedTermsLocally } from './com
 export default function App() {
   const { user, loading, setLoading, fetchProfile } = useAuthStore()
   const [showTerms, setShowTerms] = useState(false)
+  const location = useLocation()
 
   useEffect(() => {
     if (!user) return
@@ -67,7 +68,6 @@ export default function App() {
 
   if (!user) return <LoginPage />
 
-  const location = useLocation()
   const hideNav = location.pathname === '/escalacao'
     || location.pathname === '/admin/notificacoes'
     || location.pathname.startsWith('/admin/jogadores/')

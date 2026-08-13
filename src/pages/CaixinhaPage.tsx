@@ -152,22 +152,25 @@ async function fetchAllTempAvulsos(): Promise<any[]> {
  * Despesas são registros type='despesa' criados automaticamente no dia 6 de cada mês.
  */
 export async function saveCaixinhaSummary() {
-  const [paymentsSnap, configSnap, requestsSnap, tempsSnap] = await Promise.all([
+  const [paymentsSnap, configSnap, requestsSnap, tempsSnap, playersSnap] = await Promise.all([
     getDocs(collection(db, 'payments')),
     getDoc(doc(db, 'config', 'caixinha')),
     getDocs(query(collection(db, 'payment_requests'), where('status', '==', 'pending'))),
-    getDocs(collection(db, 'avulsos_temp'))
+    getDocs(collection(db, 'avulsos_temp')),
+    getDocs(collection(db, 'players'))
   ])
 
   const cfg = configSnap.exists() ? configSnap.data() : {}
   const quadraCost: number = cfg.quadraCost ?? 760
   const extrasCost: number = cfg.extrasCost ?? 320
   const avulsoValue: number = cfg.avulsoValue ?? 22
+  const mensalistaValue: number = cfg.mensalistaValue ?? 80
   const saldoInicial: number = cfg.saldoInicial ?? 1082
 
   const payments = paymentsSnap.docs.map(d => d.data())
   const requests = requestsSnap.docs.map(d => d.data())
   const temps = tempsSnap.docs.map(d => d.data())
+  const players = playersSnap.docs.map(d => ({ id: d.id, ...d.data() }) as any)
 
   const jogoPayments = payments.filter(p => p.type === 'jogo')
   const despesaPayments = payments.filter(p => p.type === 'despesa')
@@ -197,7 +200,19 @@ export async function saveCaixinhaSummary() {
 
   const mensalistaPendingFromPayments = mensalidadePayments.filter(p => !p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
   const mensalistaPendingFromRequests = requests.filter(r => r.player_type === 'mensalista').reduce((s, r) => s + (r.amount ?? 0), 0)
-  const mensalistaPending = mensalistaPendingFromPayments + mensalistaPendingFromRequests
+  // Mensalistas sem nenhum registro de pagamento criado para o mês atual ("Sem registro")
+  // também estão pendentes, mas não entram nos dois cálculos acima
+  const currentMonth = format(new Date(), 'yyyy-MM')
+  const usersComMensalidadeNoMes = new Set(
+    mensalidadePayments.filter(p => (p.month ?? '').startsWith(currentMonth)).map(p => p.user_id)
+  )
+  const usersComRequestMensalista = new Set(
+    requests.filter(r => r.player_type === 'mensalista').map(r => r.user_id)
+  )
+  const mensalistaPendingSemRegistro = players
+    .filter(p => p.player_type === 'mensalista' && p.active && !usersComMensalidadeNoMes.has(p.id) && !usersComRequestMensalista.has(p.id))
+    .length * mensalistaValue
+  const mensalistaPending = mensalistaPendingFromPayments + mensalistaPendingFromRequests + mensalistaPendingSemRegistro
 
   await setDoc(doc(db, 'config', 'caixinha-summary'), {
     saldoTotal, quadraCost, extrasCost,
@@ -656,13 +671,25 @@ export default function CaixinhaPage() {
     .reduce((s: number, _: any) => s + avulsoValue, 0)
   const avulsoPending = avulsoFromPayments + avulsoFromRequests + avulsoFromTempAvulsos
   const mensalistaPaid = mensalidadePayments.filter(p => p.paid).reduce((s, p) => s + p.amount, 0)
+  const mensalistaValue = config?.mensalistaValue ?? 80
   // Inclui payment_requests pendentes no cálculo de pendente
   const mensalistaPendingFromPayments = mensalidadePayments.filter(p => !p.paid).reduce((s, p) => s + p.amount, 0)
   const mensalistaPendingFromRequests = pendingRequests.filter(r => r.player_type === 'mensalista').reduce((s: number, r: any) => s + r.amount, 0)
-  const mensalistaPending = mensalistaPendingFromPayments + mensalistaPendingFromRequests
+  // Mensalistas sem nenhum registro de pagamento criado para o mês atual ("Sem registro")
+  // também estão pendentes, mas não entram nos dois cálculos acima
+  const currentMonth = format(new Date(), 'yyyy-MM')
+  const usersComMensalidadeNoMes = new Set(
+    mensalidadePayments.filter(p => p.month.startsWith(currentMonth)).map(p => p.user_id)
+  )
+  const usersComRequestMensalista = new Set(
+    pendingRequests.filter((r: any) => r.player_type === 'mensalista').map((r: any) => r.user_id)
+  )
+  const mensalistaPendingSemRegistro = players
+    .filter(p => (p as any).player_type === 'mensalista' && !usersComMensalidadeNoMes.has(p.id) && !usersComRequestMensalista.has(p.id))
+    .length * mensalistaValue
+  const mensalistaPending = mensalistaPendingFromPayments + mensalistaPendingFromRequests + mensalistaPendingSemRegistro
   const quadraCost = config?.quadraCost ?? 760
   const extrasCost = config?.extrasCost ?? 320
-  const mensalistaValue = config?.mensalistaValue ?? 80
   const saldoInicial = config?.saldoInicial ?? 1082
   // Fórmula: saldoInicial + recebido + rendas − despesas
   const saldoTotal = saldoInicial + avulsoPaid + mensalistaPaid + totalRendas - totalDespesas
