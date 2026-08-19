@@ -9,3 +9,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .vercel
+
+# Claude Code worktrees/config (não versionar)
+.claude/

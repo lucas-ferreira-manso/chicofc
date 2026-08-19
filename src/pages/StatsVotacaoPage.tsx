@@ -9,7 +9,7 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll'
-import { getLastWednesdayId, isVotingOpen, getInitials } from '../components/stats/VotacaoComponents'
+import { getLastWednesdayId, isVotingOpen, getInitials, AvatarSplit, joinWinnerNames } from '../components/stats/VotacaoComponents'
 import type { PlayerInfo } from '../lib/playerStats'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -79,16 +79,19 @@ async function fetchHistory(currentGameId: string): Promise<HistoryEntry[]> {
     .map(d => ({ gameId: d.id, votos: d.data().votos ?? {}, playerMap }))
 }
 
-function computeWinnerV2(
+// Co-vencedores: todos os empatados no topo. Ordenado por id → determinístico.
+function computeWinnersV2(
   votos: Record<string, Partial<VoteV2>>,
   type: keyof VoteV2
-): string | null {
+): string[] {
   const counts: Record<string, number> = {}
   Object.values(votos).forEach(v => {
     const id = v[type]
     if (id) counts[id] = (counts[id] || 0) + 1
   })
-  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+  const max = Math.max(0, ...Object.values(counts))
+  if (max === 0) return []
+  return Object.keys(counts).filter(id => counts[id] === max).sort((a, b) => a.localeCompare(b))
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -135,26 +138,25 @@ function Stepper({ currentStep, votes }: { currentStep: number; votes: Partial<V
   )
 }
 
-function HubBadge({ step, winner, onClick }: { step: typeof STEPS[number]; winner: PlayerInfo | null; onClick?: () => void }) {
+function HubBadge({ step, winners, onClick }: { step: typeof STEPS[number]; winners: PlayerInfo[]; onClick?: () => void }) {
   const icons: Record<string, React.ReactNode> = {
     bolaCheia:      <img src="/bola-cheia.png"  alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />,
     bolaMurcha:     <img src="/bola-murcha.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />,
     melhorDefensor: <img src="/premio-lucio.png"  alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />,
     piorDefensor:   <img src="/rodrigo-caio.png"  alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />,
   }
+  const hasWinner = winners.length > 0
 
   return (
     <div onClick={onClick} style={{ flex: 1, borderRadius: 16, border: '1.5px solid rgba(255,255,255,.15)', background: 'rgba(255,255,255,.08)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '10px 6px', cursor: onClick ? 'pointer' : 'default', overflow: 'hidden' }}>
-      <div style={{ width: 60, height: 60, borderRadius: 12, overflow: 'hidden', background: 'rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        {winner?.photoURL
-          ? <img src={winner.photoURL} alt={winner.name} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
-          : winner
-            ? <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 20, color: '#fff', opacity: .7 }}>{getInitials(winner.name)}</span>
-            : icons[step.key]
+      <div style={{ width: 60, height: 60, borderRadius: 12, overflow: 'hidden', background: 'rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, position: 'relative' }}>
+        {hasWinner
+          ? <AvatarSplit players={winners} objectPosition="top" initialsSize={20} />
+          : icons[step.key]
         }
       </div>
-      <span style={{ fontFamily: 'var(--font-primary)', fontSize: 10, fontWeight: 600, color: winner ? '#fff' : 'rgba(255,255,255,.7)', textAlign: 'center', lineHeight: 1.3 }}>
-        {winner ? winner.name.split(' ')[0] : step.hubLabel}
+      <span style={{ fontFamily: 'var(--font-primary)', fontSize: 10, fontWeight: 600, color: hasWinner ? '#fff' : 'rgba(255,255,255,.7)', textAlign: 'center', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+        {hasWinner ? joinWinnerNames(winners, true) : step.hubLabel}
       </span>
     </div>
   )
@@ -171,7 +173,7 @@ function ResultSheet({ players, votos, onClose, onShare, sharing, cardRef }: {
   const playerMap = new Map(players.map(p => [p.id, p]))
   const winners = STEPS.map(s => ({
     step: s,
-    player: (() => { const id = computeWinnerV2(votos, s.key); return id ? (playerMap.get(id) ?? null) : null })()
+    players: computeWinnersV2(votos, s.key).map(id => playerMap.get(id)).filter(Boolean) as PlayerInfo[],
   }))
 
   const labelColors: Record<string, string> = {
@@ -203,14 +205,12 @@ function ResultSheet({ players, votos, onClose, onShare, sharing, cardRef }: {
 
             {/* 2×2 grid */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              {winners.map(({ step, player }) => (
+              {winners.map(({ step, players: catWinners }) => (
                 <div key={step.key} style={{ borderRadius: 20, overflow: 'hidden', background: 'var(--color-bg)' }}>
                   <div style={{ aspectRatio: '1/1', width: '100%', overflow: 'hidden', background: 'var(--color-surface-secondary)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {player?.photoURL
-                      ? <img src={player.photoURL} alt={player.name} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center center' }} />
-                      : player
-                        ? <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 44, color: 'var(--color-badge-initials)', opacity: .35 }}>{getInitials(player.name)}</span>
-                        : <span style={{ fontFamily: 'var(--font-primary)', fontSize: 13, color: 'var(--color-fg-secondary)' }}>—</span>
+                    {catWinners.length > 0
+                      ? <AvatarSplit players={catWinners} objectPosition="center center" initialsSize={44} />
+                      : <span style={{ fontFamily: 'var(--font-primary)', fontSize: 13, color: 'var(--color-fg-secondary)' }}>—</span>
                     }
                   </div>
                   <div style={{ padding: '10px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -290,15 +290,14 @@ function HistoryCard({ entry, onClick }: { entry: HistoryEntry; onClick: () => v
       <span style={{ fontFamily: 'var(--font-primary)', fontSize: 11, fontWeight: 400, color: 'var(--color-fg-primary)', lineHeight: '16px' }}>{dateLabel}</span>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, width: '100%' }}>
         {STEPS.map(step => {
-          const winnerId = computeWinnerV2(entry.votos, step.key)
-          const winner = winnerId ? (entry.playerMap.get(winnerId) ?? null) : null
+          const catWinners = computeWinnersV2(entry.votos, step.key).map(id => entry.playerMap.get(id)).filter(Boolean) as PlayerInfo[]
           const { label, renderIcon } = CAT_META[step.key]
           return (
             <div key={step.key} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'white', borderRadius: 8, padding: 8 }}>
               {renderIcon()}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                 <span style={{ fontFamily: 'var(--font-primary)', fontSize: 12, fontWeight: 600, color: 'var(--color-fg-primary)', lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {winner ? winner.name.split(' ')[0] : '—'}
+                  {catWinners.length ? joinWinnerNames(catWinners, true) : '—'}
                 </span>
                 <span style={{ fontFamily: 'var(--font-primary)', fontSize: 11, fontWeight: 400, color: 'var(--color-fg-secondary)', lineHeight: '14px' }}>{label}</span>
               </div>
@@ -369,8 +368,8 @@ export default function StatsVotacaoPage() {
 
   const playerMap = new Map(players.map(p => [p.id, p]))
   const winners = Object.fromEntries(
-    STEPS.map(s => [s.key, (() => { const id = computeWinnerV2(votacao?.votos ?? {}, s.key); return id ? (playerMap.get(id) ?? null) : null })()])
-  ) as Record<keyof VoteV2, PlayerInfo | null>
+    STEPS.map(s => [s.key, computeWinnersV2(votacao?.votos ?? {}, s.key).map(id => playerMap.get(id)).filter(Boolean) as PlayerInfo[]])
+  ) as Record<keyof VoteV2, PlayerInfo[]>
 
   const gameDate = format(new Date(gameId + 'T12:00:00'), "d 'de' MMMM", { locale: ptBR })
 
@@ -414,7 +413,7 @@ export default function StatsVotacaoPage() {
             <HubBadge
               key={step.key}
               step={step}
-              winner={winners[step.key]}
+              winners={winners[step.key]}
             />
           ))}
         </div>

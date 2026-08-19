@@ -11,7 +11,7 @@ import Header from '../components/layout/Header'
 import { fetchFullRanking, type RankingEntry } from '../lib/playerStats'
 import { getLastWednesdayId, computeWinner } from '../components/stats/VotacaoComponents'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll'
-import type { HistoryEntry } from '../lib/playerStats'
+import type { HistoryEntry, PlayerInfo } from '../lib/playerStats'
 
 // ─── Data ──────────────────────────────────────────────────────────────────────
 
@@ -36,12 +36,11 @@ async function fetchLastVotacaoEntry(currentGameId: string): Promise<HistoryEntr
   const latest = entries[0]
   if (!latest) return null
   const votos = latest.data().votos ?? {}
-  const cheiaId = computeWinner(votos, 'bolaCheia')
-  const murchaId = computeWinner(votos, 'bolaMurcha')
+  const toPlayers = (ids: string[]) => ids.map(id => playerMap.get(id)).filter(Boolean) as PlayerInfo[]
   return {
     gameId: latest.id,
-    cheiaWinner: cheiaId ? (playerMap.get(cheiaId) ?? null) : null,
-    murchaWinner: murchaId ? (playerMap.get(murchaId) ?? null) : null,
+    cheiaWinners: toPlayers(computeWinner(votos, 'bolaCheia')),
+    murchaWinners: toPlayers(computeWinner(votos, 'bolaMurcha')),
   }
 }
 

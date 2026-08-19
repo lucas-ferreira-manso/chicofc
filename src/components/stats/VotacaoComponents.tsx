@@ -10,16 +10,65 @@ export function getInitials(name: string): string {
   return name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
 }
 
+/**
+ * Vencedores de uma categoria: TODOS os empatados no topo (co-vencedores).
+ * Retorna [] se ninguém recebeu voto. Ordenado por id → determinístico (a ordem
+ * das chaves de `votos` do Firestore não é estável entre leituras).
+ */
 export function computeWinner(
-  votos: Record<string, { bolaCheia: string; bolaMurcha: string }>,
+  votos: Record<string, { bolaCheia?: string; bolaMurcha?: string }>,
   type: 'bolaCheia' | 'bolaMurcha'
-): string | null {
+): string[] {
   const counts: Record<string, number> = {}
   Object.values(votos).forEach(v => {
     const id = v[type]
     if (id) counts[id] = (counts[id] || 0) + 1
   })
-  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+  const max = Math.max(0, ...Object.values(counts))
+  if (max === 0) return []
+  return Object.keys(counts).filter(id => counts[id] === max).sort((a, b) => a.localeCompare(b))
+}
+
+/** Junta nomes de co-vencedores: "A", "A e B", "A, B e C". */
+export function joinWinnerNames(players: PlayerInfo[], firstNameOnly = false): string {
+  const names = players.map(p => (firstNameOnly ? p.name.split(' ')[0] : p.name))
+  if (names.length === 0) return ''
+  if (names.length === 1) return names[0]
+  if (names.length === 2) return `${names[0]} e ${names[1]}`
+  return `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}`
+}
+
+/**
+ * Preenche o frame-pai (que deve ser position:relative + overflow:hidden) com os
+ * avatares dos jogadores. 1 jogador ocupa o frame inteiro (visual idêntico ao
+ * anterior); 2+ dividem o frame em colunas iguais.
+ */
+export function AvatarSplit({ players, objectPosition = 'center center', initialsSize = 48 }: {
+  players: PlayerInfo[]
+  objectPosition?: string
+  initialsSize?: number
+}) {
+  if (players.length === 0) return null
+  return (
+    <div style={{ position: 'absolute', inset: 0, display: 'flex' }}>
+      {players.map((p, i) => (
+        <div key={p.id} style={{
+          flex: 1, minWidth: 0, height: '100%', position: 'relative', overflow: 'hidden',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'var(--color-surface-secondary)',
+          borderLeft: i > 0 ? '2px solid var(--color-bg)' : undefined,
+        }}>
+          {p.photoURL ? (
+            <img src={p.photoURL} alt={p.name} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition, display: 'block', pointerEvents: 'none' }} />
+          ) : (
+            <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: players.length > 1 ? Math.round(initialsSize * 0.6) : initialsSize, color: 'var(--color-badge-initials)', opacity: 0.4 }}>
+              {getInitials(p.name)}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export function getLastWednesdayId(): string {
@@ -73,38 +122,33 @@ export function PlayerAvatar({ player, size = 32 }: { player: PlayerInfo; size?:
 
 interface BadgeProps {
   type: 'bolaCheia' | 'bolaMurcha'
-  player?: PlayerInfo | null
+  players?: PlayerInfo[]
   onClick?: () => void
   disabled?: boolean
   completed?: boolean
 }
 
-export function BadgeVotacao({ type, player, onClick, disabled, completed }: BadgeProps) {
+export function BadgeVotacao({ type, players = [], onClick, disabled, completed }: BadgeProps) {
   const isMurcha = type === 'bolaMurcha'
   const accentColor = completed ? 'white' : isMurcha ? '#ed0000' : 'var(--color-fg-accent)'
   const nameColor = completed ? 'rgba(255,255,255,0.8)' : 'var(--color-fg-secondary)'
   const label = isMurcha ? 'Bola Murcha' : 'Bola Cheia'
+  const hasWinner = players.length > 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minWidth: 0 }}>
       {/* Photo frame — strictly 1:1, bola icon contained inside */}
       <button onClick={onClick} disabled={disabled || !onClick} style={{
         aspectRatio: '1/1', borderRadius: 24, width: '100%',
-        background: player ? 'var(--color-surface-secondary)' : 'white',
-        border: player ? 'none' : '1.5px solid var(--color-border)',
+        background: hasWinner ? 'var(--color-surface-secondary)' : 'white',
+        border: hasWinner ? 'none' : '1.5px solid var(--color-border)',
         overflow: 'hidden', position: 'relative',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         cursor: (disabled || !onClick) ? 'default' : 'pointer', padding: 0,
         flexShrink: 0,
       }}>
-        {player ? (
-          player.photoURL ? (
-            <img src={player.photoURL} alt={player.name} crossOrigin="anonymous" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center center', display: 'block', pointerEvents: 'none' }} />
-          ) : (
-            <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 48, color: 'var(--color-badge-initials)', opacity: 0.4 }}>
-              {getInitials(player.name)}
-            </span>
-          )
+        {hasWinner ? (
+          <AvatarSplit players={players} objectPosition="center center" initialsSize={48} />
         ) : (
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
             <path d="M12 5V19M5 12H19" stroke={accentColor} strokeWidth="2" strokeLinecap="round" />
@@ -121,7 +165,7 @@ export function BadgeVotacao({ type, player, onClick, disabled, completed }: Bad
           {label}
         </span>
         <span style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 13, color: nameColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {player ? player.name : 'nome atleta'}
+          {hasWinner ? joinWinnerNames(players) : 'nome atleta'}
         </span>
       </div>
     </div>
@@ -135,15 +179,9 @@ export function SmallCardVotacao({ entry, onClick }: { entry: HistoryEntry; onCl
     try { return format(new Date(entry.gameId + 'T12:00:00'), 'dd/MM/yyyy') } catch { return entry.gameId }
   })()
 
-  const MiniPhoto = ({ player }: { player: PlayerInfo | null }) => (
+  const MiniPhoto = ({ players }: { players: PlayerInfo[] }) => (
     <div style={{ width: 63, height: 71, borderRadius: 16, overflow: 'hidden', flexShrink: 0, background: 'var(--color-surface-secondary)', position: 'relative' }}>
-      {player?.photoURL ? (
-        <img src={player.photoURL} alt={player.name} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }} />
-      ) : player ? (
-        <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 22, color: 'var(--color-badge-initials)', opacity: 0.5 }}>
-          {getInitials(player.name)}
-        </span>
-      ) : null}
+      <AvatarSplit players={players} objectPosition="center top" initialsSize={22} />
     </div>
   )
 
@@ -158,11 +196,11 @@ export function SmallCardVotacao({ entry, onClick }: { entry: HistoryEntry; onCl
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, width: '100%', position: 'relative', padding: '0 4px' }}>
         <div style={{ position: 'relative' }}>
-          <MiniPhoto player={entry.cheiaWinner} />
+          <MiniPhoto players={entry.cheiaWinners} />
           <div style={{ position: 'absolute', right: -1.4, top: 48, pointerEvents: 'none' }}><BolaCheiaIcon size={24} /></div>
         </div>
         <div style={{ position: 'relative' }}>
-          <MiniPhoto player={entry.murchaWinner} />
+          <MiniPhoto players={entry.murchaWinners} />
           <div style={{ position: 'absolute', right: -1.4, top: 48, pointerEvents: 'none' }}><BolaMurchaIcon size={24} /></div>
         </div>
       </div>
@@ -214,7 +252,7 @@ export function VotingSheet({ type, players, onClose, onVote }: VotingSheetProps
 // ─── Big Card (resultado da votação) ──────────────────────────────────────────
 
 interface BigCardProps {
-  entry: { cheiaWinner: PlayerInfo | null; murchaWinner: PlayerInfo | null; gameId?: string }
+  entry: { cheiaWinners: PlayerInfo[]; murchaWinners: PlayerInfo[]; gameId?: string }
   cardRef: React.RefObject<HTMLDivElement>
   onShare?: () => void
   sharing?: boolean
@@ -237,8 +275,8 @@ export function BigCard({ entry, cardRef, onShare, sharing }: BigCardProps) {
         </p>
       </div>
       <div style={{ display: 'flex', gap: 12, padding: '0 4px', width: '100%', position: 'relative' }}>
-        <BadgeVotacao type="bolaCheia" player={entry.cheiaWinner} disabled completed />
-        <BadgeVotacao type="bolaMurcha" player={entry.murchaWinner} disabled completed />
+        <BadgeVotacao type="bolaCheia" players={entry.cheiaWinners} disabled completed />
+        <BadgeVotacao type="bolaMurcha" players={entry.murchaWinners} disabled completed />
       </div>
       {onShare && (
         <button data-share-exclude onClick={onShare} disabled={sharing} style={{ width: '100%', height: 56, borderRadius: 9999, background: 'white', border: 'none', color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, cursor: sharing ? 'default' : 'pointer', position: 'relative', flexShrink: 0, opacity: sharing ? 0.7 : 1 }}>
