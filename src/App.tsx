@@ -25,6 +25,7 @@ import ExportarRelatorioPage from './pages/ExportarRelatorioPage'
 import NotificationCenterPage from './pages/NotificationCenterPage'
 import DesignSystemPage from './design-system'
 import TermsSheet, { needsTermsAcceptance, hasAcceptedTermsLocally } from './components/TermsSheet'
+import UpdateBanner from './components/UpdateBanner'
 
 export default function App() {
   const { user, loading, setLoading, fetchProfile } = useAuthStore()
@@ -107,6 +108,7 @@ export default function App() {
       </main>
       {!hideNav && <BottomNav />}
       {showTerms && <TermsSheet onAccept={() => setShowTerms(false)} />}
+      <UpdateBanner />
     </div>
   )
 }

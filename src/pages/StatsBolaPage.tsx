@@ -51,11 +51,10 @@ async function fetchVotacaoHistory(currentGameId: string): Promise<HistoryEntry[
     .sort((a, b) => b.id.localeCompare(a.id))
     .map(d => {
       const votos = d.data().votos ?? {}
-      const cheiaId = computeWinner(votos, 'bolaCheia')
-      const murchaId = computeWinner(votos, 'bolaMurcha')
-      return { gameId: d.id, cheiaWinner: cheiaId ? (playerMap.get(cheiaId) ?? null) : null, murchaWinner: murchaId ? (playerMap.get(murchaId) ?? null) : null }
+      const toPlayers = (ids: string[]) => ids.map(id => playerMap.get(id)).filter(Boolean) as PlayerInfo[]
+      return { gameId: d.id, cheiaWinners: toPlayers(computeWinner(votos, 'bolaCheia')), murchaWinners: toPlayers(computeWinner(votos, 'bolaMurcha')) }
     })
-    .filter(e => e.cheiaWinner || e.murchaWinner)
+    .filter(e => e.cheiaWinners.length > 0 || e.murchaWinners.length > 0)
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
@@ -122,10 +121,10 @@ export default function StatsBolaPage() {
   const hasVoted = !!myVote
   const userWasConfirmed = players.some(p => p.id === user!.id)
   const votingOpen = isVotingOpen()
-  const cheiaWinnerId = votacao ? computeWinner(votacao.votos, 'bolaCheia') : null
-  const murchaWinnerId = votacao ? computeWinner(votacao.votos, 'bolaMurcha') : null
-  const cheiaWinner = players.find(p => p.id === cheiaWinnerId) ?? null
-  const murchaWinner = players.find(p => p.id === murchaWinnerId) ?? null
+  const cheiaWinnerIds = votacao ? computeWinner(votacao.votos, 'bolaCheia') : []
+  const murchaWinnerIds = votacao ? computeWinner(votacao.votos, 'bolaMurcha') : []
+  const cheiaWinners = cheiaWinnerIds.map(id => players.find(p => p.id === id)).filter(Boolean) as PlayerInfo[]
+  const murchaWinners = murchaWinnerIds.map(id => players.find(p => p.id === id)).filter(Boolean) as PlayerInfo[]
   const pendingCheiaPlayer = players.find(p => p.id === pendingCheia) ?? null
   const pendingMurchaPlayer = players.find(p => p.id === pendingMurcha) ?? null
   const bothSelected = pendingCheia !== null && pendingMurcha !== null
@@ -176,8 +175,8 @@ export default function StatsBolaPage() {
           </div>
         ) : !votingOpen ? (
           <>
-            {cheiaWinnerId || murchaWinnerId ? (
-              <BigCard entry={{ cheiaWinner, murchaWinner }} cardRef={shareCardRef} onShare={() => shareFromRef(shareCardRef)} sharing={sharing} />
+            {cheiaWinners.length > 0 || murchaWinners.length > 0 ? (
+              <BigCard entry={{ cheiaWinners, murchaWinners }} cardRef={shareCardRef} onShare={() => shareFromRef(shareCardRef)} sharing={sharing} />
             ) : (
               <p style={{ textAlign: 'center', padding: '32px 0', fontFamily: 'var(--font-primary)', fontSize: 16, color: 'var(--color-fg-secondary)' }}>
                 Votação encerrada. Volte na quarta após o jogo!
@@ -203,15 +202,15 @@ export default function StatsBolaPage() {
                 <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'rgba(255,255,255,0.85)' }}>Toque para alterar seu voto</p>
               </div>
               <div style={{ display: 'flex', gap: 12, padding: '0 4px', width: '100%', position: 'relative' }}>
-                <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled completed />
-                <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled completed />
+                <BadgeVotacao type="bolaCheia" players={cheiaWinners} disabled completed />
+                <BadgeVotacao type="bolaMurcha" players={murchaWinners} disabled completed />
               </div>
             </button>
             <HistorySection />
           </>
         ) : !userWasConfirmed ? (
           <>
-            {cheiaWinnerId || murchaWinnerId ? (
+            {cheiaWinners.length > 0 || murchaWinners.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', padding: '24px 16px 16px', borderRadius: 24, position: 'relative', overflow: 'hidden', width: '100%' }}>
                 <img src="/stadium-bg.png" aria-hidden alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
                 <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', pointerEvents: 'none' }} />
@@ -221,8 +220,8 @@ export default function StatsBolaPage() {
                   <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'rgba(255,255,255,0.85)' }}>Vocês foram os escolhidos ao bola cheia e bola murcha da rodada!</p>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', width: '100%', alignItems: 'center', position: 'relative' }}>
-                  <BadgeVotacao type="bolaCheia" player={cheiaWinner} disabled completed />
-                  <BadgeVotacao type="bolaMurcha" player={murchaWinner} disabled completed />
+                  <BadgeVotacao type="bolaCheia" players={cheiaWinners} disabled completed />
+                  <BadgeVotacao type="bolaMurcha" players={murchaWinners} disabled completed />
                 </div>
               </div>
             ) : (
@@ -242,8 +241,8 @@ export default function StatsBolaPage() {
                 <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, color: 'rgba(255,255,255,0.85)' }}>Vote no Bola Cheia e Bola murcha da rodada!</p>
               </div>
               <div style={{ display: 'flex', gap: 12, padding: '16px 4px', position: 'relative' }}>
-                <BadgeVotacao type="bolaCheia" player={pendingCheiaPlayer} onClick={() => setSheetType('bolaCheia')} completed />
-                <BadgeVotacao type="bolaMurcha" player={pendingMurchaPlayer} onClick={() => setSheetType('bolaMurcha')} completed />
+                <BadgeVotacao type="bolaCheia" players={pendingCheiaPlayer ? [pendingCheiaPlayer] : []} onClick={() => setSheetType('bolaCheia')} completed />
+                <BadgeVotacao type="bolaMurcha" players={pendingMurchaPlayer ? [pendingMurchaPlayer] : []} onClick={() => setSheetType('bolaMurcha')} completed />
               </div>
               {bothSelected && (
                 <button onClick={() => saveVote.mutate({ bolaCheia: pendingCheia!, bolaMurcha: pendingMurcha! })} disabled={saveVote.isPending} className="transition-all active:scale-95 disabled:opacity-40" style={{ width: '100%', height: 56, borderRadius: 9999, background: 'white', color: 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0 }}>

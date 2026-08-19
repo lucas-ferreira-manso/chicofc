@@ -13,6 +13,18 @@ import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 import type { Payment, Profile } from '../types'
 
+/**
+ * "Modo Chinelinho — Mais que 1 mês": o jogador escolheu a opção indefinida no
+ * ChinelinhoSheet, que grava chinelinhoUntil = null. É a única duração de
+ * chinelinho que passa de 1 mês, então o mensalista nesse modo NÃO é cobrado a
+ * mensalidade e não entra no pendente do caixinha (ex: Mateus, chinelinho há
+ * meses, não deve poluir os valores reais). Avulso não é afetado — não paga
+ * mensalidade de qualquer forma.
+ */
+function isChinelinhoLongTerm(p: any): boolean {
+  return !!(p?.chinelinhoActive && !p?.chinelinhoUntil)
+}
+
 // Comprime imagem e retorna base64 (max ~200KB para caber no Firestore)
 async function compressImageToBase64(file: File, maxWidth = 1200, quality = 0.7): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -172,6 +184,12 @@ export async function saveCaixinhaSummary() {
   const temps = tempsSnap.docs.map(d => d.data())
   const players = playersSnap.docs.map(d => ({ id: d.id, ...d.data() }) as any)
 
+  // Mensalistas em chinelinho "Mais que 1 mês" (indefinido): isentos de
+  // mensalidade e fora do cálculo de pendência.
+  const chinelinhoLongTermIds = new Set(
+    players.filter(p => p.player_type === 'mensalista' && isChinelinhoLongTerm(p)).map(p => p.id)
+  )
+
   const jogoPayments = payments.filter(p => p.type === 'jogo')
   const despesaPayments = payments.filter(p => p.type === 'despesa')
   const mensalidadePayments = payments.filter(p => p.type === 'mensalidade')
@@ -198,7 +216,7 @@ export async function saveCaixinhaSummary() {
     .length * avulsoValue
   const avulsoPending = avulsoFromPayments + avulsoFromRequests + avulsoFromTemps
 
-  const mensalistaPendingFromPayments = mensalidadePayments.filter(p => !p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
+  const mensalistaPendingFromPayments = mensalidadePayments.filter(p => !p.paid && !chinelinhoLongTermIds.has(p.user_id)).reduce((s, p) => s + (p.amount ?? 0), 0)
   const mensalistaPendingFromRequests = requests.filter(r => r.player_type === 'mensalista').reduce((s, r) => s + (r.amount ?? 0), 0)
   // Mensalistas sem nenhum registro de pagamento criado para o mês atual ("Sem registro")
   // também estão pendentes, mas não entram nos dois cálculos acima
@@ -210,7 +228,7 @@ export async function saveCaixinhaSummary() {
     requests.filter(r => r.player_type === 'mensalista').map(r => r.user_id)
   )
   const mensalistaPendingSemRegistro = players
-    .filter(p => p.player_type === 'mensalista' && p.active && !usersComMensalidadeNoMes.has(p.id) && !usersComRequestMensalista.has(p.id))
+    .filter(p => p.player_type === 'mensalista' && p.active && !usersComMensalidadeNoMes.has(p.id) && !usersComRequestMensalista.has(p.id) && !chinelinhoLongTermIds.has(p.id))
     .length * mensalistaValue
   const mensalistaPending = mensalistaPendingFromPayments + mensalistaPendingFromRequests + mensalistaPendingSemRegistro
 
@@ -257,6 +275,12 @@ export default function CaixinhaPage() {
 
   const { data: payments = [] } = useQuery({ queryKey: ['payments'], queryFn: fetchPayments, refetchInterval: 8000 })
   const { data: players = [] } = useQuery({ queryKey: ['players'], queryFn: fetchPlayers })
+  // Mensalistas em chinelinho "Mais que 1 mês" (indefinido): isentos de
+  // mensalidade e removidos das pendências do caixinha (não são cobrados nem
+  // poluem os totais/extrato). Avulso não é afetado.
+  const chinelinhoLongTermIds = new Set(
+    players.filter(p => (p as any).player_type === 'mensalista' && isChinelinhoLongTerm(p)).map(p => p.id)
+  )
   const { data: config } = useQuery({ queryKey: ['caixinha-config'], queryFn: fetchConfig })
   const { data: pendingRequests = [] } = useQuery({
     queryKey: ['pending-requests'],
@@ -426,7 +450,8 @@ export default function CaixinhaPage() {
       const q = query(collection(db, 'payments'), where('month', '==', month), where('type', '==', 'mensalidade'))
       const existing = await getDocs(q)
       const existingIds = new Set(existing.docs.map(d => d.data().user_id))
-      const mensalistas = players.filter(p => p.player_type === 'mensalista' && !existingIds.has(p.id))
+      // Não cobra mensalidade de quem está em chinelinho "Mais que 1 mês"
+      const mensalistas = players.filter(p => p.player_type === 'mensalista' && !existingIds.has(p.id) && !chinelinhoLongTermIds.has(p.id))
       await Promise.all(mensalistas.map(p => addDoc(collection(db, 'payments'), {
         user_id: p.id, amount: mensalistaValue, type: 'mensalidade', month, paid: false, created_at: new Date().toISOString()
       })))
@@ -673,7 +698,7 @@ export default function CaixinhaPage() {
   const mensalistaPaid = mensalidadePayments.filter(p => p.paid).reduce((s, p) => s + p.amount, 0)
   const mensalistaValue = config?.mensalistaValue ?? 80
   // Inclui payment_requests pendentes no cálculo de pendente
-  const mensalistaPendingFromPayments = mensalidadePayments.filter(p => !p.paid).reduce((s, p) => s + p.amount, 0)
+  const mensalistaPendingFromPayments = mensalidadePayments.filter(p => !p.paid && !chinelinhoLongTermIds.has(p.user_id)).reduce((s, p) => s + p.amount, 0)
   const mensalistaPendingFromRequests = pendingRequests.filter(r => r.player_type === 'mensalista').reduce((s: number, r: any) => s + r.amount, 0)
   // Mensalistas sem nenhum registro de pagamento criado para o mês atual ("Sem registro")
   // também estão pendentes, mas não entram nos dois cálculos acima
@@ -685,7 +710,7 @@ export default function CaixinhaPage() {
     pendingRequests.filter((r: any) => r.player_type === 'mensalista').map((r: any) => r.user_id)
   )
   const mensalistaPendingSemRegistro = players
-    .filter(p => (p as any).player_type === 'mensalista' && !usersComMensalidadeNoMes.has(p.id) && !usersComRequestMensalista.has(p.id))
+    .filter(p => (p as any).player_type === 'mensalista' && !usersComMensalidadeNoMes.has(p.id) && !usersComRequestMensalista.has(p.id) && !chinelinhoLongTermIds.has(p.id))
     .length * mensalistaValue
   const mensalistaPending = mensalistaPendingFromPayments + mensalistaPendingFromRequests + mensalistaPendingSemRegistro
   const quadraCost = config?.quadraCost ?? 760
@@ -698,6 +723,9 @@ export default function CaixinhaPage() {
   const byMonth = payments.reduce((acc, p) => {
     // jogo pendente (não pago) fica apenas na seção "Por jogo"
     if (p.type === 'jogo' && !p.paid) return acc
+    // mensalidade pendente de quem está em chinelinho "Mais que 1 mês" não
+    // aparece no extrato (não deve poluir os valores do caixinha)
+    if (p.type === 'mensalidade' && !p.paid && chinelinhoLongTermIds.has(p.user_id)) return acc
     const monthKey = p.month.substring(0, 7)
     if (!acc[monthKey]) acc[monthKey] = []
     acc[monthKey].push(p)
@@ -995,7 +1023,8 @@ export default function CaixinhaPage() {
         {/* ── Mensalistas pendentes (admin only) ─────────────────────────── */}
         {isAdmin && (() => {
           const currentMonth = format(new Date(), 'yyyy-MM')
-          const mensalistas = players.filter(p => (p as any).player_type === 'mensalista')
+          // Exclui mensalistas em chinelinho "Mais que 1 mês" — não são cobrados
+          const mensalistas = players.filter(p => (p as any).player_type === 'mensalista' && !chinelinhoLongTermIds.has(p.id))
 
           const pendingMensalistaRequestUserIds = new Set(
             (pendingRequests as any[]).filter(r => r.player_type === 'mensalista').map(r => r.user_id)

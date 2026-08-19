@@ -106,6 +106,8 @@ function DetailSheet({ entry, position, onClose }: { entry: RankingEntry; positi
     { label: 'Presenças', value: entry.presences },
     { label: 'Bola Cheia', value: entry.bolaCheiaWins },
     { label: 'Bola Murcha', value: entry.bolaMurchaWins },
+    { label: 'Prêmio Lúcio', value: entry.melhorDefensorWins },
+    { label: 'Rodrigo Caio', value: entry.piorDefensorWins },
   ]
 
   return (

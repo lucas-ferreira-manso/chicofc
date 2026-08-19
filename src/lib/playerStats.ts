@@ -50,17 +50,30 @@ function lastMondayDate(): string {
   return d.toISOString().slice(0, 10)
 }
 
-function pluralityWinner(
-  votos: Record<string, { bolaCheia: string; bolaMurcha: string }>,
-  type: 'bolaCheia' | 'bolaMurcha'
-): string | null {
+type VoteCategory = 'bolaCheia' | 'bolaMurcha' | 'melhorDefensor' | 'piorDefensor'
+
+/**
+ * Vencedores de uma categoria num jogo: TODOS os empatados no topo (co-vencedores).
+ * Em caso de empate, cada empatado leva o prêmio/pontos — critério escolhido para
+ * eliminar a arbitrariedade de "escolher 1". Retorna [] se ninguém recebeu voto.
+ *
+ * A lista sai ordenada por id (determinística): a contagem de votos independe da
+ * ordem, mas ordenar garante que a ordem de exibição não dependa da ordem das
+ * chaves de `votos`, que o Firestore não garante estável entre leituras (cache ×
+ * servidor) — era isso que fazia o ranking "mudar sem lógica" a cada refresh.
+ */
+function pluralityWinners(
+  votos: Record<string, Partial<Record<VoteCategory, string>>>,
+  type: VoteCategory
+): string[] {
   const counts: Record<string, number> = {}
   Object.values(votos).forEach(v => {
     const id = v[type]
     if (id) counts[id] = (counts[id] || 0) + 1
   })
-  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1])
-  return entries[0]?.[0] ?? null
+  const max = Math.max(0, ...Object.values(counts))
+  if (max === 0) return []
+  return Object.keys(counts).filter(id => counts[id] === max).sort((a, b) => a.localeCompare(b))
 }
 
 // ─── Fetchers ─────────────────────────────────────────────────────────────────
@@ -218,13 +231,13 @@ export async function fetchVotingRanking(): Promise<PlayerVotingStats[]> {
   votacaoDocs.forEach(game => {
     if (!game || !game.votos || Object.keys(game.votos).length === 0) return
 
-    const cheiaWinner = pluralityWinner(game.votos, 'bolaCheia')
-    const murchaWinner = pluralityWinner(game.votos, 'bolaMurcha')
+    const cheiaWinners = pluralityWinners(game.votos, 'bolaCheia')
+    const murchaWinners = pluralityWinners(game.votos, 'bolaMurcha')
 
     playersMap.forEach((_, playerId) => {
       if (!byPlayer.has(playerId)) byPlayer.set(playerId, [])
-      const wonCheia = cheiaWinner === playerId
-      const wonMurcha = murchaWinner === playerId
+      const wonCheia = cheiaWinners.includes(playerId)
+      const wonMurcha = murchaWinners.includes(playerId)
       if (wonCheia || wonMurcha) {
         byPlayer.get(playerId)!.push({
           gameId: game.gameId,
@@ -255,8 +268,8 @@ export async function fetchVotingRanking(): Promise<PlayerVotingStats[]> {
 
 export interface HistoryEntry {
   gameId: string
-  cheiaWinner: PlayerInfo | null
-  murchaWinner: PlayerInfo | null
+  cheiaWinners: PlayerInfo[]
+  murchaWinners: PlayerInfo[]
 }
 
 export interface RankingEntry {
@@ -270,6 +283,10 @@ export interface RankingEntry {
   presences: number
   bolaCheiaWins: number
   bolaMurchaWins: number
+  /** Prêmio Lúcio — melhor defensor da rodada */
+  melhorDefensorWins: number
+  /** Rodrigo Caio — pior defensor da rodada */
+  piorDefensorWins: number
   score: number
 }
 
@@ -343,16 +360,21 @@ export async function fetchFullRanking(): Promise<RankingEntry[]> {
     }
   })
 
-  // Bola Cheia / Murcha wins
+  // Prêmios de votação por jogo (Bola Cheia, Bola Murcha, Prêmio Lúcio, Rodrigo Caio).
+  // Lúcio/Rodrigo só existem em jogos votados no fluxo novo; jogos antigos não têm
+  // esses campos e são naturalmente ignorados pelo pluralityWinners.
   const bolaCheiaWinsMap: Record<string, number> = {}
   const bolaMurchaWinsMap: Record<string, number> = {}
+  const melhorDefensorWinsMap: Record<string, number> = {}
+  const piorDefensorWinsMap: Record<string, number> = {}
   votacaoSnap.docs.forEach(d => {
     const votos = d.data().votos ?? {}
     if (Object.keys(votos).length === 0) return
-    const cheiaId = pluralityWinner(votos, 'bolaCheia')
-    const murchaId = pluralityWinner(votos, 'bolaMurcha')
-    if (cheiaId) bolaCheiaWinsMap[cheiaId] = (bolaCheiaWinsMap[cheiaId] || 0) + 1
-    if (murchaId) bolaMurchaWinsMap[murchaId] = (bolaMurchaWinsMap[murchaId] || 0) + 1
+    // Empate = co-vencedores: cada empatado ganha o prêmio da rodada.
+    pluralityWinners(votos, 'bolaCheia').forEach(id => { bolaCheiaWinsMap[id] = (bolaCheiaWinsMap[id] || 0) + 1 })
+    pluralityWinners(votos, 'bolaMurcha').forEach(id => { bolaMurchaWinsMap[id] = (bolaMurchaWinsMap[id] || 0) + 1 })
+    pluralityWinners(votos, 'melhorDefensor').forEach(id => { melhorDefensorWinsMap[id] = (melhorDefensorWinsMap[id] || 0) + 1 })
+    pluralityWinners(votos, 'piorDefensor').forEach(id => { piorDefensorWinsMap[id] = (piorDefensorWinsMap[id] || 0) + 1 })
   })
 
   return players
@@ -364,8 +386,12 @@ export async function fetchFullRanking(): Promise<RankingEntry[]> {
       const pr = presenceMap[p.id] || 0
       const bc = bolaCheiaWinsMap[p.id] || 0
       const bm = bolaMurchaWinsMap[p.id] || 0
-      const score = w * 3 + dr + pr + bc * 5 - bm * 2
-      return { ...p, wins: w, draws: dr, losses: l, presences: pr, bolaCheiaWins: bc, bolaMurchaWins: bm, score }
+      const lucio = melhorDefensorWinsMap[p.id] || 0
+      const rodrigo = piorDefensorWinsMap[p.id] || 0
+      // Fórmula (fonte da verdade = popup "Como a pontuação é calculada"):
+      // V×3 + E×1 + Presenças×1 + Bola Cheia×3 + Prêmio Lúcio×3 − Bola Murcha×3 − Rodrigo Caio×1
+      const score = w * 3 + dr + pr + bc * 3 - bm * 3 + lucio * 3 - rodrigo
+      return { ...p, wins: w, draws: dr, losses: l, presences: pr, bolaCheiaWins: bc, bolaMurchaWins: bm, melhorDefensorWins: lucio, piorDefensorWins: rodrigo, score }
     })
     .sort((a, b) => b.score - a.score || b.presences - a.presences)
 }
