@@ -10,6 +10,7 @@ import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll'
 import { getLastWednesdayId, isVotingOpen, getInitials, AvatarSplit, joinWinnerNames } from '../components/stats/VotacaoComponents'
+import { fetchGameCancellation } from '../lib/gameStatus'
 import type { PlayerInfo } from '../lib/playerStats'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -344,6 +345,12 @@ export default function StatsVotacaoPage() {
     queryFn: () => fetchHistory(gameId),
     staleTime: 5 * 60_000,
   })
+  const { data: gameCancel } = useQuery({
+    queryKey: ['game-cancel', gameId],
+    queryFn: () => fetchGameCancellation(gameId),
+    refetchInterval: 30_000,
+  })
+  const isCancelled = !!gameCancel?.cancelled
 
   const saveVote = useMutation({
     mutationFn: async (votes: VoteV2) => {
@@ -528,6 +535,16 @@ export default function StatsVotacaoPage() {
       {isLoading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
           <div className="text-4xl animate-spin">⚽</div>
+        </div>
+      ) : isCancelled ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '16px 24px 0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', textAlign: 'center', padding: '32px 16px', borderRadius: 16, background: 'var(--color-surface-primary)' }}>
+            <span style={{ fontSize: 40 }}>🚫</span>
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)' }}>Jogo cancelado</p>
+            <p style={{ fontFamily: 'var(--font-primary)', fontSize: 14, color: 'var(--color-fg-secondary)', lineHeight: 1.5 }}>
+              {gameCancel?.reason ? gameCancel.reason : 'Não houve jogo nesta rodada, então não há votação.'}
+            </p>
+          </div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '16px 24px 0' }}>

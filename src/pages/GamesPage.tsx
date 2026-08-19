@@ -6,13 +6,14 @@ import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { format, isAfter, nextWednesday, isWednesday, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Crown, BellRinging, CheckCircle, ShareNetwork, X, BellSimple, HandPalm } from '@phosphor-icons/react'
+import { Crown, BellRinging, CheckCircle, ShareNetwork, X, BellSimple, HandPalm, Prohibit } from '@phosphor-icons/react'
 import { useRef } from 'react'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 import type { Attendance } from '../types'
 import Header from '../components/layout/Header'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll'
+import { fetchGameCancellation, cancelGame, reactivateGame } from '../lib/gameStatus'
 
 const MAX_PLAYERS = 16
 const SERVER_URL = 'https://chicofc-server.onrender.com'
@@ -169,7 +170,9 @@ export default function GamesPage() {
   const [avulsoName, setAvulsoName] = useState('')
   const [selectedTempAvulso, setSelectedTempAvulso] = useState<TempAvulso | null>(null)
   const [confirmRemoveAttendance, setConfirmRemoveAttendance] = useState<Attendance | null>(null)
-  useLockBodyScroll(!!(showAvulsoSheet || selectedTempAvulso || confirmRemoveAttendance))
+  const [showCancelSheet, setShowCancelSheet] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  useLockBodyScroll(!!(showAvulsoSheet || selectedTempAvulso || confirmRemoveAttendance || showCancelSheet))
   const shareCardRef = useRef<HTMLDivElement>(null)
 
   const { data: unreadCount = 0 } = useQuery({
@@ -346,6 +349,40 @@ export default function GamesPage() {
 
   const hasLineup = lineup.blue.length >= 6 && lineup.black.length >= 6
   const myTeam = lineup.blue.includes(user?.id ?? '') ? 'blue' : lineup.black.includes(user?.id ?? '') ? 'black' : null
+
+  const { data: gameCancel } = useQuery({
+    queryKey: ['game-cancel', gameId],
+    queryFn: () => fetchGameCancellation(gameId),
+    refetchInterval: 15000
+  })
+  const isCancelled = !!gameCancel?.cancelled
+
+  const cancelGameMut = useMutation({
+    mutationFn: async () => {
+      await cancelGame(gameId, cancelReason, user!.id)
+      // Avisa todos os jogadores ativos no centro de notificações
+      const now = new Date().toISOString()
+      const activeSnap = await getDocs(query(collection(db, 'players'), where('active', '==', true)))
+      const msg = cancelReason.trim()
+        ? `O jogo de ${gameDateStr} foi cancelado: ${cancelReason.trim()}`
+        : `O jogo de ${gameDateStr} foi cancelado.`
+      await Promise.all(activeSnap.docs.map(d => addDoc(collection(db, 'notifications'), {
+        user_id: d.id, title: 'Jogo cancelado', message: msg, type: 'message', read: false, created_at: now
+      })))
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['game-cancel', gameId] })
+      setShowCancelSheet(false); setCancelReason('')
+      toast.success('Jogo cancelado e jogadores avisados.')
+    },
+    onError: () => toast.error('Erro ao cancelar o jogo.')
+  })
+
+  const reactivateGameMut = useMutation({
+    mutationFn: () => reactivateGame(gameId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['game-cancel', gameId] }); toast.success('Jogo reativado.') },
+    onError: () => toast.error('Erro ao reativar o jogo.')
+  })
 
   const handleConfirm = useMutation({
     mutationFn: async () => {
@@ -717,7 +754,7 @@ export default function GamesPage() {
               )}
             </button>
             {/* HandPalm — sair da pelada (só quando confirmado/espera e SEM modo chinelinho) */}
-            {(amConfirmed || amInWaitlist) && !chinelinhoActive && (
+            {(amConfirmed || amInWaitlist) && !chinelinhoActive && !isCancelled && (
               <button
                 onClick={() => handleDecline.mutate()}
                 disabled={isPending}
@@ -725,11 +762,46 @@ export default function GamesPage() {
                 <HandPalm size={24} color="var(--color-fg-primary)" />
               </button>
             )}
+            {/* Admin: cancelar jogo */}
+            {isAdmin && !isCancelled && (
+              <button
+                onClick={() => setShowCancelSheet(true)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}>
+                <Prohibit size={24} color="var(--color-danger)" />
+              </button>
+            )}
           </div>
         }
       />
 
       <div style={{ height: 104 }} />
+
+      {/* Banner — jogo cancelado */}
+      {isCancelled && (
+        <div className="mx-6 mb-4" style={{ background: 'var(--color-surface-primary)', borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Prohibit size={22} color="var(--color-danger)" weight="fill" style={{ flexShrink: 0 }} />
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 'var(--font-size-16)', color: 'var(--color-fg-primary)' }}>
+              Jogo cancelado
+            </p>
+          </div>
+          <p style={{ fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', color: 'var(--color-fg-secondary)', lineHeight: 1.5 }}>
+            {gameCancel?.reason
+              ? gameCancel.reason
+              : 'Não vai ter jogo nesta rodada.'}
+            {' '}Quem já confirmou presença ganha 1 ponto no ranking mesmo assim.
+          </p>
+          {isAdmin && (
+            <button
+              onClick={() => reactivateGameMut.mutate()}
+              disabled={reactivateGameMut.isPending}
+              className="transition-all active:scale-95 disabled:opacity-40"
+              style={{ alignSelf: 'flex-start', marginTop: 4, padding: '10px 18px', borderRadius: 'var(--radius-pill)', background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 'var(--font-size-14)' }}>
+              {reactivateGameMut.isPending ? '...' : 'Reativar jogo'}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Counter + progress */}
       <div className="px-6 mb-4">
@@ -970,7 +1042,7 @@ export default function GamesPage() {
       )}
 
       {/* Botões fixos — Admin confirmado */}
-      {isAdmin && (amConfirmed || amInWaitlist || listaClosed) && (showAvulsoBtn || showEscalarBtn) && (
+      {!isCancelled && isAdmin && (amConfirmed || amInWaitlist || listaClosed) && (showAvulsoBtn || showEscalarBtn) && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
           {showEscalarBtn && (
@@ -991,7 +1063,7 @@ export default function GamesPage() {
       )}
 
       {/* Botões fixos — Admin NÃO confirmado: [Escalar] + Confirmar Presença + Muié não deixa */}
-      {isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && (showEscalarBtn || !chinelinhoActive) && (
+      {!isCancelled && isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && (showEscalarBtn || !chinelinhoActive) && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
           {showEscalarBtn && (
@@ -1030,7 +1102,7 @@ export default function GamesPage() {
       )}
 
       {/* Botões fixos — Jogador não confirmado: Bora Jogar / Muié não deixa */}
-      {!isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && !chinelinhoActive && (
+      {!isCancelled && !isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && !chinelinhoActive && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
           <button
@@ -1060,7 +1132,7 @@ export default function GamesPage() {
       )}
 
       {/* Botão fixo — Adicionar Avulso Temporário (apenas não-admin; admin já tem na barra) */}
-      {showAvulsoBtn && !isAdmin && (
+      {!isCancelled && showAvulsoBtn && !isAdmin && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', zIndex: 50 }}>
           <button
@@ -1234,6 +1306,38 @@ export default function GamesPage() {
                 border: 'none', cursor: avulsoName.trim() ? 'pointer' : 'default'
               }}>
               {addAvulso.isPending ? 'Adicionando...' : 'Adicionar'}
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Sheet — cancelar jogo (admin) */}
+      {showCancelSheet && (
+        <>
+          <div onClick={() => setShowCancelSheet(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 60 }} />
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70, background: 'var(--color-bg)', borderRadius: '24px 24px 0 0', padding: '24px 24px calc(40px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 18, color: 'var(--color-fg-primary)' }}>Cancelar jogo</p>
+              <button onClick={() => setShowCancelSheet(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+                <X size={20} color="var(--color-fg-secondary)" />
+              </button>
+            </div>
+            <p style={{ fontFamily: 'var(--font-primary)', fontSize: 14, color: 'var(--color-fg-secondary)', lineHeight: 1.5 }}>
+              Sem jogo, não há votação (Bola Cheia/Murcha) nem placar. Quem já confirmou presença ainda ganha 1 ponto no ranking. Os jogadores serão avisados.
+            </p>
+            <textarea
+              value={cancelReason}
+              onChange={e => setCancelReason(e.target.value)}
+              placeholder="Motivo (opcional) — ex: sem quórum, feriado…"
+              rows={3}
+              style={{ width: '100%', borderRadius: 16, background: 'var(--color-surface-primary)', border: 'none', outline: 'none', padding: 16, fontFamily: 'var(--font-primary)', fontSize: 15, color: 'var(--color-fg-primary)', resize: 'none', boxSizing: 'border-box' }}
+            />
+            <button
+              onClick={() => cancelGameMut.mutate()}
+              disabled={cancelGameMut.isPending}
+              className="transition-all active:scale-95 disabled:opacity-40"
+              style={{ width: '100%', height: 56, borderRadius: 9999, background: 'var(--color-danger)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16 }}>
+              {cancelGameMut.isPending ? 'Cancelando...' : 'Cancelar jogo e avisar'}
             </button>
           </div>
         </>

@@ -1,6 +1,7 @@
 import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore'
 import { format } from 'date-fns'
 import { db } from './firebase'
+import { fetchCancelledGameIds } from './gameStatus'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -300,11 +301,12 @@ function getWednesdayGameId(dateStr: string): string {
 }
 
 export async function fetchFullRanking(): Promise<RankingEntry[]> {
-  const [playersSnap, scoreDoc, attendancesSnap, votacaoSnap] = await Promise.all([
+  const [playersSnap, scoreDoc, attendancesSnap, votacaoSnap, cancelledGameIds] = await Promise.all([
     getDocs(query(collection(db, 'players'), where('active', '==', true))),
     getDoc(doc(db, 'config', 'score')),
     getDocs(collection(db, 'attendances')),
-    getDocs(collection(db, 'votacao'))
+    getDocs(collection(db, 'votacao')),
+    fetchCancelledGameIds()
   ])
 
   const players = playersSnap.docs.map(d => ({
@@ -333,6 +335,7 @@ export async function fetchFullRanking(): Promise<RankingEntry[]> {
 
   history.forEach(entry => {
     const gid = getWednesdayGameId(entry.date)
+    if (cancelledGameIds.has(gid)) return // jogo cancelado: placar não conta
     const lineup = lineupMap[gid]
     if (!lineup) return
     const blueWon = entry.blue > entry.yellow
@@ -368,6 +371,7 @@ export async function fetchFullRanking(): Promise<RankingEntry[]> {
   const melhorDefensorWinsMap: Record<string, number> = {}
   const piorDefensorWinsMap: Record<string, number> = {}
   votacaoSnap.docs.forEach(d => {
+    if (cancelledGameIds.has(d.id)) return // jogo cancelado: votação não conta
     const votos = d.data().votos ?? {}
     if (Object.keys(votos).length === 0) return
     // Empate = co-vencedores: cada empatado ganha o prêmio da rodada.

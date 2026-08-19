@@ -72,6 +72,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Status do jogo (cancelamento). Doc opcional por gameId (yyyy-MM-dd).
+    match /games/{gameId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
     // Votações de destaque
     match /votacao/{docId} {
       allow read: if isAuthenticated();

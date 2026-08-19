@@ -14,6 +14,7 @@ import {
   BadgeVotacao, BigCard, SmallCardVotacao, VotingSheet,
   computeWinner, getLastWednesdayId, isVotingOpen
 } from '../components/stats/VotacaoComponents'
+import { fetchGameCancellation } from '../lib/gameStatus'
 
 // ─── Data ──────────────────────────────────────────────────────────────────────
 
@@ -78,6 +79,8 @@ export default function StatsBolaPage() {
   const { data: players = [], isLoading: loadingPlayers } = useQuery({ queryKey: ['confirmed-players', gameId], queryFn: () => fetchConfirmedPlayers(gameId), refetchInterval: 30_000 })
   const { data: votacao, isLoading: loadingVotacao } = useQuery({ queryKey: ['votacao', gameId], queryFn: () => fetchVotacao(gameId), refetchInterval: 10_000 })
   const { data: history = [] } = useQuery({ queryKey: ['votacao-history', gameId], queryFn: () => fetchVotacaoHistory(gameId), staleTime: 5 * 60_000 })
+  const { data: gameCancel } = useQuery({ queryKey: ['game-cancel', gameId], queryFn: () => fetchGameCancellation(gameId), refetchInterval: 30_000 })
+  const isCancelled = !!gameCancel?.cancelled
 
   const saveVote = useMutation({
     mutationFn: async (votes: { bolaCheia: string; bolaMurcha: string }) => {
@@ -173,6 +176,17 @@ export default function StatsBolaPage() {
           <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
             <div className="text-4xl animate-spin">⚽</div>
           </div>
+        ) : isCancelled ? (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', textAlign: 'center', padding: '32px 16px', borderRadius: 16, background: 'var(--color-surface-primary)' }}>
+              <span style={{ fontSize: 40 }}>🚫</span>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)' }}>Jogo cancelado</p>
+              <p style={{ fontFamily: 'var(--font-primary)', fontSize: 14, color: 'var(--color-fg-secondary)', lineHeight: 1.5 }}>
+                {gameCancel?.reason ? gameCancel.reason : 'Não houve jogo nesta rodada, então não há votação.'}
+              </p>
+            </div>
+            <HistorySection />
+          </>
         ) : !votingOpen ? (
           <>
             {cheiaWinners.length > 0 || murchaWinners.length > 0 ? (

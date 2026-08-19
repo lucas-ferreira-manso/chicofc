@@ -9,6 +9,8 @@ import { CaretLeft, Plus, TrashSimple } from '@phosphor-icons/react'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
+import { fetchGameCancellation } from '../lib/gameStatus'
+import { getLastWednesdayId } from '../components/stats/VotacaoComponents'
 
 interface GameEntry { blue: number; yellow: number; date: string }
 interface ScoreData { blueWins: number; yellowWins: number; updatedAt: string; history: GameEntry[] }
@@ -33,6 +35,9 @@ export default function StatsPlacasrPage() {
   const [yellowGoals, setYellowGoals] = useState('')
 
   const { data: score, isLoading } = useQuery({ queryKey: ['score'], queryFn: fetchScore })
+  const currentGameId = getLastWednesdayId()
+  const { data: gameCancel } = useQuery({ queryKey: ['game-cancel', currentGameId], queryFn: () => fetchGameCancellation(currentGameId), refetchInterval: 30_000 })
+  const isCancelled = !!gameCancel?.cancelled
 
   const saveScore = useMutation({
     mutationFn: async () => {
@@ -82,7 +87,7 @@ export default function StatsPlacasrPage() {
             <CaretLeft size={24} color="var(--color-fg-primary)" weight="bold" />
           </button>
           <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 24, color: 'var(--color-fg-primary)', flex: 1, lineHeight: '28px' }}>Placar Geral</p>
-          {isAdmin && (
+          {isAdmin && !isCancelled && (
             <button onClick={() => setShowSheet(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
               <Plus size={24} color="var(--color-fg-primary)" weight="bold" />
             </button>
@@ -104,6 +109,14 @@ export default function StatsPlacasrPage() {
           </div>
         ) : (
           <>
+            {isCancelled && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderRadius: 12, background: 'var(--color-surface-primary)' }}>
+                <span style={{ fontSize: 20 }}>🚫</span>
+                <p style={{ fontFamily: 'var(--font-primary)', fontSize: 13, color: 'var(--color-fg-secondary)', lineHeight: 1.4 }}>
+                  Jogo desta semana cancelado — sem placar nesta rodada.
+                </p>
+              </div>
+            )}
             {/* Placar Atual — fiel ao Figma: logo + número lado a lado, p-16 */}
             <div style={{ background: 'var(--color-surface-primary)', borderRadius: 20, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
