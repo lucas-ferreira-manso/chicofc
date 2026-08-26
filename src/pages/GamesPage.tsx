@@ -347,6 +347,12 @@ export default function GamesPage() {
   const hasLineup = lineup.blue.length >= 6 && lineup.black.length >= 6
   const myTeam = lineup.blue.includes(user?.id ?? '') ? 'blue' : lineup.black.includes(user?.id ?? '') ? 'black' : null
 
+  // Confirmados (e avulsos temp) que ainda não estão em nenhum dos dois times —
+  // ex: confirmaram depois que a escalação já foi salva
+  const lineupIds = new Set([...lineup.blue, ...lineup.black])
+  const unassignedConfirmed = confirmed.filter(a => !lineupIds.has(a.user_id))
+  const unassignedTempAvulsos = tempAvulsos.filter(t => !lineupIds.has(`temp_${t.id}`))
+
   const handleConfirm = useMutation({
     mutationFn: async () => {
       const batch = writeBatch(db)
@@ -436,21 +442,33 @@ export default function GamesPage() {
       // Notifica admins se times já escalados → novo jogador confirmou
       if (hasLineup) {
         try {
+          const playerType = user!.player_type ?? 'avulso'
+          const playerName = user!.name || user!.email || 'Jogador'
+          const message = `Novo jogador confirmado: ${playerName} (${playerType}). Rever escalação dos times.`
+          const adminSnap = await getDocs(query(collection(db, 'players'), where('role', '==', 'admin')))
+
+          // Escreve no Notification Center — fica visível mesmo sem push habilitado
+          await Promise.all(adminSnap.docs.map(adminDoc =>
+            addDoc(collection(db, 'notifications'), {
+              user_id: adminDoc.id,
+              title: 'Escalação precisa de revisão',
+              message,
+              type: 'message',
+              read: false,
+              created_at: new Date().toISOString()
+            }).catch(() => {})
+          ))
+
+          // Push notification
           const authInstance = getAuth()
           const currentUser = authInstance.currentUser
           if (currentUser) {
             const token = await getIdToken(currentUser)
-            const adminSnap = await getDocs(query(collection(db, 'players'), where('role', '==', 'admin')))
-            const playerType = user!.player_type ?? 'avulso'
-            const playerName = user!.name || user!.email || 'Jogador'
             await Promise.all(adminSnap.docs.map(adminDoc =>
               fetch(`${SERVER_URL}/notify-cobranca`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({
-                  userId: adminDoc.id,
-                  message: `Novo jogador confirmado: ${playerName} (${playerType}). Rever escalação dos times.`
-                })
+                body: JSON.stringify({ userId: adminDoc.id, message })
               }).catch(() => {})
             ))
           }
@@ -833,6 +851,37 @@ export default function GamesPage() {
               )
             })}
           </div>
+
+          {/* Confirmados fora dos times — ex: confirmaram depois da escalação salva */}
+          {(unassignedConfirmed.length > 0 || unassignedTempAvulsos.length > 0) && (
+            <div className="px-6 mt-4 flex flex-col gap-2">
+              <div className="flex items-center gap-1.5 mb-1">
+                <p className="font-semibold uppercase tracking-wider" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
+                  AGUARDANDO INCLUSÃO NO TIME ({unassignedConfirmed.length + unassignedTempAvulsos.length})
+                </p>
+              </div>
+              {unassignedConfirmed.map((a, i) => (
+                <PlayerRow key={a.id} attendance={a} index={i + 1} isMe={a.user_id === user?.id}
+                  onRemove={isAdmin ? () => setConfirmRemoveAttendance(a) : undefined} />
+              ))}
+              {unassignedTempAvulsos.map(t => (
+                <div key={t.id} className="flex items-center gap-3 px-4 py-4 rounded-3xl"
+                  style={{ background: 'var(--color-surface-primary)' }}>
+                  <Avatar name={t.name} />
+                  <p className="flex-1" style={{ color: 'var(--color-item-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+                    {t.name}
+                  </p>
+                </div>
+              ))}
+              {isAdmin && (
+                <button onClick={() => navigate('/escalacao')}
+                  className="mt-1 py-3 font-medium transition-all active:scale-95"
+                  style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
+                  Adicionar a um time
+                </button>
+              )}
+            </div>
+          )}
         </>
       )}
 

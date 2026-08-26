@@ -104,7 +104,8 @@ export default function EscalacaoPage() {
 
   const { data: players = [] } = useQuery({
     queryKey: ['confirmed', gameId],
-    queryFn: () => fetchConfirmed(gameId)
+    queryFn: () => fetchConfirmed(gameId),
+    refetchInterval: 15000
   })
 
   const { data: existingLineup } = useQuery({
@@ -138,7 +139,9 @@ export default function EscalacaoPage() {
     }
   }
 
-  const canSave = isAdmin && blueIds.length >= MIN_PLAYERS && blackIds.length >= MIN_PLAYERS
+  const unassignedCount = players.length - blueIds.length - blackIds.length
+  const allAssigned = unassignedCount <= 0
+  const canSave = isAdmin && blueIds.length >= MIN_PLAYERS && blackIds.length >= MIN_PLAYERS && allAssigned
 
   const saveLineup = useMutation({
     mutationFn: async () => {
@@ -280,6 +283,11 @@ export default function EscalacaoPage() {
           {activeIds.length} escalados
           <span style={{ color: 'var(--color-fg-secondary)', fontSize: 'var(--font-size-14)' }}> · mín {MIN_PLAYERS}, máx {MAX_PLAYERS}</span>
         </p>
+        {isAdmin && unassignedCount > 0 && (
+          <p className="mt-1" style={{ color: 'var(--color-danger)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
+            {unassignedCount} confirmado{unassignedCount > 1 ? 's' : ''} ainda sem time — escale todos para salvar
+          </p>
+        )}
       </div>
 
       {/* Lista de jogadores */}
