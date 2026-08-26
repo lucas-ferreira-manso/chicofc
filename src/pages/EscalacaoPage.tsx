@@ -1,22 +1,48 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { collection, getDocs, query, where, doc, setDoc, getDoc } from 'firebase/firestore'
+import { collection, getDocs, query, where, doc, setDoc, getDoc, addDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { useNavigate } from 'react-router-dom'
-import { CaretLeft, ShareNetwork } from '@phosphor-icons/react'
+import { CaretLeft, ShareNetwork, X } from '@phosphor-icons/react'
 import { useRef } from 'react'
-import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
+import { format, isWednesday, nextWednesday, startOfDay, isAfter } from 'date-fns'
 import { toast } from 'sonner'
 import type { Profile } from '../types'
 
 const MIN_PLAYERS = 6
 const MAX_PLAYERS = 8
 
-function getNextWednesdayId(): string {
+function getNextWednesdayDate(): Date {
   const today = startOfDay(new Date())
-  const wed = isWednesday(today) ? today : nextWednesday(today)
-  return format(wed, 'yyyy-MM-dd')
+  return isWednesday(today) ? today : nextWednesday(today)
+}
+
+function getNextWednesdayId(): string {
+  return format(getNextWednesdayDate(), 'yyyy-MM-dd')
+}
+
+// Mesma janela do avulso temporário na Lista de Presença — terça 16h até quarta 21h20
+function getTuesdayAt16h(gameDate: Date): Date {
+  const tuesday = new Date(gameDate)
+  tuesday.setDate(gameDate.getDate() - 1)
+  tuesday.setHours(16, 0, 0, 0)
+  return tuesday
+}
+
+function getWednesdayAt2120h(gameDate: Date): Date {
+  const wednesday = new Date(gameDate)
+  wednesday.setHours(21, 20, 0, 0)
+  return wednesday
+}
+
+function shouldShowAvulsoButton(gameDate: Date, totalConfirmed: number): boolean {
+  const now = new Date()
+  return (
+    isAfter(now, getTuesdayAt16h(gameDate)) &&
+    !isAfter(now, getWednesdayAt2120h(gameDate)) &&
+    totalConfirmed < 14
+  )
 }
 
 function getInitials(name: string): string {
@@ -93,6 +119,7 @@ export default function EscalacaoPage() {
   const navigate = useNavigate()
   const user = useAuthStore(s => s.user)
   const qc = useQueryClient()
+  const gameDate = getNextWednesdayDate()
   const gameId = getNextWednesdayId()
   const isAdmin = user?.role === 'admin'
   const [activeTeam, setActiveTeam] = useState<'blue' | 'black'>('blue')
@@ -100,6 +127,8 @@ export default function EscalacaoPage() {
   const [blackIds, setBlackIds] = useState<string[]>([])
   const [loaded, setLoaded] = useState(false)
   const [sharing, setSharing] = useState(false)
+  const [showAvulsoSheet, setShowAvulsoSheet] = useState(false)
+  const [avulsoName, setAvulsoName] = useState('')
   const shareCardRef = useRef<HTMLDivElement>(null)
 
   const { data: players = [] } = useQuery({
@@ -142,6 +171,27 @@ export default function EscalacaoPage() {
   const unassignedCount = players.length - blueIds.length - blackIds.length
   const allAssigned = unassignedCount <= 0
   const canSave = isAdmin && blueIds.length >= MIN_PLAYERS && blackIds.length >= MIN_PLAYERS && allAssigned
+  const avulsoWindowOpen = shouldShowAvulsoButton(gameDate, players.length)
+
+  const addAvulso = useMutation({
+    mutationFn: async () => {
+      const userName = (user as any)?.name || (user as any)?.email || 'Usuário'
+      await addDoc(collection(db, 'avulsos_temp'), {
+        name: avulsoName.trim(),
+        addedBy: user!.id,
+        addedByName: userName,
+        gameId,
+        createdAt: new Date().toISOString()
+      })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['confirmed', gameId] })
+      setAvulsoName('')
+      setShowAvulsoSheet(false)
+      toast.success('Avulso temporário adicionado! Já dá pra escalar.')
+    },
+    onError: () => toast.error('Erro ao adicionar avulso')
+  })
 
   const saveLineup = useMutation({
     mutationFn: async () => {
@@ -327,6 +377,18 @@ export default function EscalacaoPage() {
             </button>
           )
         })}
+
+        {isAdmin && avulsoWindowOpen && (
+          <button onClick={() => setShowAvulsoSheet(true)}
+            className="w-full flex items-center justify-center gap-2 px-4 py-4 rounded-3xl transition-all active:scale-[0.99]"
+            style={{
+              background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)',
+              border: '1.5px dashed var(--btn-secondary-fg)',
+              fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500
+            }}>
+            + Adicionar Avulso Temporário
+          </button>
+        )}
       </div>
 
       {/* Botão salvar — só admin */}
@@ -346,6 +408,54 @@ export default function EscalacaoPage() {
             {saveLineup.isPending ? 'Salvando...' : 'Salvar'}
           </button>
         </div>
+      )}
+
+      {/* Bottom sheet — Avulso Temporário */}
+      {showAvulsoSheet && (
+        <>
+          <div onClick={() => { setShowAvulsoSheet(false); setAvulsoName('') }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 60 }} />
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70,
+            background: 'var(--color-bg)', borderRadius: '24px 24px 0 0',
+            padding: '24px 24px 40px', display: 'flex', flexDirection: 'column', gap: 24
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: 'var(--color-fg-primary)' }}>
+                Adicionar Avulso Temporário
+              </p>
+              <button onClick={() => { setShowAvulsoSheet(false); setAvulsoName('') }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}>
+                <X size={20} color="var(--color-fg-secondary)" />
+              </button>
+            </div>
+            <input
+              type="text"
+              placeholder="Nome do jogador"
+              value={avulsoName}
+              onChange={e => setAvulsoName(e.target.value)}
+              style={{
+                width: '100%', height: 56, borderRadius: 9999,
+                background: 'var(--color-surface-primary)', border: 'none',
+                padding: '0 24px', fontFamily: 'var(--font-primary)', fontSize: 16,
+                color: 'var(--color-fg-primary)', outline: 'none', boxSizing: 'border-box'
+              }}
+            />
+            <button
+              onClick={() => addAvulso.mutate()}
+              disabled={!avulsoName.trim() || addAvulso.isPending}
+              className="transition-all active:scale-95 disabled:opacity-40"
+              style={{
+                width: '100%', height: 56, borderRadius: 9999,
+                background: avulsoName.trim() ? 'var(--btn-primary-bg)' : 'var(--color-surface-secondary)',
+                color: avulsoName.trim() ? 'var(--btn-primary-fg)' : 'var(--color-fg-secondary)',
+                fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16,
+                border: 'none', cursor: avulsoName.trim() ? 'pointer' : 'default'
+              }}>
+              {addAvulso.isPending ? 'Adicionando...' : 'Adicionar'}
+            </button>
+          </div>
+        </>
       )}
     </div>
   )

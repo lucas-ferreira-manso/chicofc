@@ -389,6 +389,9 @@ export default function GamesPage() {
   const hasLineup = lineup.blue.length >= 6 && lineup.black.length >= 6
   const myTeam = lineup.blue.includes(user?.id ?? '') ? 'blue' : lineup.black.includes(user?.id ?? '') ? 'black' : null
 
+  // Times já escalados → admin pode convidar avulso direto da home, mesmo sem ter confirmado presença
+  const showAvulsoBtnLineup = isAdmin && hasLineup && avulsoWindowOpen
+
   // Confirmados (e avulsos temp) que ainda não estão em nenhum dos dois times —
   // ex: confirmaram depois que a escalação já foi salva
   const lineupIds = new Set([...lineup.blue, ...lineup.black])
@@ -580,6 +583,8 @@ export default function GamesPage() {
       setAvulsoName('')
       setShowAvulsoSheet(false)
       toast.success('Avulso temporário adicionado!')
+      // Times já escalados → leva direto pra escalação incluir o novo avulso em um time
+      if (hasLineup && isAdmin) navigate('/escalacao')
     },
     onError: () => toast.error('Erro ao adicionar avulso')
   })
@@ -1038,7 +1043,7 @@ export default function GamesPage() {
       )}
 
       {/* Botões fixos — Admin confirmado */}
-      {isAdmin && (amConfirmed || amInWaitlist || listaClosed) && (showAvulsoBtn || showEscalarBtn) && (
+      {isAdmin && (amConfirmed || amInWaitlist || listaClosed || hasLineup) && (showAvulsoBtn || showAvulsoBtnLineup || showEscalarBtn) && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
           {showEscalarBtn && (
@@ -1048,10 +1053,10 @@ export default function GamesPage() {
               {hasLineup ? 'Editar Times' : 'Escalar Times'}
             </button>
           )}
-          {showAvulsoBtn && (
+          {(showAvulsoBtn || showAvulsoBtnLineup) && (
             <button onClick={() => setShowAvulsoSheet(true)}
               className="flex-1 py-4 font-medium transition-all active:scale-95"
-              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
+              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
               + Avulso Temp.
             </button>
           )}
