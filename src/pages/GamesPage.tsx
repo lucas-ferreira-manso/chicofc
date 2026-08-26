@@ -1042,65 +1042,56 @@ export default function GamesPage() {
         </div>
       )}
 
-      {/* Botões fixos — Admin confirmado */}
-      {isAdmin && (amConfirmed || amInWaitlist || listaClosed || hasLineup) && (showAvulsoBtn || showAvulsoBtnLineup || showEscalarBtn) && (
-        <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
-          style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
-          {showEscalarBtn && (
-            <button onClick={() => navigate('/escalacao')}
-              className="flex-1 py-4 font-medium transition-all active:scale-95"
-              style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
-              {hasLineup ? 'Editar Times' : 'Escalar Times'}
-            </button>
-          )}
-          {(showAvulsoBtn || showAvulsoBtnLineup) && (
-            <button onClick={() => setShowAvulsoSheet(true)}
-              className="flex-1 py-4 font-medium transition-all active:scale-95"
-              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
-              + Avulso Temp.
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Botões fixos — Admin NÃO confirmado: [Escalar] + Confirmar Presença + Muié não deixa */}
-      {isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && (showEscalarBtn || !chinelinhoActive) && (
-        <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
-          style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
-          {showEscalarBtn && (
-            <button onClick={() => navigate('/escalacao')}
-              className="flex-1 py-4 font-medium transition-all active:scale-95"
-              style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', fontWeight: 500 }}>
-              {hasLineup ? 'Editar Times' : 'Escalar Times'}
-            </button>
-          )}
-          {amDeclined && avulsoWindowOpen ? (
-            <button
-              onClick={() => setShowAvulsoSheet(true)}
-              className="flex-1 py-4 font-medium transition-all active:scale-95"
-              style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500 }}>
-              Adicionar Avulso
-            </button>
-          ) : !chinelinhoActive ? (
-            <button
-              onClick={() => !amDeclined && setShowDeclineSheet(true)}
-              disabled={isPending || amDeclined}
-              className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-              style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500, opacity: amDeclined ? 0.5 : 1 }}>
-              Muié não deixa
-            </button>
-          ) : null}
-          {!chinelinhoActive && (
-            <button
-              onClick={() => handleConfirm.mutate()}
-              disabled={isPending}
-              className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500 }}>
-              {handleConfirm.isPending ? '...' : 'Confirmar Presença'}
-            </button>
-          )}
-        </div>
-      )}
+      {/* Botões fixos — Admin (uma única barra, nunca duas sobrepostas) */}
+      {isAdmin && (() => {
+        const respondedOrClosed = amConfirmed || amInWaitlist || listaClosed
+        const pendingResponse = !respondedOrClosed && !chinelinhoActive
+        const showAvulsoHere = respondedOrClosed ? (showAvulsoBtn || showAvulsoBtnLineup) : showAvulsoBtnLineup
+        const showMuieHere = pendingResponse && !hasLineup && !(amDeclined && avulsoWindowOpen)
+        const showAvulsoDeclinedHere = pendingResponse && !hasLineup && amDeclined && avulsoWindowOpen
+        const showConfirmHere = pendingResponse
+        const crowded = showEscalarBtn && (showAvulsoHere || showAvulsoDeclinedHere || showMuieHere) && showConfirmHere
+        if (!showEscalarBtn && !showAvulsoHere && !showAvulsoDeclinedHere && !showMuieHere && !showConfirmHere) return null
+        return (
+          <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
+            style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
+            {showEscalarBtn && (
+              <button onClick={() => navigate('/escalacao')}
+                className="flex-1 py-4 font-medium transition-all active:scale-95"
+                style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: crowded ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
+                {hasLineup ? 'Editar Times' : 'Escalar Times'}
+              </button>
+            )}
+            {(showAvulsoHere || showAvulsoDeclinedHere) && (
+              <button onClick={() => setShowAvulsoSheet(true)}
+                className="flex-1 py-4 font-medium transition-all active:scale-95"
+                style={showAvulsoDeclinedHere
+                  ? { background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: crowded ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500 }
+                  : { background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: crowded ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
+                {showAvulsoDeclinedHere ? 'Adicionar Avulso' : '+ Avulso Temp.'}
+              </button>
+            )}
+            {showMuieHere && (
+              <button
+                onClick={() => !amDeclined && setShowDeclineSheet(true)}
+                disabled={isPending || amDeclined}
+                className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
+                style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: crowded ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500, opacity: amDeclined ? 0.5 : 1 }}>
+                Muié não deixa
+              </button>
+            )}
+            {showConfirmHere && (
+              <button
+                onClick={() => handleConfirm.mutate()}
+                disabled={isPending}
+                className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
+                style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: crowded ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500 }}>
+                {handleConfirm.isPending ? '...' : 'Confirmar Presença'}
+              </button>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Botões fixos — Jogador não confirmado: Muié não deixa / Bora Jogar (sempre à direita) */}
       {!isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && !chinelinhoActive && (
