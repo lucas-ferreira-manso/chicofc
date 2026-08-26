@@ -109,11 +109,19 @@ function getWednesdayAt21h(gameDate: Date): Date {
   return wednesday
 }
 
+// Avulso temporário fica disponível 20min a mais que o resto da lista —
+// é o recurso pra repor alguém em cima da hora, então fecha mais perto do jogo (21h30)
+function getWednesdayAt2120h(gameDate: Date): Date {
+  const wednesday = new Date(gameDate)
+  wednesday.setHours(21, 20, 0, 0)
+  return wednesday
+}
+
 function shouldShowAvulsoButton(gameDate: Date, totalConfirmed: number): boolean {
   const now = new Date()
   return (
     isAfter(now, getTuesdayAt16h(gameDate)) &&
-    !isAfter(now, getWednesdayAt21h(gameDate)) &&
+    !isAfter(now, getWednesdayAt2120h(gameDate)) &&
     totalConfirmed < 14
   )
 }
@@ -122,6 +130,39 @@ async function fetchTempAvulsos(gameId: string): Promise<TempAvulso[]> {
   const q = query(collection(db, 'avulsos_temp'), where('gameId', '==', gameId))
   const snap = await getDocs(q)
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as TempAvulso))
+}
+
+// Avisa todos os admins quando a escalação precisa ser revista (jogador confirmou
+// ou avulso temp entrou depois que os times já foram salvos) — grava no Notification
+// Center (visível mesmo sem push) e dispara push em paralelo
+async function notifyAdminsLineupChanged(message: string) {
+  try {
+    const adminSnap = await getDocs(query(collection(db, 'players'), where('role', '==', 'admin')))
+
+    await Promise.all(adminSnap.docs.map(adminDoc =>
+      addDoc(collection(db, 'notifications'), {
+        user_id: adminDoc.id,
+        title: 'Escalação precisa de revisão',
+        message,
+        type: 'message',
+        read: false,
+        created_at: new Date().toISOString()
+      }).catch(() => {})
+    ))
+
+    const authInstance = getAuth()
+    const currentUser = authInstance.currentUser
+    if (currentUser) {
+      const token = await getIdToken(currentUser)
+      await Promise.all(adminSnap.docs.map(adminDoc =>
+        fetch(`${SERVER_URL}/notify-cobranca`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ userId: adminDoc.id, message })
+        }).catch(() => {})
+      ))
+    }
+  } catch { /* notificação de admin não bloqueia a ação */ }
 }
 
 async function fetchAllPlayers(): Promise<{ id: string; name: string; player_type: string; photoURL?: string }[]> {
@@ -169,7 +210,8 @@ export default function GamesPage() {
   const [avulsoName, setAvulsoName] = useState('')
   const [selectedTempAvulso, setSelectedTempAvulso] = useState<TempAvulso | null>(null)
   const [confirmRemoveAttendance, setConfirmRemoveAttendance] = useState<Attendance | null>(null)
-  useLockBodyScroll(!!(showAvulsoSheet || selectedTempAvulso || confirmRemoveAttendance))
+  const [showDeclineSheet, setShowDeclineSheet] = useState(false)
+  useLockBodyScroll(!!(showAvulsoSheet || selectedTempAvulso || confirmRemoveAttendance || showDeclineSheet))
   const shareCardRef = useRef<HTMLDivElement>(null)
 
   const { data: unreadCount = 0 } = useQuery({
@@ -347,6 +389,15 @@ export default function GamesPage() {
   const hasLineup = lineup.blue.length >= 6 && lineup.black.length >= 6
   const myTeam = lineup.blue.includes(user?.id ?? '') ? 'blue' : lineup.black.includes(user?.id ?? '') ? 'black' : null
 
+  // Times já escalados → admin pode convidar avulso direto da home, mesmo sem ter confirmado presença
+  const showAvulsoBtnLineup = isAdmin && hasLineup && avulsoWindowOpen
+
+  // Confirmados (e avulsos temp) que ainda não estão em nenhum dos dois times —
+  // ex: confirmaram depois que a escalação já foi salva
+  const lineupIds = new Set([...lineup.blue, ...lineup.black])
+  const unassignedConfirmed = confirmed.filter(a => !lineupIds.has(a.user_id))
+  const unassignedTempAvulsos = tempAvulsos.filter(t => !lineupIds.has(`temp_${t.id}`))
+
   const handleConfirm = useMutation({
     mutationFn: async () => {
       const batch = writeBatch(db)
@@ -435,26 +486,9 @@ export default function GamesPage() {
 
       // Notifica admins se times já escalados → novo jogador confirmou
       if (hasLineup) {
-        try {
-          const authInstance = getAuth()
-          const currentUser = authInstance.currentUser
-          if (currentUser) {
-            const token = await getIdToken(currentUser)
-            const adminSnap = await getDocs(query(collection(db, 'players'), where('role', '==', 'admin')))
-            const playerType = user!.player_type ?? 'avulso'
-            const playerName = user!.name || user!.email || 'Jogador'
-            await Promise.all(adminSnap.docs.map(adminDoc =>
-              fetch(`${SERVER_URL}/notify-cobranca`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({
-                  userId: adminDoc.id,
-                  message: `Novo jogador confirmado: ${playerName} (${playerType}). Rever escalação dos times.`
-                })
-              }).catch(() => {})
-            ))
-          }
-        } catch { /* notificação de admin não bloqueia confirmação */ }
+        const playerType = user!.player_type ?? 'avulso'
+        const playerName = user!.name || user!.email || 'Jogador'
+        await notifyAdminsLineupChanged(`Novo jogador confirmado: ${playerName} (${playerType}). Rever escalação dos times.`)
       }
     },
     onSuccess: () => {
@@ -530,19 +564,27 @@ export default function GamesPage() {
   const addAvulso = useMutation({
     mutationFn: async () => {
       const userName = (user as any)?.name || (user as any)?.email || 'Usuário'
+      const name = avulsoName.trim()
       await addDoc(collection(db, 'avulsos_temp'), {
-        name: avulsoName.trim(),
+        name,
         addedBy: user!.id,
         addedByName: userName,
         gameId,
         createdAt: new Date().toISOString()
       })
+
+      // Times já escalados → avisa admins que precisam incluir o avulso em um time
+      if (hasLineup) {
+        await notifyAdminsLineupChanged(`Novo avulso temporário adicionado: ${name}. Rever escalação dos times.`)
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['temp-avulsos', gameId] })
       setAvulsoName('')
       setShowAvulsoSheet(false)
       toast.success('Avulso temporário adicionado!')
+      // Times já escalados → leva direto pra escalação incluir o novo avulso em um time
+      if (hasLineup && isAdmin) navigate('/escalacao')
     },
     onError: () => toast.error('Erro ao adicionar avulso')
   })
@@ -833,6 +875,37 @@ export default function GamesPage() {
               )
             })}
           </div>
+
+          {/* Confirmados fora dos times — ex: confirmaram depois da escalação salva */}
+          {(unassignedConfirmed.length > 0 || unassignedTempAvulsos.length > 0) && (
+            <div className="px-6 mt-4 flex flex-col gap-2">
+              <div className="flex items-center gap-1.5 mb-1">
+                <p className="font-semibold uppercase tracking-wider" style={{ color: 'var(--color-fg-secondary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)' }}>
+                  AGUARDANDO INCLUSÃO NO TIME ({unassignedConfirmed.length + unassignedTempAvulsos.length})
+                </p>
+              </div>
+              {unassignedConfirmed.map((a, i) => (
+                <PlayerRow key={a.id} attendance={a} index={i + 1} isMe={a.user_id === user?.id}
+                  onRemove={isAdmin ? () => setConfirmRemoveAttendance(a) : undefined} />
+              ))}
+              {unassignedTempAvulsos.map(t => (
+                <div key={t.id} className="flex items-center gap-3 px-4 py-4 rounded-3xl"
+                  style={{ background: 'var(--color-surface-primary)' }}>
+                  <Avatar name={t.name} />
+                  <p className="flex-1" style={{ color: 'var(--color-item-fg)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+                    {t.name}
+                  </p>
+                </div>
+              ))}
+              {isAdmin && (
+                <button onClick={() => navigate('/escalacao')}
+                  className="mt-1 py-3 font-medium transition-all active:scale-95"
+                  style={{ background: 'var(--color-surface-accent-light)', color: 'var(--color-fg-accent)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
+                  Adicionar a um time
+                </button>
+              )}
+            </div>
+          )}
         </>
       )}
 
@@ -970,7 +1043,7 @@ export default function GamesPage() {
       )}
 
       {/* Botões fixos — Admin confirmado */}
-      {isAdmin && (amConfirmed || amInWaitlist || listaClosed) && (showAvulsoBtn || showEscalarBtn) && (
+      {isAdmin && (amConfirmed || amInWaitlist || listaClosed || hasLineup) && (showAvulsoBtn || showAvulsoBtnLineup || showEscalarBtn) && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
           {showEscalarBtn && (
@@ -980,10 +1053,10 @@ export default function GamesPage() {
               {hasLineup ? 'Editar Times' : 'Escalar Times'}
             </button>
           )}
-          {showAvulsoBtn && (
+          {(showAvulsoBtn || showAvulsoBtnLineup) && (
             <button onClick={() => setShowAvulsoSheet(true)}
               className="flex-1 py-4 font-medium transition-all active:scale-95"
-              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showAvulsoBtn && showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
+              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
               + Avulso Temp.
             </button>
           )}
@@ -1001,15 +1074,6 @@ export default function GamesPage() {
               {hasLineup ? 'Editar Times' : 'Escalar Times'}
             </button>
           )}
-          {!chinelinhoActive && (
-            <button
-              onClick={() => handleConfirm.mutate()}
-              disabled={isPending}
-              className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500 }}>
-              {handleConfirm.isPending ? '...' : 'Confirmar Presença'}
-            </button>
-          )}
           {amDeclined && avulsoWindowOpen ? (
             <button
               onClick={() => setShowAvulsoSheet(true)}
@@ -1019,27 +1083,29 @@ export default function GamesPage() {
             </button>
           ) : !chinelinhoActive ? (
             <button
-              onClick={() => !amDeclined && handleDecline.mutate()}
+              onClick={() => !amDeclined && setShowDeclineSheet(true)}
               disabled={isPending || amDeclined}
               className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
               style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500, opacity: amDeclined ? 0.5 : 1 }}>
-              {handleDecline.isPending ? '...' : 'Muié não deixa'}
+              Muié não deixa
             </button>
           ) : null}
+          {!chinelinhoActive && (
+            <button
+              onClick={() => handleConfirm.mutate()}
+              disabled={isPending}
+              className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
+              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500 }}>
+              {handleConfirm.isPending ? '...' : 'Confirmar Presença'}
+            </button>
+          )}
         </div>
       )}
 
-      {/* Botões fixos — Jogador não confirmado: Bora Jogar / Muié não deixa */}
+      {/* Botões fixos — Jogador não confirmado: Muié não deixa / Bora Jogar (sempre à direita) */}
       {!isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && !chinelinhoActive && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
-          <button
-            onClick={() => handleConfirm.mutate()}
-            disabled={isPending}
-            className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
-            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
-            {handleConfirm.isPending ? '...' : 'Bora Jogar'}
-          </button>
           {amDeclined && avulsoWindowOpen ? (
             <button
               onClick={() => setShowAvulsoSheet(true)}
@@ -1049,13 +1115,20 @@ export default function GamesPage() {
             </button>
           ) : (
             <button
-              onClick={() => !amDeclined && handleDecline.mutate()}
+              onClick={() => !amDeclined && setShowDeclineSheet(true)}
               disabled={isPending || amDeclined}
               className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
               style={{ background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)', border: '1px solid var(--btn-secondary-border)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500, opacity: amDeclined ? 0.5 : 1 }}>
-              {handleDecline.isPending ? '...' : 'Muié não deixa'}
+              Muié não deixa
             </button>
           )}
+          <button
+            onClick={() => handleConfirm.mutate()}
+            disabled={isPending}
+            className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
+            style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
+            {handleConfirm.isPending ? '...' : 'Bora Jogar'}
+          </button>
         </div>
       )}
 
@@ -1186,6 +1259,61 @@ export default function GamesPage() {
                 style={{ height: 56, borderRadius: 9999, background: '#ef4444', border: 'none', fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, color: '#fff', cursor: 'pointer' }}>
                 {adminRemovePlayer.isPending ? 'Removendo...' : 'Remover'}
               </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Bottom sheet — Confirmar ausência ou convidar avulso no lugar */}
+      {showDeclineSheet && (
+        <>
+          <div onClick={() => setShowDeclineSheet(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 60 }} />
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70,
+            background: 'var(--color-bg)', borderRadius: '24px 24px 0 0',
+            padding: '24px 24px calc(32px + env(safe-area-inset-bottom))',
+            display: 'flex', flexDirection: 'column', gap: 20
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 18, color: 'var(--color-fg-primary)' }}>
+                Não vai dar pra jogar?
+              </p>
+              <button onClick={() => setShowDeclineSheet(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
+                <X size={20} color="var(--color-fg-secondary)" />
+              </button>
+            </div>
+
+            <p style={{ fontFamily: 'var(--font-primary)', fontSize: 14, color: 'var(--color-fg-secondary)', lineHeight: 1.5 }}>
+              Confirme sua ausência ou convide um avulso temporário pra puxar sua vaga.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button
+                onClick={() => { setShowDeclineSheet(false); handleDecline.mutate() }}
+                disabled={isPending}
+                className="w-full transition-all active:scale-95 disabled:opacity-40"
+                style={{
+                  height: 56, borderRadius: 9999,
+                  background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)',
+                  border: 'none', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, cursor: 'pointer'
+                }}>
+                Confirmar
+              </button>
+              {avulsoWindowOpen && (
+                <button
+                  onClick={() => { setShowDeclineSheet(false); setShowAvulsoSheet(true) }}
+                  className="w-full transition-all active:scale-95"
+                  style={{
+                    height: 56, borderRadius: 9999,
+                    background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)',
+                    border: '1px solid var(--btn-secondary-border)',
+                    fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, cursor: 'pointer'
+                  }}>
+                  Convidar Avulso Temporário
+                </button>
+              )}
             </div>
           </div>
         </>
