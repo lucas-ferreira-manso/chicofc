@@ -109,11 +109,19 @@ function getWednesdayAt21h(gameDate: Date): Date {
   return wednesday
 }
 
+// Avulso temporário fica disponível 20min a mais que o resto da lista —
+// é o recurso pra repor alguém em cima da hora, então fecha mais perto do jogo (21h30)
+function getWednesdayAt2120h(gameDate: Date): Date {
+  const wednesday = new Date(gameDate)
+  wednesday.setHours(21, 20, 0, 0)
+  return wednesday
+}
+
 function shouldShowAvulsoButton(gameDate: Date, totalConfirmed: number): boolean {
   const now = new Date()
   return (
     isAfter(now, getTuesdayAt16h(gameDate)) &&
-    !isAfter(now, getWednesdayAt21h(gameDate)) &&
+    !isAfter(now, getWednesdayAt2120h(gameDate)) &&
     totalConfirmed < 14
   )
 }
@@ -122,6 +130,39 @@ async function fetchTempAvulsos(gameId: string): Promise<TempAvulso[]> {
   const q = query(collection(db, 'avulsos_temp'), where('gameId', '==', gameId))
   const snap = await getDocs(q)
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as TempAvulso))
+}
+
+// Avisa todos os admins quando a escalação precisa ser revista (jogador confirmou
+// ou avulso temp entrou depois que os times já foram salvos) — grava no Notification
+// Center (visível mesmo sem push) e dispara push em paralelo
+async function notifyAdminsLineupChanged(message: string) {
+  try {
+    const adminSnap = await getDocs(query(collection(db, 'players'), where('role', '==', 'admin')))
+
+    await Promise.all(adminSnap.docs.map(adminDoc =>
+      addDoc(collection(db, 'notifications'), {
+        user_id: adminDoc.id,
+        title: 'Escalação precisa de revisão',
+        message,
+        type: 'message',
+        read: false,
+        created_at: new Date().toISOString()
+      }).catch(() => {})
+    ))
+
+    const authInstance = getAuth()
+    const currentUser = authInstance.currentUser
+    if (currentUser) {
+      const token = await getIdToken(currentUser)
+      await Promise.all(adminSnap.docs.map(adminDoc =>
+        fetch(`${SERVER_URL}/notify-cobranca`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ userId: adminDoc.id, message })
+        }).catch(() => {})
+      ))
+    }
+  } catch { /* notificação de admin não bloqueia a ação */ }
 }
 
 async function fetchAllPlayers(): Promise<{ id: string; name: string; player_type: string; photoURL?: string }[]> {
@@ -441,38 +482,9 @@ export default function GamesPage() {
 
       // Notifica admins se times já escalados → novo jogador confirmou
       if (hasLineup) {
-        try {
-          const playerType = user!.player_type ?? 'avulso'
-          const playerName = user!.name || user!.email || 'Jogador'
-          const message = `Novo jogador confirmado: ${playerName} (${playerType}). Rever escalação dos times.`
-          const adminSnap = await getDocs(query(collection(db, 'players'), where('role', '==', 'admin')))
-
-          // Escreve no Notification Center — fica visível mesmo sem push habilitado
-          await Promise.all(adminSnap.docs.map(adminDoc =>
-            addDoc(collection(db, 'notifications'), {
-              user_id: adminDoc.id,
-              title: 'Escalação precisa de revisão',
-              message,
-              type: 'message',
-              read: false,
-              created_at: new Date().toISOString()
-            }).catch(() => {})
-          ))
-
-          // Push notification
-          const authInstance = getAuth()
-          const currentUser = authInstance.currentUser
-          if (currentUser) {
-            const token = await getIdToken(currentUser)
-            await Promise.all(adminSnap.docs.map(adminDoc =>
-              fetch(`${SERVER_URL}/notify-cobranca`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ userId: adminDoc.id, message })
-              }).catch(() => {})
-            ))
-          }
-        } catch { /* notificação de admin não bloqueia confirmação */ }
+        const playerType = user!.player_type ?? 'avulso'
+        const playerName = user!.name || user!.email || 'Jogador'
+        await notifyAdminsLineupChanged(`Novo jogador confirmado: ${playerName} (${playerType}). Rever escalação dos times.`)
       }
     },
     onSuccess: () => {
@@ -548,13 +560,19 @@ export default function GamesPage() {
   const addAvulso = useMutation({
     mutationFn: async () => {
       const userName = (user as any)?.name || (user as any)?.email || 'Usuário'
+      const name = avulsoName.trim()
       await addDoc(collection(db, 'avulsos_temp'), {
-        name: avulsoName.trim(),
+        name,
         addedBy: user!.id,
         addedByName: userName,
         gameId,
         createdAt: new Date().toISOString()
       })
+
+      // Times já escalados → avisa admins que precisam incluir o avulso em um time
+      if (hasLineup) {
+        await notifyAdminsLineupChanged(`Novo avulso temporário adicionado: ${name}. Rever escalação dos times.`)
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['temp-avulsos', gameId] })
