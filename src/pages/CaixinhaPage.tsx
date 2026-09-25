@@ -45,7 +45,7 @@ async function compressImageToBase64(file: File, maxWidth = 1200, quality = 0.7)
   })
 }
 
-const PIX_CODE = '42c4fc79-a983-4a02-88fb-81ec76948c0f'
+const PIX_CODE = 'b2dce787-80a2-46df-97be-8dbebc530397'
 // Saldo inicial em caixa antes do app ser criado: R$ 1.082,00
 // Agora persistido em config/caixinha.saldoInicial
 
