@@ -131,7 +131,7 @@ export default function EscalacaoPage() {
   const [avulsoName, setAvulsoName] = useState('')
   const shareCardRef = useRef<HTMLDivElement>(null)
 
-  const { data: players = [] } = useQuery({
+  const { data: players = [], isSuccess: playersLoaded } = useQuery({
     queryKey: ['confirmed', gameId],
     queryFn: () => fetchConfirmed(gameId),
     refetchInterval: 15000
@@ -148,6 +148,13 @@ export default function EscalacaoPage() {
     setLoaded(true)
   }
 
+  // Ignora `temp_<id>` de avulsos temporários que já foram excluídos (sobras no lineup
+  // salvo) — senão contam como escalados e liberam salvar com jogador real de fora
+  const playerIds = new Set(players.map(p => p.id))
+  const isOrphanTemp = (id: string) => playersLoaded && id.startsWith('temp_') && !playerIds.has(id)
+  const validBlueIds = blueIds.filter(id => !isOrphanTemp(id))
+  const validBlackIds = blackIds.filter(id => !isOrphanTemp(id))
+
   const activeIds = activeTeam === 'blue' ? blueIds : blackIds
   const setActiveIds = (ids: string[]) => activeTeam === 'blue' ? setBlueIds(ids) : setBlackIds(ids)
 
@@ -160,7 +167,7 @@ export default function EscalacaoPage() {
     if (activeIds.includes(id)) {
       setActiveIds(activeIds.filter(i => i !== id))
     } else {
-      if (activeIds.length >= MAX_PLAYERS) {
+      if (activeIds.filter(i => !isOrphanTemp(i)).length >= MAX_PLAYERS) {
         toast(`Máximo de ${MAX_PLAYERS} jogadores por time`)
         return
       }
@@ -168,9 +175,9 @@ export default function EscalacaoPage() {
     }
   }
 
-  const unassignedCount = players.length - blueIds.length - blackIds.length
+  const unassignedCount = players.length - validBlueIds.length - validBlackIds.length
   const allAssigned = unassignedCount <= 0
-  const canSave = isAdmin && blueIds.length >= MIN_PLAYERS && blackIds.length >= MIN_PLAYERS && allAssigned
+  const canSave = isAdmin && validBlueIds.length >= MIN_PLAYERS && validBlackIds.length >= MIN_PLAYERS && allAssigned
   const avulsoWindowOpen = shouldShowAvulsoButton(gameDate, players.length)
 
   const addAvulso = useMutation({
@@ -196,8 +203,8 @@ export default function EscalacaoPage() {
   const saveLineup = useMutation({
     mutationFn: async () => {
       await setDoc(doc(db, 'lineups', gameId), {
-        blue: blueIds,
-        black: blackIds,
+        blue: validBlueIds,
+        black: validBlackIds,
         updatedAt: new Date().toISOString()
       })
     },
@@ -285,7 +292,7 @@ export default function EscalacaoPage() {
           <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 20, fontWeight: 700 }}>ChicoFC ⚽</p>
         </div>
         {(['blue', 'black'] as const).map(team => {
-          const ids = team === 'blue' ? blueIds : blackIds
+          const ids = team === 'blue' ? validBlueIds : validBlackIds
           const label = team === 'blue' ? 'Time Azul' : 'Time Preto'
           const img = team === 'blue' ? '/team-blue.png' : '/team-yellow.png'
           return (

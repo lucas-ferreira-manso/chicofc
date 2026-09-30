@@ -110,7 +110,7 @@ function getWednesdayAt21h(gameDate: Date): Date {
 }
 
 // Avulso temporário fica disponível 20min a mais que o resto da lista —
-// é o recurso pra repor alguém em cima da hora, então fecha mais perto do jogo (21h30)
+// é o recurso pra repor alguém em cima da hora, então fecha mais perto do jogo (21h20)
 function getWednesdayAt2120h(gameDate: Date): Date {
   const wednesday = new Date(gameDate)
   wednesday.setHours(21, 20, 0, 0)
@@ -591,14 +591,30 @@ export default function GamesPage() {
 
   const removeAvulso = useMutation({
     mutationFn: async (id: string) => {
+      // Tira do lineup antes de apagar o doc — senão o time fica com um `temp_<id>` órfão
+      const lineupId = `temp_${id}`
+      const inBlue = lineup.blue.includes(lineupId)
+      const inBlack = lineup.black.includes(lineupId)
+      if (inBlue || inBlack) {
+        // lineups só aceita escrita de admin (firestore.rules)
+        if (!isAdmin) throw new Error('avulso-escalado')
+        await updateDoc(doc(db, 'lineups', gameId), {
+          ...(inBlue && { blue: arrayRemove(lineupId) }),
+          ...(inBlack && { black: arrayRemove(lineupId) }),
+        })
+      }
       await deleteDoc(doc(db, 'avulsos_temp', id))
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['temp-avulsos', gameId] })
+      qc.invalidateQueries({ queryKey: ['lineup', gameId] })
+      qc.invalidateQueries({ queryKey: ['confirmed', gameId] })
       setSelectedTempAvulso(null)
       toast.success('Avulso removido.')
     },
-    onError: () => toast.error('Erro ao remover avulso')
+    onError: (err) => toast.error(err instanceof Error && err.message === 'avulso-escalado'
+      ? 'Avulso já está escalado. Peça a um admin para remover.'
+      : 'Erro ao remover avulso')
   })
 
   const adminRemovePlayer = useMutation({

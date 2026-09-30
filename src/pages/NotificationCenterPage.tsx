@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  collection, getDocs, query, where, doc,
+  collection, getDocs, getDoc, query, where, doc,
   updateDoc, addDoc, writeBatch, deleteDoc
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
@@ -111,22 +111,25 @@ export default function NotificationCenterPage() {
   const approveRequest = useMutation({
     mutationFn: async (r: PaymentRequest) => {
       const now = new Date().toISOString()
-      await updateDoc(doc(db, 'payment_requests', r.id), { status: 'approved', approved_at: now })
-
       const month = r.month
       const tipo = r.player_type === 'mensalista' ? 'mensalidade' : 'jogo'
 
       if (tipo === 'jogo') {
         if (r.is_for_temp_avulso && r.temp_avulso_ids?.length) {
+          // Tudo num batch só (aprovação + payment + avulsos) — ou grava tudo ou nada.
+          // Avulsos já excluídos são ignorados: batch.update em doc inexistente derruba o commit.
+          const tempSnaps = await Promise.all(r.temp_avulso_ids.map(id => getDoc(doc(db, 'avulsos_temp', id))))
           const batch = writeBatch(db)
-          r.temp_avulso_ids.forEach(id =>
-            batch.update(doc(db, 'avulsos_temp', id), { paid: true, paid_at: now })
+          tempSnaps.filter(t => t.exists()).forEach(t =>
+            batch.update(t.ref, { paid: true, paid_at: now })
           )
-          await batch.commit()
-          await addDoc(collection(db, 'payments'), {
+          batch.set(doc(collection(db, 'payments')), {
             user_id: r.user_id, amount: r.amount, type: 'jogo',
             month, paid: true, paid_at: now, created_at: now
           })
+          batch.update(doc(db, 'payment_requests', r.id), { status: 'approved', approved_at: now })
+          await batch.commit()
+          return
         } else {
           const q = query(collection(db, 'payments'),
             where('user_id', '==', r.user_id),
@@ -159,6 +162,9 @@ export default function NotificationCenterPage() {
           })
         }
       }
+
+      // Só marca como aprovado depois que o payment foi gravado
+      await updateDoc(doc(db, 'payment_requests', r.id), { status: 'approved', approved_at: now })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payment-requests'] })

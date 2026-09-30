@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { collection, getDocs, doc, updateDoc, addDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore'
+import { collection, getDocs, getDoc, doc, updateDoc, addDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 
 import { saveCaixinhaSummary } from './CaixinhaPage'
@@ -57,21 +57,23 @@ export default function NotificacoesAdminPage() {
   // Função reutilizável para aprovar um ou mais requests
   async function approveRequests(toApprove: PaymentRequest[]) {
       await Promise.all(toApprove.map(async r => {
-        await updateDoc(doc(db, 'payment_requests', r.id), {
-          status: 'approved',
-          approved_at: new Date().toISOString()
-        })
         const month = r.month
         const tipo = r.player_type === 'mensalista' ? 'mensalidade' : 'jogo'
 
         if (tipo === 'jogo') {
-          if (r.is_for_temp_avulso && (r as any).temp_avulso_ids?.length > 0) {
+          if (r.is_for_temp_avulso && r.temp_avulso_ids?.length) {
+            // Tudo num batch só (aprovação + payment + avulsos) — ou grava tudo ou nada.
+            // Avulsos já excluídos são ignorados: batch.update em doc inexistente derruba o commit.
+            const now = new Date().toISOString()
+            const tempSnaps = await Promise.all(r.temp_avulso_ids.map(id => getDoc(doc(db, 'avulsos_temp', id))))
             const batch = writeBatch(db)
-            ;(r as any).temp_avulso_ids.forEach((id: string) =>
-              batch.update(doc(db, 'avulsos_temp', id), { paid: true, paid_at: new Date().toISOString() })
+            tempSnaps.filter(t => t.exists()).forEach(t =>
+              batch.update(t.ref, { paid: true, paid_at: now })
             )
+            batch.set(doc(collection(db, 'payments')), { user_id: r.user_id, amount: r.amount, type: 'jogo', month, paid: true, paid_at: now, created_at: now })
+            batch.update(doc(db, 'payment_requests', r.id), { status: 'approved', approved_at: now })
             await batch.commit()
-            await addDoc(collection(db, 'payments'), { user_id: r.user_id, amount: r.amount, type: 'jogo', month, paid: true, paid_at: new Date().toISOString(), created_at: new Date().toISOString() })
+            return
           } else {
             const q = query(collection(db, 'payments'), where('user_id', '==', r.user_id), where('type', '==', 'jogo'), where('paid', '==', false))
             const existing = await getDocs(q)
@@ -90,6 +92,12 @@ export default function NotificacoesAdminPage() {
             await addDoc(collection(db, 'payments'), { user_id: r.user_id, amount: r.amount, type: 'mensalidade', month, paid: true, paid_at: new Date().toISOString(), created_at: new Date().toISOString() })
           }
         }
+
+        // Só marca como aprovado depois que o payment foi gravado
+        await updateDoc(doc(db, 'payment_requests', r.id), {
+          status: 'approved',
+          approved_at: new Date().toISOString()
+        })
       }))
 
       // Comprovantes ficam no Firestore — não há Storage para limpar
