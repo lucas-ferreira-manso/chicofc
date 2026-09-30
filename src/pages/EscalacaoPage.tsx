@@ -9,6 +9,7 @@ import { useRef } from 'react'
 import { format, isWednesday, nextWednesday, startOfDay, isAfter } from 'date-fns'
 import { toast } from 'sonner'
 import type { Profile } from '../types'
+import { MAX_GAME_PLAYERS, GameFullError, assertGameHasSpot, fetchOccupiedSpots } from '../lib/gameCapacity'
 
 const MIN_PLAYERS = 6
 const MAX_PLAYERS = 8
@@ -181,9 +182,18 @@ export default function EscalacaoPage() {
   const canSave = isAdmin && validBlueIds.length >= MIN_PLAYERS && validBlackIds.length >= MIN_PLAYERS && allAssigned
   const avulsoWindowOpen = isAvulsoWindowOpen(gameDate)
 
+  // Vagas ocupadas contam também a lista de espera (mesma conta da home)
+  const { data: occupiedSpots = 0 } = useQuery({
+    queryKey: ['occupied-spots', gameId],
+    queryFn: () => fetchOccupiedSpots(gameId),
+    refetchInterval: 15000
+  })
+  const isFull = occupiedSpots >= MAX_GAME_PLAYERS
+
   const addAvulso = useMutation({
     mutationFn: async () => {
       const userName = (user as any)?.name || (user as any)?.email || 'Usuário'
+      await assertGameHasSpot(gameId)
       await addDoc(collection(db, 'avulsos_temp'), {
         name: avulsoName.trim(),
         addedBy: user!.id,
@@ -194,11 +204,20 @@ export default function EscalacaoPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['confirmed', gameId] })
+      qc.invalidateQueries({ queryKey: ['occupied-spots', gameId] })
       setAvulsoName('')
       setShowAvulsoSheet(false)
       toast.success('Avulso temporário adicionado! Já dá pra escalar.')
     },
-    onError: () => toast.error('Erro ao adicionar avulso')
+    onError: (err) => {
+      if (err instanceof GameFullError) {
+        qc.invalidateQueries({ queryKey: ['occupied-spots', gameId] })
+        setShowAvulsoSheet(false)
+        toast.error(`${err.message} — não dá mais pra adicionar avulso`)
+      } else {
+        toast.error('Erro ao adicionar avulso')
+      }
+    }
   })
 
   const saveLineup = useMutation({
@@ -388,13 +407,14 @@ export default function EscalacaoPage() {
 
         {isAdmin && avulsoWindowOpen && (
           <button onClick={() => setShowAvulsoSheet(true)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-4 rounded-3xl transition-all active:scale-[0.99]"
+            disabled={isFull}
+            className="w-full flex items-center justify-center gap-2 px-4 py-4 rounded-3xl transition-all active:scale-[0.99] disabled:opacity-40"
             style={{
               background: 'var(--btn-secondary-bg)', color: 'var(--btn-secondary-fg)',
               border: '1.5px dashed var(--btn-secondary-fg)',
               fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500
             }}>
-            + Avulso Temp
+            {isFull ? `Lista cheia (${MAX_GAME_PLAYERS}/${MAX_GAME_PLAYERS})` : '+ Avulso Temp'}
           </button>
         )}
       </div>
@@ -451,7 +471,7 @@ export default function EscalacaoPage() {
             />
             <button
               onClick={() => addAvulso.mutate()}
-              disabled={!avulsoName.trim() || addAvulso.isPending}
+              disabled={!avulsoName.trim() || addAvulso.isPending || isFull}
               className="transition-all active:scale-95 disabled:opacity-40"
               style={{
                 width: '100%', height: 56, borderRadius: 9999,

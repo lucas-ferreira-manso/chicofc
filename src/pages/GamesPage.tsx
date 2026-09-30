@@ -13,8 +13,8 @@ import { useNavigate } from 'react-router-dom'
 import type { Attendance } from '../types'
 import Header from '../components/layout/Header'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll'
+import { MAX_GAME_PLAYERS as MAX_PLAYERS, GameFullError, assertGameHasSpot } from '../lib/gameCapacity'
 
-const MAX_PLAYERS = 16
 const SERVER_URL = 'https://chicofc-server.onrender.com'
 
 function getNextWednesday(): Date {
@@ -372,6 +372,8 @@ export default function GamesPage() {
   const amInWaitlist = myAttendance?.status === 'waitlist'
   const amDeclined = myAttendance?.status === 'declined'
   const avulsoWindowOpen = isAvulsoWindowOpen(gameDate)
+  // Lista completa (16) → ninguém mais confirma nem adiciona avulso temp
+  const canAddAvulso = avulsoWindowOpen && !isFull
   const showAvulsoBtn = amConfirmed && avulsoWindowOpen
 
   const closeTime = getWednesdayAt21h(gameDate)
@@ -421,6 +423,9 @@ export default function GamesPage() {
 
       // Idempotência: se já está confirmado, não faz nada
       if (freshAttendance?.status === 'confirmed') return
+
+      // Quem está na espera já ocupa vaga; qualquer outro precisa de vaga livre
+      if (freshAttendance?.status !== 'waitlist') await assertGameHasSpot(gameId)
 
       if (freshAttendance) {
         // Caso especial: player mudou de tipo (era avulso, agora é mensalista)
@@ -507,7 +512,15 @@ export default function GamesPage() {
         toast.success('Bora jogar! 🙌')
       }
     },
-    onError: () => toast.error('Erro ao confirmar presença')
+    onError: (err) => {
+      if (err instanceof GameFullError) {
+        qc.invalidateQueries({ queryKey: ['attendances', gameId] })
+        qc.invalidateQueries({ queryKey: ['temp-avulsos', gameId] })
+        toast.error(`${err.message} — não dá mais pra confirmar presença`)
+      } else {
+        toast.error('Erro ao confirmar presença')
+      }
+    }
   })
 
   const handleDecline = useMutation({
@@ -588,6 +601,7 @@ export default function GamesPage() {
     mutationFn: async () => {
       const userName = (user as any)?.name || (user as any)?.email || 'Usuário'
       const name = avulsoName.trim()
+      await assertGameHasSpot(gameId)
       await addDoc(collection(db, 'avulsos_temp'), {
         name,
         addedBy: user!.id,
@@ -609,7 +623,16 @@ export default function GamesPage() {
       // Times já escalados → leva direto pra escalação incluir o novo avulso em um time
       if (hasLineup && isAdmin) navigate('/escalacao')
     },
-    onError: () => toast.error('Erro ao adicionar avulso')
+    onError: (err) => {
+      if (err instanceof GameFullError) {
+        qc.invalidateQueries({ queryKey: ['attendances', gameId] })
+        qc.invalidateQueries({ queryKey: ['temp-avulsos', gameId] })
+        setShowAvulsoSheet(false)
+        toast.error(`${err.message} — não dá mais pra adicionar avulso`)
+      } else {
+        toast.error('Erro ao adicionar avulso')
+      }
+    }
   })
 
   const removeAvulso = useMutation({
@@ -1094,9 +1117,10 @@ export default function GamesPage() {
           )}
           {(showAvulsoBtn || showAvulsoBtnLineup) && (
             <button onClick={() => setShowAvulsoSheet(true)}
-              className="flex-1 py-4 font-medium transition-all active:scale-95"
+              disabled={isFull}
+              className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
               style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
-              + Avulso Temp
+              {isFull ? 'Lista cheia' : '+ Avulso Temp'}
             </button>
           )}
         </div>
@@ -1113,7 +1137,7 @@ export default function GamesPage() {
               {hasLineup ? 'Editar Times' : 'Escalar Times'}
             </button>
           )}
-          {amDeclined && avulsoWindowOpen ? (
+          {amDeclined && canAddAvulso ? (
             <button
               onClick={() => setShowAvulsoSheet(true)}
               className="flex-1 py-4 font-medium transition-all active:scale-95"
@@ -1132,10 +1156,10 @@ export default function GamesPage() {
           {!chinelinhoActive && (
             <button
               onClick={() => handleConfirm.mutate()}
-              disabled={isPending}
+              disabled={isPending || isFull}
               className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
               style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-16)', fontWeight: 500 }}>
-              {handleConfirm.isPending ? '...' : 'Confirmar Presença'}
+              {handleConfirm.isPending ? '...' : isFull ? 'Lista cheia' : 'Confirmar Presença'}
             </button>
           )}
         </div>
@@ -1145,7 +1169,7 @@ export default function GamesPage() {
       {!isAdmin && !amConfirmed && !amInWaitlist && !listaClosed && !chinelinhoActive && (
         <div className="fixed inset-x-0 px-6 pt-4 pb-3 flex gap-2"
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', background: 'var(--color-bg)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--color-border)' }}>
-          {amDeclined && avulsoWindowOpen ? (
+          {amDeclined && canAddAvulso ? (
             <button
               onClick={() => setShowAvulsoSheet(true)}
               className="flex-1 py-4 font-medium transition-all active:scale-95"
@@ -1163,10 +1187,10 @@ export default function GamesPage() {
           )}
           <button
             onClick={() => handleConfirm.mutate()}
-            disabled={isPending}
+            disabled={isPending || isFull}
             className="flex-1 py-4 font-medium transition-all active:scale-95 disabled:opacity-40"
             style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500 }}>
-            {handleConfirm.isPending ? '...' : 'Bora Jogar'}
+            {handleConfirm.isPending ? '...' : isFull ? 'Lista cheia' : 'Bora Jogar'}
           </button>
         </div>
       )}
@@ -1177,14 +1201,15 @@ export default function GamesPage() {
           style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))', zIndex: 50 }}>
           <button
             onClick={() => setShowAvulsoSheet(true)}
-            className="w-full transition-all active:scale-95"
+            disabled={isFull}
+            className="w-full transition-all active:scale-95 disabled:opacity-40"
             style={{
               height: 56, borderRadius: 9999,
               background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)',
               fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 'var(--font-size-16)',
-              border: 'none', cursor: 'pointer'
+              border: 'none', cursor: isFull ? 'default' : 'pointer'
             }}>
-            + Avulso Temp
+            {isFull ? 'Lista cheia' : '+ Avulso Temp'}
           </button>
         </div>
       )}
@@ -1340,7 +1365,7 @@ export default function GamesPage() {
                 }}>
                 Confirmar
               </button>
-              {avulsoWindowOpen && (
+              {canAddAvulso && (
                 <button
                   onClick={() => { setShowDeclineSheet(false); setShowAvulsoSheet(true) }}
                   className="w-full transition-all active:scale-95"
@@ -1391,7 +1416,7 @@ export default function GamesPage() {
             />
             <button
               onClick={() => addAvulso.mutate()}
-              disabled={!avulsoName.trim() || addAvulso.isPending}
+              disabled={!avulsoName.trim() || addAvulso.isPending || isFull}
               className="transition-all active:scale-95 disabled:opacity-40"
               style={{
                 width: '100%', height: 56, borderRadius: 9999,
