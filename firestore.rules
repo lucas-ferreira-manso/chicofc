@@ -62,8 +62,19 @@ service cloud.firestore {
 
     // Escalações dos times
     match /lineups/{docId} {
+      // Jogador que desiste pode se retirar do time — só remover o próprio id, nada mais
+      function isSelfRemoval() {
+        let before = resource.data;
+        let after = request.resource.data;
+        return isAuthenticated()
+          && after.diff(before).affectedKeys().hasOnly(['blue', 'black'])
+          && after.blue == before.blue.removeAll([request.auth.uid])
+          && after.black == before.black.removeAll([request.auth.uid]);
+      }
+
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || isSelfRemoval();
     }
 
     // Configurações do app (caixinha, pontuação)

@@ -132,36 +132,42 @@ async function fetchTempAvulsos(gameId: string): Promise<TempAvulso[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as TempAvulso))
 }
 
-// Avisa todos os admins quando a escalação precisa ser revista (jogador confirmou
-// ou avulso temp entrou depois que os times já foram salvos) — grava no Notification
-// Center (visível mesmo sem push) e dispara push em paralelo
-async function notifyAdminsLineupChanged(message: string) {
+// Grava no Notification Center (visível mesmo sem push) e dispara push em paralelo
+async function notifyUsers(userIds: string[], title: string, message: string) {
+  if (userIds.length === 0) return
   try {
-    const adminSnap = await getDocs(query(collection(db, 'players'), where('role', '==', 'admin')))
-
-    await Promise.all(adminSnap.docs.map(adminDoc =>
+    const now = new Date().toISOString()
+    await Promise.all(userIds.map(userId =>
       addDoc(collection(db, 'notifications'), {
-        user_id: adminDoc.id,
-        title: 'Escalação precisa de revisão',
+        user_id: userId,
+        title,
         message,
         type: 'message',
         read: false,
-        created_at: new Date().toISOString()
+        created_at: now
       }).catch(() => {})
     ))
 
-    const authInstance = getAuth()
-    const currentUser = authInstance.currentUser
+    const currentUser = getAuth().currentUser
     if (currentUser) {
       const token = await getIdToken(currentUser)
-      await Promise.all(adminSnap.docs.map(adminDoc =>
+      await Promise.all(userIds.map(userId =>
         fetch(`${SERVER_URL}/notify-cobranca`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ userId: adminDoc.id, message })
+          body: JSON.stringify({ userId, message })
         }).catch(() => {})
       ))
     }
+  } catch { /* notificação não bloqueia a ação */ }
+}
+
+// Avisa todos os admins quando a escalação precisa ser revista (jogador confirmou
+// ou avulso temp entrou depois que os times já foram salvos)
+async function notifyAdminsLineupChanged(message: string) {
+  try {
+    const adminSnap = await getDocs(query(collection(db, 'players'), where('role', '==', 'admin')))
+    await notifyUsers(adminSnap.docs.map(d => d.id), 'Escalação precisa de revisão', message)
   } catch { /* notificação de admin não bloqueia a ação */ }
 }
 
@@ -524,13 +530,14 @@ export default function GamesPage() {
           const next = waitlist[0]
           batch.update(doc(db, 'attendances', next.id), { status: 'confirmed' })
         }
-        // Se estava confirmado e está escalado, remove do time (blue ou black)
-        if (myAttendance.status === 'confirmed' && hasLineup) {
-          const lineupRef = doc(db, 'lineups', gameId)
+        // Se estava confirmado e está escalado, remove do time (blue ou black).
+        // Vale mesmo com escalação parcial — senão o id fica órfão no lineup.
+        // firestore.rules libera o jogador a remover apenas o próprio id.
+        if (myAttendance.status === 'confirmed') {
           const inBlue = lineup.blue.includes(user!.id)
           const inBlack = lineup.black.includes(user!.id)
           if (inBlue || inBlack) {
-            await updateDoc(lineupRef, {
+            await updateDoc(doc(db, 'lineups', gameId), {
               ...(inBlue && { blue: arrayRemove(user!.id) }),
               ...(inBlack && { black: arrayRemove(user!.id) }),
             })
@@ -552,6 +559,21 @@ export default function GamesPage() {
         })
       }
       await batch.commit()
+
+      // Desistência de quem estava confirmado → avisa todos os confirmados
+      // (incluindo quem foi promovido da espera no lugar dele)
+      if (myAttendance?.status === 'confirmed') {
+        const recipients = confirmed
+          .map(a => a.user_id)
+          .filter(id => id !== user!.id)
+        if (waitlist.length > 0) recipients.push(waitlist[0].user_id)
+        const playerName = (user!.name || user!.email || 'Jogador').toUpperCase()
+        await notifyUsers(
+          recipients,
+          'Desistência',
+          `ATENÇÃO - O ${playerName} DESISTIU. MERECE MULTA? Se sim, envie no nosso whatsapp seu sim!`
+        )
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attendances', gameId] })
