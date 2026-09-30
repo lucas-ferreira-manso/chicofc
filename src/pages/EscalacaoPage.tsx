@@ -36,12 +36,13 @@ function getWednesdayAt2120h(gameDate: Date): Date {
   return wednesday
 }
 
-function shouldShowAvulsoButton(gameDate: Date, totalConfirmed: number): boolean {
+// Janela do "+ Avulso Temp": terça 16h → quarta 21h20. Sem teto de confirmados —
+// o CTA fica disponível para todo confirmado (e para o admin) durante a janela.
+function isAvulsoWindowOpen(gameDate: Date): boolean {
   const now = new Date()
   return (
     isAfter(now, getTuesdayAt16h(gameDate)) &&
-    !isAfter(now, getWednesdayAt2120h(gameDate)) &&
-    totalConfirmed < 14
+    !isAfter(now, getWednesdayAt2120h(gameDate))
   )
 }
 
@@ -178,7 +179,7 @@ export default function EscalacaoPage() {
   const unassignedCount = players.length - validBlueIds.length - validBlackIds.length
   const allAssigned = unassignedCount <= 0
   const canSave = isAdmin && validBlueIds.length >= MIN_PLAYERS && validBlackIds.length >= MIN_PLAYERS && allAssigned
-  const avulsoWindowOpen = shouldShowAvulsoButton(gameDate, players.length)
+  const avulsoWindowOpen = isAvulsoWindowOpen(gameDate)
 
   const addAvulso = useMutation({
     mutationFn: async () => {
@@ -393,7 +394,7 @@ export default function EscalacaoPage() {
               border: '1.5px dashed var(--btn-secondary-fg)',
               fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 500
             }}>
-            + Adicionar Avulso Temporário
+            + Avulso Temp
           </button>
         )}
       </div>

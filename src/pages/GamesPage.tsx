@@ -117,12 +117,13 @@ function getWednesdayAt2120h(gameDate: Date): Date {
   return wednesday
 }
 
-function shouldShowAvulsoButton(gameDate: Date, totalConfirmed: number): boolean {
+// Janela do "+ Avulso Temp": terça 16h → quarta 21h20. Sem teto de confirmados —
+// o CTA fica disponível para todo confirmado (e para o admin) durante a janela.
+function isAvulsoWindowOpen(gameDate: Date): boolean {
   const now = new Date()
   return (
     isAfter(now, getTuesdayAt16h(gameDate)) &&
-    !isAfter(now, getWednesdayAt2120h(gameDate)) &&
-    totalConfirmed < 14
+    !isAfter(now, getWednesdayAt2120h(gameDate))
   )
 }
 
@@ -370,7 +371,7 @@ export default function GamesPage() {
   const amConfirmed = myAttendance?.status === 'confirmed'
   const amInWaitlist = myAttendance?.status === 'waitlist'
   const amDeclined = myAttendance?.status === 'declined'
-  const avulsoWindowOpen = shouldShowAvulsoButton(gameDate, totalConfirmed)
+  const avulsoWindowOpen = isAvulsoWindowOpen(gameDate)
   const showAvulsoBtn = amConfirmed && avulsoWindowOpen
 
   const closeTime = getWednesdayAt21h(gameDate)
@@ -1094,8 +1095,8 @@ export default function GamesPage() {
           {(showAvulsoBtn || showAvulsoBtnLineup) && (
             <button onClick={() => setShowAvulsoSheet(true)}
               className="flex-1 py-4 font-medium transition-all active:scale-95"
-              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
-              + Avulso Temp.
+              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
+              + Avulso Temp
             </button>
           )}
         </div>
@@ -1183,7 +1184,7 @@ export default function GamesPage() {
               fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 'var(--font-size-16)',
               border: 'none', cursor: 'pointer'
             }}>
-            Adicionar Avulso Temporário
+            + Avulso Temp
           </button>
         </div>
       )}
