@@ -110,19 +110,20 @@ function getWednesdayAt21h(gameDate: Date): Date {
 }
 
 // Avulso temporário fica disponível 20min a mais que o resto da lista —
-// é o recurso pra repor alguém em cima da hora, então fecha mais perto do jogo (21h30)
+// é o recurso pra repor alguém em cima da hora, então fecha mais perto do jogo (21h20)
 function getWednesdayAt2120h(gameDate: Date): Date {
   const wednesday = new Date(gameDate)
   wednesday.setHours(21, 20, 0, 0)
   return wednesday
 }
 
-function shouldShowAvulsoButton(gameDate: Date, totalConfirmed: number): boolean {
+// Janela do "+ Avulso Temp": terça 16h → quarta 21h20. Sem teto de confirmados —
+// o CTA fica disponível para todo confirmado (e para o admin) durante a janela.
+function isAvulsoWindowOpen(gameDate: Date): boolean {
   const now = new Date()
   return (
     isAfter(now, getTuesdayAt16h(gameDate)) &&
-    !isAfter(now, getWednesdayAt2120h(gameDate)) &&
-    totalConfirmed < 14
+    !isAfter(now, getWednesdayAt2120h(gameDate))
   )
 }
 
@@ -132,36 +133,42 @@ async function fetchTempAvulsos(gameId: string): Promise<TempAvulso[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as TempAvulso))
 }
 
-// Avisa todos os admins quando a escalação precisa ser revista (jogador confirmou
-// ou avulso temp entrou depois que os times já foram salvos) — grava no Notification
-// Center (visível mesmo sem push) e dispara push em paralelo
-async function notifyAdminsLineupChanged(message: string) {
+// Grava no Notification Center (visível mesmo sem push) e dispara push em paralelo
+async function notifyUsers(userIds: string[], title: string, message: string) {
+  if (userIds.length === 0) return
   try {
-    const adminSnap = await getDocs(query(collection(db, 'players'), where('role', '==', 'admin')))
-
-    await Promise.all(adminSnap.docs.map(adminDoc =>
+    const now = new Date().toISOString()
+    await Promise.all(userIds.map(userId =>
       addDoc(collection(db, 'notifications'), {
-        user_id: adminDoc.id,
-        title: 'Escalação precisa de revisão',
+        user_id: userId,
+        title,
         message,
         type: 'message',
         read: false,
-        created_at: new Date().toISOString()
+        created_at: now
       }).catch(() => {})
     ))
 
-    const authInstance = getAuth()
-    const currentUser = authInstance.currentUser
+    const currentUser = getAuth().currentUser
     if (currentUser) {
       const token = await getIdToken(currentUser)
-      await Promise.all(adminSnap.docs.map(adminDoc =>
+      await Promise.all(userIds.map(userId =>
         fetch(`${SERVER_URL}/notify-cobranca`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ userId: adminDoc.id, message })
+          body: JSON.stringify({ userId, message })
         }).catch(() => {})
       ))
     }
+  } catch { /* notificação não bloqueia a ação */ }
+}
+
+// Avisa todos os admins quando a escalação precisa ser revista (jogador confirmou
+// ou avulso temp entrou depois que os times já foram salvos)
+async function notifyAdminsLineupChanged(message: string) {
+  try {
+    const adminSnap = await getDocs(query(collection(db, 'players'), where('role', '==', 'admin')))
+    await notifyUsers(adminSnap.docs.map(d => d.id), 'Escalação precisa de revisão', message)
   } catch { /* notificação de admin não bloqueia a ação */ }
 }
 
@@ -364,7 +371,7 @@ export default function GamesPage() {
   const amConfirmed = myAttendance?.status === 'confirmed'
   const amInWaitlist = myAttendance?.status === 'waitlist'
   const amDeclined = myAttendance?.status === 'declined'
-  const avulsoWindowOpen = shouldShowAvulsoButton(gameDate, totalConfirmed)
+  const avulsoWindowOpen = isAvulsoWindowOpen(gameDate)
   const showAvulsoBtn = amConfirmed && avulsoWindowOpen
 
   const closeTime = getWednesdayAt21h(gameDate)
@@ -524,13 +531,14 @@ export default function GamesPage() {
           const next = waitlist[0]
           batch.update(doc(db, 'attendances', next.id), { status: 'confirmed' })
         }
-        // Se estava confirmado e está escalado, remove do time (blue ou black)
-        if (myAttendance.status === 'confirmed' && hasLineup) {
-          const lineupRef = doc(db, 'lineups', gameId)
+        // Se estava confirmado e está escalado, remove do time (blue ou black).
+        // Vale mesmo com escalação parcial — senão o id fica órfão no lineup.
+        // firestore.rules libera o jogador a remover apenas o próprio id.
+        if (myAttendance.status === 'confirmed') {
           const inBlue = lineup.blue.includes(user!.id)
           const inBlack = lineup.black.includes(user!.id)
           if (inBlue || inBlack) {
-            await updateDoc(lineupRef, {
+            await updateDoc(doc(db, 'lineups', gameId), {
               ...(inBlue && { blue: arrayRemove(user!.id) }),
               ...(inBlack && { black: arrayRemove(user!.id) }),
             })
@@ -552,6 +560,21 @@ export default function GamesPage() {
         })
       }
       await batch.commit()
+
+      // Desistência de quem estava confirmado → avisa todos os confirmados
+      // (incluindo quem foi promovido da espera no lugar dele)
+      if (myAttendance?.status === 'confirmed') {
+        const recipients = confirmed
+          .map(a => a.user_id)
+          .filter(id => id !== user!.id)
+        if (waitlist.length > 0) recipients.push(waitlist[0].user_id)
+        const playerName = (user!.name || user!.email || 'Jogador').toUpperCase()
+        await notifyUsers(
+          recipients,
+          'Desistência',
+          `ATENÇÃO - O ${playerName} DESISTIU. MERECE MULTA? Se sim, envie no nosso whatsapp seu sim!`
+        )
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attendances', gameId] })
@@ -591,14 +614,30 @@ export default function GamesPage() {
 
   const removeAvulso = useMutation({
     mutationFn: async (id: string) => {
+      // Tira do lineup antes de apagar o doc — senão o time fica com um `temp_<id>` órfão
+      const lineupId = `temp_${id}`
+      const inBlue = lineup.blue.includes(lineupId)
+      const inBlack = lineup.black.includes(lineupId)
+      if (inBlue || inBlack) {
+        // lineups só aceita escrita de admin (firestore.rules)
+        if (!isAdmin) throw new Error('avulso-escalado')
+        await updateDoc(doc(db, 'lineups', gameId), {
+          ...(inBlue && { blue: arrayRemove(lineupId) }),
+          ...(inBlack && { black: arrayRemove(lineupId) }),
+        })
+      }
       await deleteDoc(doc(db, 'avulsos_temp', id))
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['temp-avulsos', gameId] })
+      qc.invalidateQueries({ queryKey: ['lineup', gameId] })
+      qc.invalidateQueries({ queryKey: ['confirmed', gameId] })
       setSelectedTempAvulso(null)
       toast.success('Avulso removido.')
     },
-    onError: () => toast.error('Erro ao remover avulso')
+    onError: (err) => toast.error(err instanceof Error && err.message === 'avulso-escalado'
+      ? 'Avulso já está escalado. Peça a um admin para remover.'
+      : 'Erro ao remover avulso')
   })
 
   const adminRemovePlayer = useMutation({
@@ -1056,8 +1095,8 @@ export default function GamesPage() {
           {(showAvulsoBtn || showAvulsoBtnLineup) && (
             <button onClick={() => setShowAvulsoSheet(true)}
               className="flex-1 py-4 font-medium transition-all active:scale-95"
-              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: showEscalarBtn ? 'var(--font-size-12)' : 'var(--font-size-14)', fontWeight: 500 }}>
-              + Avulso Temp.
+              style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', borderRadius: 'var(--radius-pill)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-14)', fontWeight: 500 }}>
+              + Avulso Temp
             </button>
           )}
         </div>
@@ -1145,7 +1184,7 @@ export default function GamesPage() {
               fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 'var(--font-size-16)',
               border: 'none', cursor: 'pointer'
             }}>
-            Adicionar Avulso Temporário
+            + Avulso Temp
           </button>
         </div>
       )}
