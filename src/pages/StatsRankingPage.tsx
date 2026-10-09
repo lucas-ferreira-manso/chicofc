@@ -5,6 +5,7 @@ import { CaretLeft, CaretRight, Info, SoccerBall, X } from '@phosphor-icons/reac
 import { useAuthStore } from '../store/authStore'
 import { fetchFullRanking, type RankingEntry } from '../lib/playerStats'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll'
+import PlayerStatsGrid from '../components/stats/PlayerStatsGrid'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -99,16 +100,6 @@ function RankingRow({ entry, position, isMe, onClick }: { entry: RankingEntry; p
 
 function DetailSheet({ entry, position, onClose }: { entry: RankingEntry; position: number; onClose: () => void }) {
   const initials = getInitials(entry.name)
-  const stats = [
-    { label: 'Vitórias', value: entry.wins },
-    { label: 'Empates', value: entry.draws },
-    { label: 'Derrotas', value: entry.losses },
-    { label: 'Presenças', value: entry.presences },
-    { label: 'Bola Cheia', value: entry.bolaCheiaWins },
-    { label: 'Bola Murcha', value: entry.bolaMurchaWins },
-    { label: 'Prêmio Lúcio', value: entry.melhorDefensorWins },
-    { label: 'Rodrigo Caio', value: entry.piorDefensorWins },
-  ]
 
   return (
     <>
@@ -151,15 +142,7 @@ function DetailSheet({ entry, position, onClose }: { entry: RankingEntry; positi
           </button>
         </div>
 
-        {/* Grid de stats 3×2 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-          {stats.map(s => (
-            <div key={s.label} style={{ background: 'var(--color-surface-primary)', borderRadius: 16, padding: '16px', display: 'flex', flexDirection: 'column', gap: 4, height: 76 }}>
-              <p style={{ fontFamily: 'var(--font-primary)', fontSize: 11, color: 'var(--color-fg-secondary)', lineHeight: 1 }}>{s.label}</p>
-              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 24, color: 'var(--color-fg-primary)', lineHeight: 1 }}>{s.value}</p>
-            </div>
-          ))}
-        </div>
+        <PlayerStatsGrid entry={entry} />
 
         {/* Botão ver perfil */}
         <button onClick={onClose} className="transition-all active:scale-95" style={{ width: '100%', height: 56, borderRadius: 9999, background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, border: 'none', cursor: 'pointer' }}>

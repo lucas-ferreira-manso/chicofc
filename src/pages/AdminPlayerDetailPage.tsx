@@ -169,6 +169,7 @@ export default function AdminPlayerDetailPage() {
         message,
         type: 'message',
         read: false,
+        sender_id: auth.currentUser?.uid,
         created_at: new Date().toISOString()
       })
 

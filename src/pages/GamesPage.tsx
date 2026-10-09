@@ -138,6 +138,7 @@ async function notifyUsers(userIds: string[], title: string, message: string) {
   if (userIds.length === 0) return
   try {
     const now = new Date().toISOString()
+    const senderId = getAuth().currentUser?.uid
     await Promise.all(userIds.map(userId =>
       addDoc(collection(db, 'notifications'), {
         user_id: userId,
@@ -145,6 +146,7 @@ async function notifyUsers(userIds: string[], title: string, message: string) {
         message,
         type: 'message',
         read: false,
+        sender_id: senderId,
         created_at: now
       }).catch(() => {})
     ))
@@ -165,11 +167,15 @@ async function notifyUsers(userIds: string[], title: string, message: string) {
 
 // Avisa todos os admins quando a escalação precisa ser revista (jogador confirmou
 // ou avulso temp entrou depois que os times já foram salvos)
-async function notifyAdminsLineupChanged(message: string) {
+async function notifyAdmins(title: string, message: string) {
   try {
     const adminSnap = await getDocs(query(collection(db, 'players'), where('role', '==', 'admin')))
-    await notifyUsers(adminSnap.docs.map(d => d.id), 'Escalação precisa de revisão', message)
+    await notifyUsers(adminSnap.docs.map(d => d.id), title, message)
   } catch { /* notificação de admin não bloqueia a ação */ }
+}
+
+async function notifyAdminsLineupChanged(message: string) {
+  await notifyAdmins('Escalação precisa de revisão', message)
 }
 
 async function fetchAllPlayers(): Promise<{ id: string; name: string; player_type: string; photoURL?: string }[]> {
@@ -445,8 +451,10 @@ export default function GamesPage() {
             confirmed_at: new Date().toISOString()
           })
         } else {
-          // Movendo da espera / declined para confirmado
-          batch.update(doc(db, 'attendances', freshAttendance.id), { status: 'confirmed' })
+          // Movendo da espera / declined para confirmado. Avulso antes de terça 13h volta
+          // para a espera — firestore.rules recusa avulso se confirmando dentro da prioridade
+          const nextStatus = playerType === 'avulso' && priorityOpen ? 'waitlist' : 'confirmed'
+          batch.update(doc(db, 'attendances', freshAttendance.id), { status: nextStatus })
           if (playerType === 'avulso' && freshAttendance.status === 'waitlist' && !priorityOpen) {
             shouldNotifyAvulso = true
           }
@@ -454,13 +462,16 @@ export default function GamesPage() {
       } else {
         // Sem attendance prévia — cria nova
         const status: 'confirmed' | 'waitlist' = (isFull || playerType === 'avulso') ? 'waitlist' : 'confirmed'
-        batch.set(doc(collection(db, 'attendances')), {
+        const attRef = doc(collection(db, 'attendances'))
+        batch.set(attRef, {
           game_id: gameId, user_id: user!.id, player_type: playerType,
           status, confirmed_at: new Date().toISOString()
         })
         if (playerType === 'avulso') {
+          // attendance_id: firestore.rules só deixa o jogador apagar este pagamento
+          // no mesmo batch em que a attendance vira 'declined'
           batch.set(doc(collection(db, 'payments')), {
-            user_id: user!.id, amount: 22, type: 'jogo',
+            user_id: user!.id, amount: 22, type: 'jogo', attendance_id: attRef.id,
             game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString()
           })
         }
@@ -477,6 +488,7 @@ export default function GamesPage() {
             message: 'Você confirmou presença! Não esqueça de pagar o jogo na Caixinha.',
             type: 'message',
             read: false,
+            sender_id: user!.id,
             created_at: new Date().toISOString()
           })
           // Push notification
@@ -525,7 +537,8 @@ export default function GamesPage() {
 
   const handleDecline = useMutation({
     mutationFn: async () => {
-      // Busca pagamento não pago do avulso para deletar ao sair
+      // Pendência do avulso fica para um admin cancelar — só admin cancela pagamento
+      // (firestore.rules). Aqui só descobre se existe, para avisar os admins.
       let unpaidPaymentId: string | null = null
       if (myAttendance && user?.player_type === 'avulso') {
         const paySnap = await getDocs(query(
@@ -540,9 +553,11 @@ export default function GamesPage() {
       const batch = writeBatch(db)
       if (myAttendance) {
         // Promove próximo da fila se o que saiu estava confirmado + reseta escalação
+        // promoted_by = attendance de quem saiu: firestore.rules só libera promover outra
+        // pessoa no mesmo batch em que a própria attendance vai de confirmed → declined
         if (myAttendance.status === 'confirmed' && waitlist.length > 0) {
           const next = waitlist[0]
-          batch.update(doc(db, 'attendances', next.id), { status: 'confirmed' })
+          batch.update(doc(db, 'attendances', next.id), { status: 'confirmed', promoted_by: myAttendance.id })
         }
         // Se estava confirmado e está escalado, remove do time (blue ou black).
         // Vale mesmo com escalação parcial — senão o id fica órfão no lineup.
@@ -558,10 +573,6 @@ export default function GamesPage() {
           }
         }
         batch.update(doc(db, 'attendances', myAttendance.id), { status: 'declined' })
-        // Remove pagamento pendente ao sair da pelada
-        if (unpaidPaymentId) {
-          batch.delete(doc(db, 'payments', unpaidPaymentId))
-        }
       } else {
         const attRef = doc(collection(db, 'attendances'))
         batch.set(attRef, {
@@ -573,6 +584,11 @@ export default function GamesPage() {
         })
       }
       await batch.commit()
+
+      if (unpaidPaymentId) {
+        const playerName = user!.name || user!.email || 'Jogador'
+        await notifyAdmins('Pagamento pendente para revisar', `${playerName} desistiu do jogo de ${gameDateStr} com pagamento de R$22 em aberto. Cancele na Caixinha se for o caso.`)
+      }
 
       // Desistência de quem estava confirmado → avisa todos os confirmados
       // (incluindo quem foi promovido da espera no lugar dele)
@@ -727,7 +743,7 @@ export default function GamesPage() {
         const batch = writeBatch(db)
         toCreate.forEach(a => {
           batch.set(doc(collection(db, 'payments')), {
-            user_id: a.user_id, amount: 22, type: 'jogo',
+            user_id: a.user_id, amount: 22, type: 'jogo', attendance_id: a.id,
             game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString()
           })
         })
@@ -738,14 +754,15 @@ export default function GamesPage() {
   }, [attendances.length])
 
   // Correção: se a janela de prioridade está aberta, avulsos não devem estar como 'confirmed'
+  // Só admin: mexe na attendance de outros jogadores (firestore.rules)
   useEffect(() => {
-    if (!priorityOpen || confirmedAvulsos.length === 0 || attendances.length === 0) return
+    if (!isAdmin || !priorityOpen || confirmedAvulsos.length === 0 || attendances.length === 0) return
     const batch = writeBatch(db)
     confirmedAvulsos.forEach(a => {
       batch.update(doc(db, 'attendances', a.id), { status: 'waitlist' })
     })
     batch.commit().then(() => qc.invalidateQueries({ queryKey: ['attendances', gameId] }))
-  }, [priorityOpen, confirmedAvulsos.length, attendances.length])
+  }, [isAdmin, priorityOpen, confirmedAvulsos.length, attendances.length])
 
   // Promoção automática: após terça 13h, avulsos em espera são confirmados (admin dispara)
   const autoPromoteRef = useRef(false)
@@ -770,7 +787,7 @@ export default function GamesPage() {
           batch.update(doc(db, 'attendances', a.id), { status: 'confirmed' })
           if (a.player_type === 'avulso' && !existingPayers.has(a.user_id)) {
             batch.set(doc(collection(db, 'payments')), {
-              user_id: a.user_id, amount: 22, type: 'jogo',
+              user_id: a.user_id, amount: 22, type: 'jogo', attendance_id: a.id,
               game_id: gameId, month: gameId, paid: false,
               created_at: new Date().toISOString()
             })
