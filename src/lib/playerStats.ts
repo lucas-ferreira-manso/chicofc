@@ -264,6 +264,28 @@ export async function fetchVotingRanking(): Promise<PlayerVotingStats[]> {
   return stats.sort((a, b) => b.bolaCheiaWins - a.bolaCheiaWins)
 }
 
+// Quem vota e pode ser votado = quem foi escalado (time azul ou preto), independente
+// do status da attendance — escalado jogou, mesmo que a presença tenha ficado 'declined'.
+// Avulsos temporários (ids "temp_…") não têm conta e ficam de fora.
+// Sem escalação salva, cai para os confirmados para a votação não ficar vazia.
+export async function fetchEligiblePlayers(gameId: string): Promise<PlayerInfo[]> {
+  const lineupSnap = await getDoc(doc(db, 'lineups', gameId))
+  const lineup = lineupSnap.exists() ? lineupSnap.data() as { blue?: string[]; black?: string[] } : {}
+  let userIds = [...new Set([...(lineup.blue ?? []), ...(lineup.black ?? [])])].filter(id => !id.startsWith('temp_'))
+  if (userIds.length === 0) {
+    const q = query(collection(db, 'attendances'), where('game_id', '==', gameId), where('status', '==', 'confirmed'))
+    const snap = await getDocs(q)
+    userIds = [...new Set(snap.docs.map(d => d.data().user_id as string))]
+  }
+  const profiles = await Promise.all(userIds.map(async id => {
+    const pSnap = await getDoc(doc(db, 'players', id))
+    if (!pSnap.exists()) return null
+    const data = pSnap.data()
+    return { id, name: data.name || data.email || 'Jogador', photoURL: data.photoURL } as PlayerInfo
+  }))
+  return profiles.filter(Boolean) as PlayerInfo[]
+}
+
 // ─── Ranking Completo ─────────────────────────────────────────────────────────
 
 export interface HistoryEntry {

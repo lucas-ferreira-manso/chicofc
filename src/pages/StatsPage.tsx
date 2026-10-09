@@ -11,6 +11,7 @@ import Header from '../components/layout/Header'
 import { fetchFullRanking, type RankingEntry } from '../lib/playerStats'
 import { getLastWednesdayId, computeWinner } from '../components/stats/VotacaoComponents'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll'
+import PlayerStatsGrid from '../components/stats/PlayerStatsGrid'
 import type { HistoryEntry, PlayerInfo } from '../lib/playerStats'
 
 // ─── Data ──────────────────────────────────────────────────────────────────────
@@ -101,14 +102,6 @@ function RankingPreviewRow({ entry, position, onClick }: { entry: RankingEntry; 
 
 function HomeDetailSheet({ entry, position, onClose }: { entry: RankingEntry; position: number; onClose: () => void }) {
   const initials = getInitials(entry.name)
-  const stats = [
-    { label: 'Vitórias', value: entry.wins },
-    { label: 'Empates', value: entry.draws },
-    { label: 'Derrotas', value: entry.losses },
-    { label: 'Presenças', value: entry.presences },
-    { label: 'Bola Cheia', value: entry.bolaCheiaWins },
-    { label: 'Bola Murcha', value: entry.bolaMurchaWins },
-  ]
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 60 }} />
@@ -141,14 +134,7 @@ function HomeDetailSheet({ entry, position, onClose }: { entry: RankingEntry; po
             <X size={20} color="var(--color-fg-secondary)" />
           </button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-          {stats.map(s => (
-            <div key={s.label} style={{ background: 'var(--color-surface-primary)', borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', gap: 4, height: 76 }}>
-              <p style={{ fontFamily: 'var(--font-primary)', fontSize: 11, color: 'var(--color-fg-secondary)', lineHeight: 1 }}>{s.label}</p>
-              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 24, color: 'var(--color-fg-primary)', lineHeight: 1 }}>{s.value}</p>
-            </div>
-          ))}
-        </div>
+        <PlayerStatsGrid entry={entry} />
         <button onClick={onClose} className="transition-all active:scale-95" style={{ width: '100%', height: 56, borderRadius: 9999, background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, border: 'none', cursor: 'pointer' }}>
           Fechar
         </button>

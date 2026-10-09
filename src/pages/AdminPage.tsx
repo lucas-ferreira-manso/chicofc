@@ -180,7 +180,7 @@ export default function AdminPage() {
         await Promise.all(toNotify.map(d =>
           addDoc(collection(db, 'notifications'), {
             user_id: d.id, title: 'Confirmação de Presença',
-            message: msg, type: 'message', read: false, created_at: now
+            message: msg, type: 'message', read: false, sender_id: user!.id, created_at: now
           })
         ))
 
@@ -245,7 +245,7 @@ export default function AdminPage() {
             : 'Você ainda tem pagamento de jogo pendente. Por favor, efetue o pagamento!')
           return addDoc(collection(db, 'notifications'), {
             user_id: p.id, title: 'Cobrança de Pagamento',
-            message: msg, type: 'message', read: false, created_at: now
+            message: msg, type: 'message', read: false, sender_id: user!.id, created_at: now
           })
         }))
 
