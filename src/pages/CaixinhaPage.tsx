@@ -129,6 +129,18 @@ async function fetchMyPaymentRequest(userId: string, playerType?: string) {
   return { id: ownRequest.id, ...ownRequest.data() }
 }
 
+async function fetchMyMensalidadePaidThisMonth(userId: string): Promise<boolean> {
+  const currentMonth = format(new Date(), 'yyyy-MM')
+  const q = query(
+    collection(db, 'payments'),
+    where('user_id', '==', userId),
+    where('type', '==', 'mensalidade'),
+    where('paid', '==', true)
+  )
+  const snap = await getDocs(q)
+  return snap.docs.some(d => (d.data().month as string)?.startsWith(currentMonth))
+}
+
 async function fetchMyUnpaidJogoPayments(userId: string): Promise<any[]> {
   const q = query(
     collection(db, 'payments'),
@@ -440,6 +452,14 @@ export default function CaixinhaPage() {
     queryFn: () => fetchMyUnpaidJogoPayments(user!.id),
     enabled: !!user?.id && user?.player_type === 'avulso',
     refetchInterval: 8000
+  })
+
+  const { data: mensalidadePaidThisMonth = false } = useQuery({
+    queryKey: ['my-mensalidade-paid', user?.id],
+    queryFn: () => fetchMyMensalidadePaidThisMonth(user!.id),
+    enabled: !!user?.id && user?.player_type === 'mensalista',
+    refetchInterval: 15000,
+    staleTime: 60_000,
   })
 
   const currentGameId = getGameId(getNextWednesday())
@@ -991,7 +1011,10 @@ export default function CaixinhaPage() {
   const myAmount = isAvulso ? avulsoValue : mensalistaValue
   // Para avulsos, fetchMyPaymentRequest só retorna pendentes do próprio jogo (não temp avulso)
   const hasRequested = !!myRequest && (myRequest as any).status === 'pending'
-  const isApproved = !isAvulso && !!myRequest && (myRequest as any).status === 'approved'
+  const isApproved = !isAvulso && (
+    (!!myRequest && (myRequest as any).status === 'approved') ||
+    mensalidadePaidThisMonth
+  )
   // Avulsos veem botões de pagamento se têm jogo pendente OU estão na lista de espera/confirmados
   const avulsoInGame = !!myCurrentGameAttendance && ['confirmed', 'waitlist'].includes(myCurrentGameAttendance.status)
   const avulsoNeedsPay = isAvulso && (myUnpaidJogoPayments.length > 0 || avulsoInGame)
