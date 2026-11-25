@@ -83,11 +83,11 @@ interface CaixinhaConfig {
 
 async function fetchConfig(): Promise<CaixinhaConfig> {
   const snap = await getDoc(doc(db, 'config', 'caixinha'))
-  if (!snap.exists()) return { quadraCost: 760, extrasCost: 320, mensalistaValue: 80, avulsoValue: 22, saldoInicial: 1082, goleiroCost: 90, autoGoleiro_since: null, autoCdi_since: null, setupConcluido: false }
+  if (!snap.exists()) return { quadraCost: 760, extrasCost: 0, mensalistaValue: 80, avulsoValue: 22, saldoInicial: 1082, goleiroCost: 90, autoGoleiro_since: null, autoCdi_since: null, setupConcluido: false }
   const d = snap.data()
   return {
     quadraCost: d.quadraCost ?? 760,
-    extrasCost: d.extrasCost ?? 320,
+    extrasCost: d.extrasCost ?? 0,
     mensalistaValue: d.mensalistaValue ?? 80,
     avulsoValue: d.avulsoValue ?? 22,
     saldoInicial: (typeof d.saldoInicial === 'number' && !isNaN(d.saldoInicial)) ? d.saldoInicial : 1082,
@@ -270,12 +270,15 @@ export async function autoDebitarDespesaMensal(quadraCost: number, extrasCost: n
   )
   const snap = await getDocs(q)
   if (!snap.empty) return
-  const total = quadraCost + extrasCost
+  const total = quadraCost + (extrasCost > 0 ? extrasCost : 0)
+  const description = extrasCost > 0
+    ? `Despesas ${month} (Quadra R$${quadraCost} + Extras R$${extrasCost})`
+    : `Despesas ${month} (Quadra R$${quadraCost})`
   await addDoc(collection(db, 'payments'), {
     type: 'despesa',
     amount: total,
     month,
-    description: `Despesas ${month} (Quadra R$${quadraCost} + Extras R$${extrasCost})`,
+    description,
     paid: true,
     created_at: today.toISOString(),
     auto: true
