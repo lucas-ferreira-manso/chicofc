@@ -49,6 +49,8 @@ const PIX_CODE = 'b2dce787-80a2-46df-97be-8dbebc530397'
 // Saldo inicial em caixa antes do app ser criado: R$ 1.082,00
 // Agora persistido em config/caixinha.saldoInicial
 
+const safe = (n: unknown): number => (typeof n === 'number' && isFinite(n) ? n : 0)
+
 async function fetchPlayers(): Promise<Profile[]> {
   const snap = await getDocs(collection(db, 'players'))
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as Profile)).filter(p => p.active)
@@ -185,7 +187,7 @@ export async function saveCaixinhaSummary() {
   const extrasCost: number = cfg.extrasCost ?? 320
   const avulsoValue: number = cfg.avulsoValue ?? 22
   const mensalistaValue: number = cfg.mensalistaValue ?? 80
-  const saldoInicial: number = cfg.saldoInicial ?? 1082
+  const saldoInicial: number = safe(cfg.saldoInicial) || 1082
 
   const payments = paymentsSnap.docs.map(d => d.data())
   const requests = requestsSnap.docs.map(d => d.data())
@@ -203,11 +205,11 @@ export async function saveCaixinhaSummary() {
   const mensalidadePayments = payments.filter(p => p.type === 'mensalidade')
 
   // Saldo = inicial + recebido + rendas − despesas
-  const totalDespesas = despesaPayments.reduce((s, p) => s + (p.amount ?? 0), 0)
+  const totalDespesas = despesaPayments.reduce((s, p) => s + safe(p.amount), 0)
   const rendaPaymentsSummary = payments.filter(p => p.type === 'renda')
-  const totalRendas = rendaPaymentsSummary.reduce((s, p) => s + (p.amount ?? 0), 0)
-  const avulsoPaid = jogoPayments.filter(p => p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
-  const mensalistaPaid = mensalidadePayments.filter(p => p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
+  const totalRendas = rendaPaymentsSummary.reduce((s, p) => s + safe(p.amount), 0)
+  const avulsoPaid = jogoPayments.filter(p => p.paid).reduce((s, p) => s + safe(p.amount), 0)
+  const mensalistaPaid = mensalidadePayments.filter(p => p.paid).reduce((s, p) => s + safe(p.amount), 0)
   const saldoTotal = saldoInicial + avulsoPaid + mensalistaPaid + totalRendas - totalDespesas
 
   const userIdsComPendingAvulsoRequest = new Set(
@@ -382,14 +384,14 @@ export async function autoRendimentoCDI(since: string) {
     getDoc(doc(db, 'config', 'caixinha'))
   ])
   const cfg = configSnap.exists() ? configSnap.data() : {}
-  const saldoInicial: number = cfg.saldoInicial ?? 1082
+  const saldoInicial: number = safe(cfg.saldoInicial) || 1082
   const pmts = paymentsSnap.docs.map(d => d.data())
   const beforeCurrent = pmts.filter(p => (p.month ?? '').substring(0, 7) < currentMonth)
   const saldoPrev = saldoInicial
-    + beforeCurrent.filter(p => p.type === 'jogo' && p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
-    + beforeCurrent.filter(p => p.type === 'mensalidade' && p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
-    + beforeCurrent.filter(p => p.type === 'renda').reduce((s, p) => s + (p.amount ?? 0), 0)
-    - beforeCurrent.filter(p => p.type === 'despesa').reduce((s, p) => s + (p.amount ?? 0), 0)
+    + beforeCurrent.filter(p => p.type === 'jogo' && p.paid).reduce((s, p) => s + safe(p.amount), 0)
+    + beforeCurrent.filter(p => p.type === 'mensalidade' && p.paid).reduce((s, p) => s + safe(p.amount), 0)
+    + beforeCurrent.filter(p => p.type === 'renda').reduce((s, p) => s + safe(p.amount), 0)
+    - beforeCurrent.filter(p => p.type === 'despesa').reduce((s, p) => s + safe(p.amount), 0)
   if (saldoPrev <= 0) return
   const rendimento = parseFloat((saldoPrev * cdiRate * 1.05).toFixed(2))
   await addDoc(collection(db, 'payments'), {
@@ -640,10 +642,10 @@ export default function CaixinhaPage() {
       const allPaymentsSnap = await getDocs(collection(db, 'payments'))
       const pmts = allPaymentsSnap.docs.map(d => d.data())
       const net =
-        pmts.filter(p => p.type === 'jogo' && p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
-        + pmts.filter(p => p.type === 'mensalidade' && p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
-        + pmts.filter(p => p.type === 'renda').reduce((s, p) => s + (p.amount ?? 0), 0)
-        - pmts.filter(p => p.type === 'despesa').reduce((s, p) => s + (p.amount ?? 0), 0)
+        pmts.filter(p => p.type === 'jogo' && p.paid).reduce((s, p) => s + safe(p.amount), 0)
+        + pmts.filter(p => p.type === 'mensalidade' && p.paid).reduce((s, p) => s + safe(p.amount), 0)
+        + pmts.filter(p => p.type === 'renda').reduce((s, p) => s + safe(p.amount), 0)
+        - pmts.filter(p => p.type === 'despesa').reduce((s, p) => s + safe(p.amount), 0)
       const newSaldoInicial = parseFloat((2360.46 - net).toFixed(2))
 
       await setDoc(doc(db, 'config', 'caixinha'), {
@@ -920,11 +922,11 @@ export default function CaixinhaPage() {
   const jogoPayments = payments.filter(p => p.type === 'jogo')
   const despesaPayments = payments.filter(p => p.type === 'despesa')
   const rendaPayments = payments.filter(p => p.type === 'renda')
-  const totalDespesas = despesaPayments.reduce((s, p) => s + p.amount, 0)
-  const totalRendas = rendaPayments.reduce((s, p) => s + p.amount, 0)
+  const totalDespesas = despesaPayments.reduce((s, p) => s + safe(p.amount), 0)
+  const totalRendas = rendaPayments.reduce((s, p) => s + safe(p.amount), 0)
   const mensalidadePayments = payments.filter(p => p.type === 'mensalidade')
   const avulsoValue = config?.avulsoValue ?? 22
-  const avulsoPaid = jogoPayments.filter(p => p.paid).reduce((s, p) => s + p.amount, 0)
+  const avulsoPaid = jogoPayments.filter(p => p.paid).reduce((s, p) => s + safe(p.amount), 0)
   // Usuários que já têm um payment_request de avulso pendente cobrem tudo (próprio + temps)
   // → não conta o jogo deles em separado (evita dupla contagem)
   const userIdsComPendingAvulsoRequest = new Set(
@@ -934,21 +936,21 @@ export default function CaixinhaPage() {
   const currentAvulsoIds = new Set(players.filter(p => (p as any).player_type === 'avulso').map(p => p.id))
   const avulsoFromPayments = jogoPayments
     .filter(p => !p.paid && !userIdsComPendingAvulsoRequest.has(p.user_id) && currentAvulsoIds.has(p.user_id))
-    .reduce((s, p) => s + p.amount, 0)
+    .reduce((s, p) => s + safe(p.amount), 0)
   // Requests de avulso pendentes (cobrem jogo próprio e/ou temps) — somamos o amount direto
   const avulsoFromRequests = (pendingRequests as any[])
     .filter(r => r.player_type === 'avulso')
-    .reduce((s: number, r: any) => s + r.amount, 0)
+    .reduce((s: number, r: any) => s + safe(r.amount), 0)
   // Temp avulsos sem rastreamento: não pagos E addedBy sem request pendente de avulso
   const avulsoFromTempAvulsos = (allTempAvulsos as any[])
     .filter(t => !t.paid && !userIdsComPendingAvulsoRequest.has(t.addedBy))
     .reduce((s: number, _: any) => s + avulsoValue, 0)
   const avulsoPending = avulsoFromPayments + avulsoFromRequests + avulsoFromTempAvulsos
-  const mensalistaPaid = mensalidadePayments.filter(p => p.paid).reduce((s, p) => s + p.amount, 0)
+  const mensalistaPaid = mensalidadePayments.filter(p => p.paid).reduce((s, p) => s + safe(p.amount), 0)
   const mensalistaValue = config?.mensalistaValue ?? 80
   // Inclui payment_requests pendentes no cálculo de pendente
-  const mensalistaPendingFromPayments = mensalidadePayments.filter(p => !p.paid && !chinelinhoLongTermIds.has(p.user_id)).reduce((s, p) => s + p.amount, 0)
-  const mensalistaPendingFromRequests = pendingRequests.filter(r => r.player_type === 'mensalista').reduce((s: number, r: any) => s + r.amount, 0)
+  const mensalistaPendingFromPayments = mensalidadePayments.filter(p => !p.paid && !chinelinhoLongTermIds.has(p.user_id)).reduce((s, p) => s + safe(p.amount), 0)
+  const mensalistaPendingFromRequests = pendingRequests.filter(r => r.player_type === 'mensalista').reduce((s: number, r: any) => s + safe(r.amount), 0)
   // Mensalistas sem nenhum registro de pagamento criado para o mês atual ("Sem registro")
   // também estão pendentes, mas não entram nos dois cálculos acima
   const currentMonth = format(new Date(), 'yyyy-MM')
