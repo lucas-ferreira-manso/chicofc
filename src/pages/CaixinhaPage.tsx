@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { collection, getDocs, doc, updateDoc, addDoc, getDoc, setDoc, query, where, deleteDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
-import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
+import { format, isWednesday, nextWednesday, startOfDay, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Copy, Check, PencilSimple, X, CheckCircle, Circle, CaretDown, FileArrowUp, CurrencyCircleDollar } from '@phosphor-icons/react'
 
@@ -73,18 +73,24 @@ interface CaixinhaConfig {
   mensalistaValue: number
   avulsoValue: number
   saldoInicial: number
+  goleiroCost: number
+  autoGoleiro_since: string | null
+  autoCdi_since: string | null
 }
 
 async function fetchConfig(): Promise<CaixinhaConfig> {
   const snap = await getDoc(doc(db, 'config', 'caixinha'))
-  if (!snap.exists()) return { quadraCost: 760, extrasCost: 320, mensalistaValue: 80, avulsoValue: 22, saldoInicial: 1082 }
+  if (!snap.exists()) return { quadraCost: 760, extrasCost: 320, mensalistaValue: 80, avulsoValue: 22, saldoInicial: 1082, goleiroCost: 90, autoGoleiro_since: null, autoCdi_since: null }
   const d = snap.data()
   return {
     quadraCost: d.quadraCost ?? 760,
     extrasCost: d.extrasCost ?? 320,
     mensalistaValue: d.mensalistaValue ?? 80,
     avulsoValue: d.avulsoValue ?? 22,
-    saldoInicial: d.saldoInicial ?? 1082
+    saldoInicial: d.saldoInicial ?? 1082,
+    goleiroCost: d.goleiroCost ?? 90,
+    autoGoleiro_since: d.autoGoleiro_since ?? null,
+    autoCdi_since: d.autoCdi_since ?? null,
   }
 }
 
@@ -316,7 +322,83 @@ export async function cleanupRetroativeAutoDebitos() {
   }
 }
 
-type EditField = 'quadra' | 'extras' | 'mensalista' | 'avulso' | null
+/**
+ * Auto-débito do goleiro: para cada quarta-feira passada (>= autoGoleiro_since) com
+ * pelo menos 8 confirmações, cria despesa R$goleiroCost se ainda não existir.
+ */
+export async function autoDebitarGoleiro(goleiroCost: number, since: string) {
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+  const attendancesSnap = await getDocs(
+    query(collection(db, 'attendances'), where('status', '==', 'confirmed'))
+  )
+  const counts = new Map<string, number>()
+  for (const d of attendancesSnap.docs) {
+    const gid = d.data().game_id as string
+    if (gid && gid < todayStr && gid >= since) counts.set(gid, (counts.get(gid) ?? 0) + 1)
+  }
+  if (counts.size === 0) return
+  const goleiroSnap = await getDocs(
+    query(collection(db, 'payments'), where('auto_type', '==', 'goleiro'))
+  )
+  const paidGames = new Set(goleiroSnap.docs.map(d => d.data().game_id as string))
+  const toCharge = [...counts.entries()].filter(([gid, n]) => n >= 8 && !paidGames.has(gid)).map(([gid]) => gid)
+  if (toCharge.length === 0) return
+  await Promise.all(toCharge.map(gid => addDoc(collection(db, 'payments'), {
+    type: 'despesa', amount: goleiroCost,
+    description: `Goleiro - ${gid}`, game_id: gid,
+    month: gid.substring(0, 7), paid: true,
+    created_at: new Date().toISOString(), auto: true, auto_type: 'goleiro'
+  })))
+}
+
+/**
+ * Rendimento CDI: no dia 5+ de cada mês, busca o CDI acumulado do mês anterior
+ * na API do BCB e cria uma renda de 105% CDI se ainda não existir para aquele mês.
+ */
+export async function autoRendimentoCDI(since: string) {
+  const today = new Date()
+  if (today.getDate() < 5) return
+  const currentMonth = format(today, 'yyyy-MM')
+  const prevMonth = format(subMonths(today, 1), 'yyyy-MM')
+  if (prevMonth < since) return
+  const cdiSnap = await getDocs(
+    query(collection(db, 'payments'), where('auto_type', '==', 'cdi'))
+  )
+  const alreadyApplied = cdiSnap.docs.some(d => (d.data().month as string)?.substring(0, 7) === prevMonth)
+  if (alreadyApplied) return
+  let cdiRate: number
+  try {
+    const res = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.4389/dados/ultimos/2?formato=json')
+    if (!res.ok) return
+    const data = await res.json() as Array<{ data: string; valor: string }>
+    const entry = data.find(d => { const [, mm, yyyy] = d.data.split('/'); return `${yyyy}-${mm}` === prevMonth }) ?? data[data.length - 1]
+    cdiRate = parseFloat(entry.valor) / 100
+  } catch { return }
+  if (!cdiRate || cdiRate <= 0) return
+  const [paymentsSnap, configSnap] = await Promise.all([
+    getDocs(collection(db, 'payments')),
+    getDoc(doc(db, 'config', 'caixinha'))
+  ])
+  const cfg = configSnap.exists() ? configSnap.data() : {}
+  const saldoInicial: number = cfg.saldoInicial ?? 1082
+  const pmts = paymentsSnap.docs.map(d => d.data())
+  const beforeCurrent = pmts.filter(p => (p.month ?? '').substring(0, 7) < currentMonth)
+  const saldoPrev = saldoInicial
+    + beforeCurrent.filter(p => p.type === 'jogo' && p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
+    + beforeCurrent.filter(p => p.type === 'mensalidade' && p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
+    + beforeCurrent.filter(p => p.type === 'renda').reduce((s, p) => s + (p.amount ?? 0), 0)
+    - beforeCurrent.filter(p => p.type === 'despesa').reduce((s, p) => s + (p.amount ?? 0), 0)
+  if (saldoPrev <= 0) return
+  const rendimento = parseFloat((saldoPrev * cdiRate * 1.05).toFixed(2))
+  await addDoc(collection(db, 'payments'), {
+    type: 'renda', amount: rendimento,
+    description: `Rendimento CDI ${prevMonth} (105% CDI)`,
+    month: prevMonth, paid: true,
+    created_at: today.toISOString(), auto: true, auto_type: 'cdi'
+  })
+}
+
+type EditField = 'quadra' | 'extras' | 'mensalista' | 'avulso' | 'goleiro' | null
 
 export default function CaixinhaPage() {
   const qc = useQueryClient()
@@ -396,16 +478,13 @@ export default function CaixinhaPage() {
   // Auto-débito mensal: admin abre a página → verifica se precisa debitar despesas do dia 6
   useEffect(() => {
     if (!isAdmin || !config) return
-    // Remove despesas auto-geradas retroativamente de forma incorreta (bug 2025-11-25)
-    cleanupRetroativeAutoDebitos().then(() => {
-      // Atualiza summary e verifica auto-débito do dia 6 após limpeza
-      saveCaixinhaSummary().then(() => {
-        qc.invalidateQueries({ queryKey: ['caixinha-summary'] })
-      })
-      autoDebitarDespesaMensal(config.quadraCost, config.extrasCost).then(() => {
-        qc.invalidateQueries({ queryKey: ['payments'] })
-        saveCaixinhaSummary()
-      })
+    cleanupRetroativeAutoDebitos().then(async () => {
+      await autoDebitarDespesaMensal(config.quadraCost, config.extrasCost)
+      if (config.autoGoleiro_since) await autoDebitarGoleiro(config.goleiroCost, config.autoGoleiro_since)
+      if (config.autoCdi_since) await autoRendimentoCDI(config.autoCdi_since)
+      await saveCaixinhaSummary()
+      qc.invalidateQueries({ queryKey: ['payments'] })
+      qc.invalidateQueries({ queryKey: ['caixinha-summary'] })
     })
   }, [isAdmin, !!config])
 
@@ -413,7 +492,8 @@ export default function CaixinhaPage() {
   const [extraTipo, setExtraTipo] = useState<'custo' | 'renda'>('custo')
   const [extraNome, setExtraNome] = useState('')
   const [extraValor, setExtraValor] = useState('')
-  useLockBodyScroll(showExtraSheet)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  useLockBodyScroll(showExtraSheet || showResetConfirm)
 
   const closeExtraSheet = () => { setShowExtraSheet(false); setExtraNome(''); setExtraValor(''); setExtraTipo('custo') }
 
@@ -471,10 +551,42 @@ export default function CaixinhaPage() {
     setEditValue(String(currentValue))
   }
 
+  const resetCaixinha = useMutation({
+    mutationFn: async () => {
+      const today = format(new Date(), 'yyyy-MM-dd')
+      const currentMonth = format(new Date(), 'yyyy-MM')
+      const [paymentsSnap, requestsSnap] = await Promise.all([
+        getDocs(collection(db, 'payments')),
+        getDocs(collection(db, 'payment_requests'))
+      ])
+      await Promise.all([
+        ...paymentsSnap.docs.map(d => deleteDoc(d.ref)),
+        ...requestsSnap.docs.map(d => deleteDoc(d.ref))
+      ])
+      const realBalance = 2360.46
+      const newSaldoInicial = realBalance + (config?.quadraCost ?? 760) + (config?.extrasCost ?? 320)
+      await setDoc(doc(db, 'config', 'caixinha'), {
+        saldoInicial: newSaldoInicial,
+        autoGoleiro_since: today,
+        autoCdi_since: currentMonth,
+      }, { merge: true })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payments'] })
+      qc.invalidateQueries({ queryKey: ['caixinha-config'] })
+      qc.invalidateQueries({ queryKey: ['caixinha-summary'] })
+      qc.invalidateQueries({ queryKey: ['pending-requests'] })
+      saveCaixinhaSummary()
+      setShowResetConfirm(false)
+      toast.success('Caixinha resetado! Saldo base: R$ 2360,46')
+    },
+    onError: () => toast.error('Erro ao resetar caixinha.')
+  })
+
   const saveField = useMutation({
     mutationFn: async () => {
       const value = parseFloat(editValue) || 0
-      const fieldMap: Record<string, string> = { quadra: 'quadraCost', extras: 'extrasCost', mensalista: 'mensalistaValue', avulso: 'avulsoValue' }
+      const fieldMap: Record<string, string> = { quadra: 'quadraCost', extras: 'extrasCost', mensalista: 'mensalistaValue', avulso: 'avulsoValue', goleiro: 'goleiroCost' }
       await setDoc(doc(db, 'config', 'caixinha'), { [fieldMap[editingField!]]: value }, { merge: true })
     },
     onSuccess: () => {
@@ -875,6 +987,12 @@ export default function CaixinhaPage() {
                 <div className="flex-1"><EditableRow field="quadra" label="Despesa Quadra" value={displayQuadra} /></div>
                 <div className="flex-1"><EditableRow field="extras" label="Despesas Extras" value={displayExtras} /></div>
               </div>
+              {isAdmin && (
+                <div className="flex gap-5">
+                  <div className="flex-1"><EditableRow field="goleiro" label="Goleiro/Jogo" value={config?.goleiroCost ?? 90} /></div>
+                  <div className="flex-1" />
+                </div>
+              )}
               <div className="flex gap-5">
                 <div className="flex-1 flex flex-col gap-0.5">
                   <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Mensalista Recebido</p>
@@ -895,6 +1013,14 @@ export default function CaixinhaPage() {
                   <p style={{ color: (displayAvulsoPending ?? 0) > 0 ? 'var(--color-danger)' : 'var(--color-fg-accent)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-16)', fontWeight: 600 }}>{fmt(displayAvulsoPending)}</p>
                 </div>
               </div>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowResetConfirm(true)}
+                  style={{ width: '100%', height: 40, borderRadius: 9999, background: 'transparent', border: '1.5px solid var(--color-danger)', color: 'var(--color-danger)', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 13, cursor: 'pointer', marginTop: 4 }}
+                >
+                  Resetar Caixinha
+                </button>
+              )}
             </div>
           )
         })()}
@@ -1328,6 +1454,25 @@ export default function CaixinhaPage() {
               </p>
             </div>
 
+            {/* Atalhos */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 12, color: 'var(--color-fg-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Atalhos</p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => { setExtraTipo('custo'); setExtraNome('Goleiro'); setExtraValor(String(config?.goleiroCost ?? 90)) }}
+                  style={{ flex: 1, height: 44, borderRadius: 9999, background: 'var(--color-surface-primary)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 14, color: 'var(--color-fg-primary)' }}
+                >
+                  🥅 Goleiro
+                </button>
+                <button
+                  onClick={() => { setExtraTipo('renda'); setExtraNome(`Rendimento CDI ${format(subMonths(new Date(), 1), 'yyyy-MM')}`); setExtraValor('') }}
+                  style={{ flex: 1, height: 44, borderRadius: 9999, background: 'var(--color-surface-primary)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 14, color: 'var(--color-fg-primary)' }}
+                >
+                  📈 CDI
+                </button>
+              </div>
+            </div>
+
             {/* Tipo: Custo / Renda */}
             <div style={{ display: 'flex', gap: 8 }}>
               {(['custo', 'renda'] as const).map(tipo => {
@@ -1405,6 +1550,34 @@ export default function CaixinhaPage() {
                 </button>
               )
             })()}
+          </div>
+        </>
+      )}
+
+      {/* Bottom Sheet — Confirmação Reset Caixinha */}
+      {showResetConfirm && isAdmin && (
+        <>
+          <div onClick={() => setShowResetConfirm(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 60 }} />
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70, background: 'var(--color-bg)', borderRadius: '24px 24px 0 0', padding: '28px 24px calc(40px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div className="w-10 h-1 rounded-full mx-auto mb-2" style={{ background: 'var(--color-border)' }} />
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 18, color: 'var(--color-danger)' }}>⚠️ Resetar Caixinha</p>
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 400, fontSize: 14, color: 'var(--color-fg-secondary)', lineHeight: 1.5 }}>
+              Isso vai <strong>apagar todos os pagamentos</strong> e redefinir o saldo base para <strong>R$ 2.360,46</strong>.{'\n'}
+              A automação de goleiro e CDI começa a contar a partir de hoje.
+            </p>
+            <button
+              onClick={() => resetCaixinha.mutate()}
+              disabled={resetCaixinha.isPending}
+              style={{ width: '100%', height: 56, borderRadius: 9999, background: 'var(--color-danger)', color: '#fff', fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, border: 'none', cursor: 'pointer', opacity: resetCaixinha.isPending ? 0.5 : 1 }}
+            >
+              {resetCaixinha.isPending ? 'Resetando...' : 'Confirmar Reset'}
+            </button>
+            <button
+              onClick={() => setShowResetConfirm(false)}
+              style={{ width: '100%', height: 56, borderRadius: 9999, background: 'var(--color-surface-primary)', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, border: 'none', cursor: 'pointer' }}
+            >
+              Cancelar
+            </button>
           </div>
         </>
       )}
