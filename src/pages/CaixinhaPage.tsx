@@ -88,7 +88,7 @@ async function fetchConfig(): Promise<CaixinhaConfig> {
     extrasCost: d.extrasCost ?? 320,
     mensalistaValue: d.mensalistaValue ?? 80,
     avulsoValue: d.avulsoValue ?? 22,
-    saldoInicial: d.saldoInicial ?? 1082,
+    saldoInicial: (typeof d.saldoInicial === 'number' && !isNaN(d.saldoInicial)) ? d.saldoInicial : 1082,
     goleiroCost: d.goleiroCost ?? 90,
     autoGoleiro_since: d.autoGoleiro_since ?? null,
     autoCdi_since: d.autoCdi_since ?? null,
