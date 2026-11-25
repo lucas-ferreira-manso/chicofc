@@ -679,6 +679,7 @@ export default function CaixinhaPage() {
           message: `${userName} realizou pagamento`,
           type: 'payment_request',
           read: false,
+          sender_id: user.id,
           created_at: now
         })
       ))

@@ -1,10 +1,11 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Comprovantes: usuário faz upload do próprio; admins podem ler todos
-    match /comprovantes/{userId}/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+    // Storage não é mais usado: comprovantes vão em base64 no Firestore (payment_requests),
+    // onde a leitura é restrita ao dono e aos admins. Comprovantes antigos continuam
+    // abrindo pelo link com token salvo em comprovante_url, que não passa por estas regras.
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

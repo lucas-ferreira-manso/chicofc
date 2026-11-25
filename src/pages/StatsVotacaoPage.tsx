@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { doc, getDoc, setDoc, collection, getDocs, query, where } from 'firebase/firestore'
+import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { CaretLeft } from '@phosphor-icons/react'
@@ -10,7 +10,7 @@ import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll'
 import { getLastWednesdayId, isVotingOpen, getInitials, AvatarSplit, joinWinnerNames } from '../components/stats/VotacaoComponents'
-import type { PlayerInfo } from '../lib/playerStats'
+import { fetchEligiblePlayers, type PlayerInfo } from '../lib/playerStats'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,18 +34,6 @@ const STEPS = [
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
-async function fetchConfirmedPlayers(gameId: string): Promise<PlayerInfo[]> {
-  const q = query(collection(db, 'attendances'), where('game_id', '==', gameId), where('status', 'in', ['confirmed', 'waitlist']))
-  const snap = await getDocs(q)
-  const userIds = [...new Set(snap.docs.map(d => d.data().user_id as string))]
-  const profiles = await Promise.all(userIds.map(async id => {
-    const pSnap = await getDoc(doc(db, 'players', id))
-    if (!pSnap.exists()) return null
-    const data = pSnap.data()
-    return { id, name: data.name || data.email || 'Jogador', photoURL: data.photoURL } as PlayerInfo
-  }))
-  return profiles.filter(Boolean) as PlayerInfo[]
-}
 
 async function fetchVotacaoV2(gameId: string): Promise<VotacaoV2Data> {
   const snap = await getDoc(doc(db, 'votacao', gameId))
@@ -148,8 +136,8 @@ function HubBadge({ step, winners, onClick }: { step: typeof STEPS[number]; winn
   const hasWinner = winners.length > 0
 
   return (
-    <div onClick={onClick} style={{ flex: 1, borderRadius: 16, border: '1.5px solid rgba(255,255,255,.15)', background: 'rgba(255,255,255,.08)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '10px 6px', cursor: onClick ? 'pointer' : 'default', overflow: 'hidden' }}>
-      <div style={{ width: 60, height: 60, borderRadius: 12, overflow: 'hidden', background: 'rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, position: 'relative' }}>
+    <div onClick={onClick} style={{ flex: 1, minWidth: 0, borderRadius: 16, border: '1.5px solid rgba(255,255,255,.15)', background: 'rgba(255,255,255,.08)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '10px 6px', cursor: onClick ? 'pointer' : 'default', overflow: 'hidden' }}>
+      <div style={{ width: '100%', maxWidth: 60, aspectRatio: '1', borderRadius: 12, overflow: 'hidden', background: 'rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, position: 'relative' }}>
         {hasWinner
           ? <AvatarSplit players={winners} objectPosition="top" initialsSize={20} />
           : icons[step.key]
@@ -204,7 +192,7 @@ function ResultSheet({ players, votos, onClose, onShare, sharing, cardRef }: {
             </div>
 
             {/* 2×2 grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
               {winners.map(({ step, players: catWinners }) => (
                 <div key={step.key} style={{ borderRadius: 20, overflow: 'hidden', background: 'var(--color-bg)' }}>
                   <div style={{ aspectRatio: '1/1', width: '100%', overflow: 'hidden', background: 'var(--color-surface-secondary)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -288,7 +276,7 @@ function HistoryCard({ entry, onClick }: { entry: HistoryEntry; onClick: () => v
       style={{ width: '100%', textAlign: 'left', background: 'var(--color-surface-primary)', borderRadius: 16, padding: 16, border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10 }}
     >
       <span style={{ fontFamily: 'var(--font-primary)', fontSize: 11, fontWeight: 400, color: 'var(--color-fg-primary)', lineHeight: '16px' }}>{dateLabel}</span>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, width: '100%' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, width: '100%' }}>
         {STEPS.map(step => {
           const catWinners = computeWinnersV2(entry.votos, step.key).map(id => entry.playerMap.get(id)).filter(Boolean) as PlayerInfo[]
           const { label, renderIcon } = CAT_META[step.key]
@@ -330,8 +318,8 @@ export default function StatsVotacaoPage() {
   useLockBodyScroll(showResult || !!historyEntry)
 
   const { data: players = [], isLoading: loadingPlayers } = useQuery({
-    queryKey: ['confirmed-players-v2', gameId],
-    queryFn: () => fetchConfirmedPlayers(gameId),
+    queryKey: ['eligible-players-v2', gameId],
+    queryFn: () => fetchEligiblePlayers(gameId),
     refetchInterval: 30_000,
   })
   const { data: votacao, isLoading: loadingVotacao } = useQuery({
@@ -347,9 +335,9 @@ export default function StatsVotacaoPage() {
 
   const saveVote = useMutation({
     mutationFn: async (votes: VoteV2) => {
-      const current = votacao ?? { votos: {} }
+      // Grava só o próprio voto — firestore.rules recusa escrita que toque votos de outros
       await setDoc(doc(db, 'votacao', gameId), {
-        votos: { ...current.votos, [user!.id]: votes }
+        votos: { [user!.id]: votes }
       }, { merge: true })
     },
     onSuccess: () => {
@@ -408,7 +396,7 @@ export default function StatsVotacaoPage() {
         </div>
 
         {/* 4 badges */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
           {STEPS.map(step => (
             <HubBadge
               key={step.key}

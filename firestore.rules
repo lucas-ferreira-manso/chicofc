@@ -27,10 +27,72 @@ service cloud.firestore {
 
     // Confirmações de presença nos jogos
     match /attendances/{attendanceId} {
+      function attendancePath(attId) {
+        return /databases/$(database)/documents/attendances/$(attId);
+      }
+      function isValidStatus(status) {
+        return status in ['confirmed', 'waitlist', 'declined'];
+      }
+      // Prioridade dos mensalistas termina terça 13h de Brasília = 16h UTC,
+      // ou seja, 8h antes da meia-noite UTC da quarta do jogo (game_id = yyyy-MM-dd)
+      function isPriorityOver(gameId) {
+        let d = gameId.split('-');
+        return request.time >= timestamp.date(int(d[0]), int(d[1]), int(d[2])) - duration.value(8, 'h');
+      }
+      // Declarar-se mensalista só vale se o cadastro disser isso; avulso é sempre aceito
+      function isTrueMensalista(playerType) {
+        return playerType != 'mensalista'
+          || get(/databases/$(database)/documents/players/$(request.auth.uid)).data.player_type == 'mensalista';
+      }
+      // Avulso só entra direto como confirmado depois da prioridade
+      function canBeConfirmed(playerType, gameId) {
+        return playerType == 'mensalista' || isPriorityOver(gameId);
+      }
+
+      function isOwnCreate() {
+        let a = request.resource.data;
+        return isOwner(a.user_id)
+          && a.keys().hasOnly(['game_id', 'user_id', 'player_type', 'status', 'confirmed_at'])
+          && a.game_id is string
+          && a.player_type in ['mensalista', 'avulso']
+          && isTrueMensalista(a.player_type)
+          && isValidStatus(a.status)
+          && (a.status != 'confirmed' || canBeConfirmed(a.player_type, a.game_id));
+      }
+
+      // Dono só muda o status (nunca user_id, game_id ou player_type)
+      function isOwnStatusUpdate() {
+        let before = resource.data;
+        let after = request.resource.data;
+        return isOwner(before.user_id)
+          && after.diff(before).affectedKeys().hasOnly(['status'])
+          && isValidStatus(after.status)
+          && (after.status != 'confirmed' || before.status == 'confirmed'
+              || canBeConfirmed(before.player_type, before.game_id));
+      }
+
+      // Quem desiste promove alguém da espera no mesmo batch: promoted_by aponta para a
+      // attendance de quem saiu, que precisa ser dele, do mesmo jogo e ir de
+      // confirmed → declined nesse batch. Rules não fazem query, então não dá para
+      // garantir que é o primeiro da fila — promoted_by fica como registro.
+      function isWaitlistPromotionOnDecline() {
+        let before = resource.data;
+        let after = request.resource.data;
+        let mine = after.promoted_by;
+        return isAuthenticated()
+          && before.status == 'waitlist'
+          && after.status == 'confirmed'
+          && after.diff(before).affectedKeys().hasOnly(['status', 'promoted_by'])
+          && mine is string
+          && get(attendancePath(mine)).data.user_id == request.auth.uid
+          && get(attendancePath(mine)).data.game_id == before.game_id
+          && get(attendancePath(mine)).data.status == 'confirmed'
+          && getAfter(attendancePath(mine)).data.status == 'declined';
+      }
+
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
-      allow update: if isAdmin() ||
-        (isAuthenticated() && resource.data.user_id == request.auth.uid);
+      allow create: if isAdmin() || isOwnCreate();
+      allow update: if isAdmin() || isOwnStatusUpdate() || isWaitlistPromotionOnDecline();
       allow delete: if isAdmin();
     }
 
@@ -53,10 +115,29 @@ service cloud.firestore {
 
     // Registros de pagamento (admin gerencia; jogador pode criar o próprio ao confirmar presença)
     match /payments/{docId} {
+      function attendancePath(attId) {
+        return /databases/$(database)/documents/attendances/$(attId);
+      }
+
+      // Jogador só cria a pendência de avulso do próprio jogo: R$22, não paga, ligada a
+      // uma attendance dele. Nada de 'renda'/'despesa', valor livre ou paid: true.
+      function isOwnGamePendingCreate() {
+        let p = request.resource.data;
+        return isOwner(p.user_id)
+          && p.keys().hasOnly(['user_id', 'amount', 'type', 'attendance_id', 'game_id', 'month', 'paid', 'created_at'])
+          && p.type == 'jogo'
+          && p.paid == false
+          && p.amount == 22
+          && p.game_id is string
+          && p.attendance_id is string
+          && getAfter(attendancePath(p.attendance_id)).data.user_id == request.auth.uid
+          && getAfter(attendancePath(p.attendance_id)).data.game_id == p.game_id;
+      }
+
       allow read: if isAdmin() ||
         (isAuthenticated() && resource.data.user_id == request.auth.uid);
-      allow create: if isAdmin() ||
-        (isAuthenticated() && request.resource.data.user_id == request.auth.uid);
+      allow create: if isAdmin() || isOwnGamePendingCreate();
+      // Aprovar (paid) e cancelar (delete) pagamento é exclusivo de admin
       allow update, delete: if isAdmin();
     }
 
@@ -83,21 +164,94 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Votações de destaque
-    match /votacao/{docId} {
+    // Votações de destaque — doc id = game_id (yyyy-MM-dd)
+    match /votacao/{gameId} {
+      function lineupPath() {
+        return /databases/$(database)/documents/lineups/$(gameId);
+      }
+      function lineupIds() {
+        let l = get(lineupPath()).data;
+        return l.get('blue', []).concat(l.get('black', []));
+      }
+      // Mesma regra do app (fetchEligiblePlayers): com escalação salva, só escalados.
+      // Sem escalação o app cai para os confirmados, que a regra não consegue consultar
+      // (não há query em rules) — nesse caso libera qualquer jogador logado.
+      function hasLineup() {
+        return exists(lineupPath()) && lineupIds().size() > 0;
+      }
+      function isEligible(uid) {
+        return !hasLineup() || uid in lineupIds();
+      }
+      function isValidPick(vote, category) {
+        return !(category in vote) || (vote[category] is string && isEligible(vote[category]));
+      }
+      // Aberta da quarta do jogo até domingo (fecha segunda 00h de Brasília = 03h UTC),
+      // igual ao isVotingOpen() do app — depois disso o resultado não muda mais.
+      function isVotingWindow() {
+        let d = gameId.split('-');
+        let gameDay = timestamp.date(int(d[0]), int(d[1]), int(d[2]));
+        return request.time >= gameDay && request.time < gameDay + duration.value(123, 'h');
+      }
+      function isOwnVoteWrite() {
+        let uid = request.auth.uid;
+        let after = request.resource.data;
+        let before = resource == null ? {} : resource.data;
+        let vote = after.votos[uid];
+        return isAuthenticated()
+          && after.diff(before).affectedKeys().hasOnly(['votos'])
+          && after.votos.diff(before.get('votos', {})).affectedKeys().hasOnly([uid])
+          && vote is map
+          && vote.keys().hasOnly(['bolaCheia', 'bolaMurcha', 'melhorDefensor', 'piorDefensor'])
+          && isValidPick(vote, 'bolaCheia')
+          && isValidPick(vote, 'bolaMurcha')
+          && isValidPick(vote, 'melhorDefensor')
+          && isValidPick(vote, 'piorDefensor')
+          && isEligible(uid)
+          && isVotingWindow();
+      }
+
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow create, update: if isAdmin() || isOwnVoteWrite();
+      allow delete: if isAdmin();
     }
 
     // Notification Center — histórico de notificações por usuário
     match /notifications/{docId} {
+      // Toda notificação nova registra quem enviou (sender_id = quem está logado);
+      // a Central mostra "por Fulano", então ninguém se passa por outra pessoa
+      function isWellFormed(maxMessage) {
+        let n = request.resource.data;
+        return isAuthenticated()
+          && n.keys().hasOnly(['user_id', 'title', 'message', 'type', 'read', 'sender_id', 'created_at'])
+          && n.sender_id == request.auth.uid
+          && n.user_id is string
+          && n.read == false
+          && n.type in ['message', 'payment_request']
+          && n.title is string && n.title.size() <= 80
+          && n.message is string && n.message.size() <= maxMessage;
+      }
+      function recipientIsAdmin() {
+        return get(/databases/$(database)/documents/players/$(request.resource.data.user_id)).data.role == 'admin';
+      }
+      // Jogador comum só cria os avisos automáticos do app; títulos "oficiais"
+      // (Cobrança de Pagamento, Pagamento negado, Confirmação de Presença) são de admin
+      function isPlayerNotification() {
+        let n = request.resource.data;
+        return isWellFormed(300) && (
+          n.title == 'Desistência'
+          || (n.title == 'Lembrete de pagamento' && n.user_id == request.auth.uid)
+          || (n.title in ['Confirmar Pagamento', 'Escalação precisa de revisão', 'Pagamento pendente para revisar']
+              && recipientIsAdmin())
+        );
+      }
+
       // Leitura: próprio usuário ou admin
       allow read: if isAuthenticated() &&
         (isAdmin() || resource.data.user_id == request.auth.uid);
-      // Qualquer autenticado pode criar (ex: usuário avisa admin de pagamento)
-      allow create: if isAuthenticated();
-      // Só o destinatário pode marcar como lida
-      allow update: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow create: if (isAdmin() && isWellFormed(1000)) || isPlayerNotification();
+      // Só o destinatário marca como lida — e não altera mais nada
+      allow update: if isAuthenticated() && resource.data.user_id == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       allow delete: if isAdmin();
     }
 

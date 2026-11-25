@@ -21,6 +21,7 @@ interface AppNotification {
   message?: string
   type: 'message' | 'payment_request'
   payment_request_id?: string
+  sender_id?: string
   read: boolean
   created_at: string
 }
@@ -54,6 +55,16 @@ async function fetchMyNotifications(userId: string): Promise<AppNotification[]> 
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
 }
 
+// Nome de quem enviou cada notificação — mostrado como "por Fulano" para que
+// ninguém se passe por admin (notificações antigas não têm sender_id)
+async function fetchSenderNames(ids: string[]): Promise<Record<string, string>> {
+  const entries = await Promise.all(ids.map(async id => {
+    const snap = await getDoc(doc(db, 'players', id))
+    return [id, snap.exists() ? (snap.data().name || snap.data().email || 'Jogador') : 'Desconhecido'] as const
+  }))
+  return Object.fromEntries(entries)
+}
+
 async function fetchPendingRequests(): Promise<PaymentRequest[]> {
   const q = query(collection(db, 'payment_requests'), where('status', '==', 'pending'))
   const snap = await getDocs(q)
@@ -78,6 +89,14 @@ export default function NotificationCenterPage() {
     queryFn: () => fetchMyNotifications(user!.id),
     enabled: !!user?.id,
     refetchInterval: 10000
+  })
+
+  const senderIds = [...new Set(notifications.map(n => n.sender_id).filter(Boolean) as string[])].sort()
+  const { data: senderNames = {} } = useQuery({
+    queryKey: ['notification-senders', senderIds],
+    queryFn: () => fetchSenderNames(senderIds),
+    enabled: senderIds.length > 0,
+    staleTime: 5 * 60_000
   })
 
   // Pending payment requests — admin only
@@ -183,6 +202,7 @@ export default function NotificationCenterPage() {
         message: 'Seu comprovante foi recusado. Verifique e envie novamente.',
         type: 'payment_request',
         read: false,
+        sender_id: user!.id,
         created_at: new Date().toISOString()
       })
       await deleteDoc(doc(db, 'payment_requests', r.id))
@@ -255,6 +275,7 @@ export default function NotificationCenterPage() {
                 isNew={!n.read}
                 title={n.title}
                 message={n.message}
+                sender={n.sender_id ? senderNames[n.sender_id] : undefined}
               />
             ))}
           </>
@@ -362,12 +383,13 @@ export default function NotificationCenterPage() {
 // ─── NotificationItem ─────────────────────────────────────────────────────────
 
 function NotificationItem({
-  type, isNew, title, message, onPress
+  type, isNew, title, message, sender, onPress
 }: {
   type: 'message' | 'payment'
   isNew: boolean
   title: string
   message?: string
+  sender?: string
   onPress?: () => void
 }) {
   const isPayment = type === 'payment'
@@ -400,6 +422,11 @@ function NotificationItem({
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
         }}>
           {title}
+          {sender && (
+            <span style={{ fontWeight: 400, fontSize: 'var(--font-size-11)', color: 'var(--color-fg-secondary)' }}>
+              {' · por '}{sender}
+            </span>
+          )}
         </p>
         {message && (
           <p style={{

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { collection, getDocs, getDoc, doc, updateDoc, addDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { auth, db } from '../lib/firebase'
 
 import { saveCaixinhaSummary } from './CaixinhaPage'
 import { useState } from 'react'
@@ -124,6 +124,7 @@ export default function NotificacoesAdminPage() {
         message: 'Seu comprovante foi recusado. Verifique e envie novamente.',
         type: 'payment_request',
         read: false,
+        sender_id: auth.currentUser?.uid,
         created_at: new Date().toISOString()
       })
       // Remove o payment_request — jogador fica livre para submeter de novo

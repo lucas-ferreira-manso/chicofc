@@ -1,14 +1,14 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { doc, getDoc, setDoc, collection, getDocs, query, where } from 'firebase/firestore'
+import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { CaretLeft, X } from '@phosphor-icons/react'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
-import type { PlayerInfo, HistoryEntry } from '../lib/playerStats'
+import { fetchEligiblePlayers, type PlayerInfo, type HistoryEntry } from '../lib/playerStats'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll'
 import {
   BadgeVotacao, BigCard, SmallCardVotacao, VotingSheet,
@@ -16,19 +16,6 @@ import {
 } from '../components/stats/VotacaoComponents'
 
 // ─── Data ──────────────────────────────────────────────────────────────────────
-
-async function fetchConfirmedPlayers(gameId: string): Promise<PlayerInfo[]> {
-  const q = query(collection(db, 'attendances'), where('game_id', '==', gameId), where('status', 'in', ['confirmed', 'waitlist']))
-  const snap = await getDocs(q)
-  const userIds = [...new Set(snap.docs.map(d => d.data().user_id as string))]
-  const profiles = await Promise.all(userIds.map(async id => {
-    const pSnap = await getDoc(doc(db, 'players', id))
-    if (!pSnap.exists()) return null
-    const data = pSnap.data()
-    return { id, name: data.name || data.email || 'Jogador', photoURL: data.photoURL } as PlayerInfo
-  }))
-  return profiles.filter(Boolean) as PlayerInfo[]
-}
 
 async function fetchVotacao(gameId: string) {
   const snap = await getDoc(doc(db, 'votacao', gameId))
@@ -75,14 +62,14 @@ export default function StatsBolaPage() {
   const shareCardRef = useRef<HTMLDivElement>(null)
   const historyShareRef = useRef<HTMLDivElement>(null)
 
-  const { data: players = [], isLoading: loadingPlayers } = useQuery({ queryKey: ['confirmed-players', gameId], queryFn: () => fetchConfirmedPlayers(gameId), refetchInterval: 30_000 })
+  const { data: players = [], isLoading: loadingPlayers } = useQuery({ queryKey: ['eligible-players-v2', gameId], queryFn: () => fetchEligiblePlayers(gameId), refetchInterval: 30_000 })
   const { data: votacao, isLoading: loadingVotacao } = useQuery({ queryKey: ['votacao', gameId], queryFn: () => fetchVotacao(gameId), refetchInterval: 10_000 })
   const { data: history = [] } = useQuery({ queryKey: ['votacao-history', gameId], queryFn: () => fetchVotacaoHistory(gameId), staleTime: 5 * 60_000 })
 
   const saveVote = useMutation({
     mutationFn: async (votes: { bolaCheia: string; bolaMurcha: string }) => {
-      const current = votacao ?? { votos: {} }
-      await setDoc(doc(db, 'votacao', gameId), { votos: { ...current.votos, [user!.id]: votes } })
+      // Grava só o próprio voto; o merge preserva Lúcio/Rodrigo Caio já votados no fluxo novo
+      await setDoc(doc(db, 'votacao', gameId), { votos: { [user!.id]: votes } }, { merge: true })
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['votacao', gameId] }); setIsEditingVote(false); toast.success('Voto registrado!') },
     onError: () => toast.error('Erro ao votar. Tente novamente.')
