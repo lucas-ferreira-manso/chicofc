@@ -364,6 +364,17 @@ export default function GamesPage() {
     staleTime: 1000 * 60 * 5
   })
 
+  const { data: gameConfig } = useQuery({
+    queryKey: ['caixinha-config'],
+    queryFn: async () => {
+      const snap = await getDoc(doc(db, 'config', 'caixinha'))
+      if (!snap.exists()) return { avulsoValue: 22 }
+      return { avulsoValue: snap.data().avulsoValue ?? 22 }
+    },
+    staleTime: 1000 * 60 * 10
+  })
+  const avulsoJogoValue = gameConfig?.avulsoValue ?? 22
+
   const myAttendance = attendances.find(a => a.user_id === user?.id)
   const confirmed = attendances.filter(a => a.status === 'confirmed')
   const waitlist = attendances.filter(a => a.status === 'waitlist')
@@ -471,7 +482,7 @@ export default function GamesPage() {
           // attendance_id: firestore.rules só deixa o jogador apagar este pagamento
           // no mesmo batch em que a attendance vira 'declined'
           batch.set(doc(collection(db, 'payments')), {
-            user_id: user!.id, amount: 22, type: 'jogo', attendance_id: attRef.id,
+            user_id: user!.id, amount: avulsoJogoValue, type: 'jogo', attendance_id: attRef.id,
             game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString()
           })
         }
@@ -743,7 +754,7 @@ export default function GamesPage() {
         const batch = writeBatch(db)
         toCreate.forEach(a => {
           batch.set(doc(collection(db, 'payments')), {
-            user_id: a.user_id, amount: 22, type: 'jogo', attendance_id: a.id,
+            user_id: a.user_id, amount: avulsoJogoValue, type: 'jogo', attendance_id: a.id,
             game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString()
           })
         })
@@ -787,7 +798,7 @@ export default function GamesPage() {
           batch.update(doc(db, 'attendances', a.id), { status: 'confirmed' })
           if (a.player_type === 'avulso' && !existingPayers.has(a.user_id)) {
             batch.set(doc(collection(db, 'payments')), {
-              user_id: a.user_id, amount: 22, type: 'jogo', attendance_id: a.id,
+              user_id: a.user_id, amount: avulsoJogoValue, type: 'jogo', attendance_id: a.id,
               game_id: gameId, month: gameId, paid: false,
               created_at: new Date().toISOString()
             })
