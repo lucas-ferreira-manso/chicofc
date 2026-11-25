@@ -241,28 +241,63 @@ export async function saveCaixinhaSummary() {
 }
 
 /**
- * Auto-débito mensal: se hoje >= dia 6 e ainda não existe registro de despesa
- * para o mês atual, cria um com quadraCost + extrasCost.
+ * Auto-débito mensal: cria registros de despesa (quadra + extras) para todos os
+ * meses desde o início do app que ainda não possuem uma despesa auto-gerada.
+ * Roda quando o admin abre a página e repara retroativamente qualquer mês faltante.
+ *
+ * Usa where('auto', '==', true) para diferenciar despesas geradas automaticamente
+ * de custos extras manuais — assim um custo extra nunca bloqueia o auto-débito.
  */
 export async function autoDebitarDespesaMensal(quadraCost: number, extrasCost: number) {
   const today = new Date()
-  if (today.getDate() < 6) return // ainda não chegou o dia 6
-  const month = format(today, 'yyyy-MM')
-  // Verifica se já existe despesa para este mês
-  const q = query(collection(db, 'payments'), where('type', '==', 'despesa'), where('month', '==', month))
-  const snap = await getDocs(q)
-  if (!snap.empty) return // já debitado
-  // Cria o registro de despesa
+  const currentMonth = format(today, 'yyyy-MM')
+
+  // Busca o mês do pagamento mais antigo para saber desde quando o app está ativo.
+  // Fallback: usa o mês atual como ponto de partida.
+  const paymentsSnap = await getDocs(collection(db, 'payments'))
+  const months = paymentsSnap.docs
+    .map(d => (d.data().month as string)?.substring(0, 7))
+    .filter(Boolean)
+  const startMonth = months.length > 0
+    ? months.reduce((min, m) => (m < min ? m : min))
+    : currentMonth
+
+  // Monta lista de meses desde startMonth até o mês atual (apenas se já passou do dia 6)
+  const monthsToCheck: string[] = []
+  const cursor = new Date(`${startMonth}-01`)
+  const limit = new Date(`${currentMonth}-01`)
+  while (cursor <= limit) {
+    const m = format(cursor, 'yyyy-MM')
+    // Para o mês atual, só debita se já chegou o dia 6
+    if (m === currentMonth && today.getDate() < 6) break
+    monthsToCheck.push(m)
+    cursor.setMonth(cursor.getMonth() + 1)
+  }
+
+  if (monthsToCheck.length === 0) return
+
+  // Busca todos os meses que já têm despesa auto-gerada (uma única query)
+  const autoDebitSnap = await getDocs(
+    query(collection(db, 'payments'), where('type', '==', 'despesa'), where('auto', '==', true))
+  )
+  const alreadyDebited = new Set(autoDebitSnap.docs.map(d => (d.data().month as string)?.substring(0, 7)))
+
+  const missing = monthsToCheck.filter(m => !alreadyDebited.has(m))
+  if (missing.length === 0) return
+
+  // Cria despesa para cada mês faltante
   const total = quadraCost + extrasCost
-  await addDoc(collection(db, 'payments'), {
-    type: 'despesa',
-    amount: total,
-    month,
-    description: `Despesas ${month} (Quadra R$${quadraCost} + Extras R$${extrasCost})`,
-    paid: true,
-    created_at: today.toISOString(),
-    auto: true
-  })
+  await Promise.all(missing.map(month =>
+    addDoc(collection(db, 'payments'), {
+      type: 'despesa',
+      amount: total,
+      month,
+      description: `Despesas ${month} (Quadra R$${quadraCost} + Extras R$${extrasCost})`,
+      paid: true,
+      created_at: new Date().toISOString(),
+      auto: true
+    })
+  ))
 }
 
 type EditField = 'quadra' | 'extras' | 'mensalista' | 'avulso' | null

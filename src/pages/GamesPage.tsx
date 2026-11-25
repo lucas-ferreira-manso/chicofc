@@ -358,6 +358,17 @@ export default function GamesPage() {
     staleTime: 1000 * 60 * 5
   })
 
+  const { data: gameConfig } = useQuery({
+    queryKey: ['caixinha-config'],
+    queryFn: async () => {
+      const snap = await getDoc(doc(db, 'config', 'caixinha'))
+      if (!snap.exists()) return { avulsoValue: 22 }
+      return { avulsoValue: snap.data().avulsoValue ?? 22 }
+    },
+    staleTime: 1000 * 60 * 10
+  })
+  const avulsoJogoValue = gameConfig?.avulsoValue ?? 22
+
   const myAttendance = attendances.find(a => a.user_id === user?.id)
   const confirmed = attendances.filter(a => a.status === 'confirmed')
   const waitlist = attendances.filter(a => a.status === 'waitlist')
@@ -460,7 +471,7 @@ export default function GamesPage() {
         })
         if (playerType === 'avulso') {
           batch.set(doc(collection(db, 'payments')), {
-            user_id: user!.id, amount: 22, type: 'jogo',
+            user_id: user!.id, amount: avulsoJogoValue, type: 'jogo',
             game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString()
           })
         }
@@ -727,7 +738,7 @@ export default function GamesPage() {
         const batch = writeBatch(db)
         toCreate.forEach(a => {
           batch.set(doc(collection(db, 'payments')), {
-            user_id: a.user_id, amount: 22, type: 'jogo',
+            user_id: a.user_id, amount: avulsoJogoValue, type: 'jogo',
             game_id: gameId, month: gameId, paid: false, created_at: new Date().toISOString()
           })
         })
@@ -770,7 +781,7 @@ export default function GamesPage() {
           batch.update(doc(db, 'attendances', a.id), { status: 'confirmed' })
           if (a.player_type === 'avulso' && !existingPayers.has(a.user_id)) {
             batch.set(doc(collection(db, 'payments')), {
-              user_id: a.user_id, amount: 22, type: 'jogo',
+              user_id: a.user_id, amount: avulsoJogoValue, type: 'jogo',
               game_id: gameId, month: gameId, paid: false,
               created_at: new Date().toISOString()
             })
