@@ -241,63 +241,79 @@ export async function saveCaixinhaSummary() {
 }
 
 /**
- * Auto-débito mensal: cria registros de despesa (quadra + extras) para todos os
- * meses desde o início do app que ainda não possuem uma despesa auto-gerada.
- * Roda quando o admin abre a página e repara retroativamente qualquer mês faltante.
+ * Auto-débito mensal: se hoje >= dia 6 e ainda não existe despesa auto-gerada
+ * para o mês atual, cria uma com quadraCost + extrasCost.
  *
  * Usa where('auto', '==', true) para diferenciar despesas geradas automaticamente
- * de custos extras manuais — assim um custo extra nunca bloqueia o auto-débito.
+ * de custos extras manuais — assim um custo extra adicionado antes do dia 6 nunca
+ * bloqueia o auto-débito mensal.
  */
 export async function autoDebitarDespesaMensal(quadraCost: number, extrasCost: number) {
   const today = new Date()
-  const currentMonth = format(today, 'yyyy-MM')
+  if (today.getDate() < 6) return
+  const month = format(today, 'yyyy-MM')
+  const q = query(
+    collection(db, 'payments'),
+    where('type', '==', 'despesa'),
+    where('month', '==', month),
+    where('auto', '==', true)
+  )
+  const snap = await getDocs(q)
+  if (!snap.empty) return
+  const total = quadraCost + extrasCost
+  await addDoc(collection(db, 'payments'), {
+    type: 'despesa',
+    amount: total,
+    month,
+    description: `Despesas ${month} (Quadra R$${quadraCost} + Extras R$${extrasCost})`,
+    paid: true,
+    created_at: today.toISOString(),
+    auto: true
+  })
+}
 
-  // Busca o mês do pagamento mais antigo para saber desde quando o app está ativo.
-  // Fallback: usa o mês atual como ponto de partida.
-  const paymentsSnap = await getDocs(collection(db, 'payments'))
-  const months = paymentsSnap.docs
-    .map(d => (d.data().month as string)?.substring(0, 7))
-    .filter(Boolean)
-  const startMonth = months.length > 0
-    ? months.reduce((min, m) => (m < min ? m : min))
-    : currentMonth
-
-  // Monta lista de meses desde startMonth até o mês atual (apenas se já passou do dia 6)
-  const monthsToCheck: string[] = []
-  const cursor = new Date(`${startMonth}-01`)
-  const limit = new Date(`${currentMonth}-01`)
-  while (cursor <= limit) {
-    const m = format(cursor, 'yyyy-MM')
-    // Para o mês atual, só debita se já chegou o dia 6
-    if (m === currentMonth && today.getDate() < 6) break
-    monthsToCheck.push(m)
-    cursor.setMonth(cursor.getMonth() + 1)
-  }
-
-  if (monthsToCheck.length === 0) return
-
-  // Busca todos os meses que já têm despesa auto-gerada (uma única query)
-  const autoDebitSnap = await getDocs(
+/**
+ * Remove despesas auto-geradas retroativamente de forma incorreta pelo bug da versão
+ * anterior. Identifica registros com auto=true criados em meses anteriores ao atual
+ * que já possuíam uma despesa manual — ou seja, duplicatas.
+ * Roda uma única vez quando o admin abre a página logo após o deploy do fix.
+ */
+export async function cleanupRetroativeAutoDebitos() {
+  const currentMonth = format(new Date(), 'yyyy-MM')
+  const snap = await getDocs(
     query(collection(db, 'payments'), where('type', '==', 'despesa'), where('auto', '==', true))
   )
-  const alreadyDebited = new Set(autoDebitSnap.docs.map(d => (d.data().month as string)?.substring(0, 7)))
+  // Separa por mês: auto-geradas anteriores ao mês atual
+  const pastAutoByMonth = new Map<string, typeof snap.docs>()
+  for (const d of snap.docs) {
+    const month = (d.data().month as string)?.substring(0, 7)
+    if (!month || month >= currentMonth) continue
+    if (!pastAutoByMonth.has(month)) pastAutoByMonth.set(month, [])
+    pastAutoByMonth.get(month)!.push(d)
+  }
+  if (pastAutoByMonth.size === 0) return
 
-  const missing = monthsToCheck.filter(m => !alreadyDebited.has(m))
-  if (missing.length === 0) return
+  // Para cada mês com despesa auto, verifica se há também uma despesa manual
+  const allDespesasSnap = await getDocs(
+    query(collection(db, 'payments'), where('type', '==', 'despesa'))
+  )
+  const manualDespesaMonths = new Set(
+    allDespesasSnap.docs
+      .filter(d => !d.data().auto)
+      .map(d => (d.data().month as string)?.substring(0, 7))
+      .filter(Boolean)
+  )
 
-  // Cria despesa para cada mês faltante
-  const total = quadraCost + extrasCost
-  await Promise.all(missing.map(month =>
-    addDoc(collection(db, 'payments'), {
-      type: 'despesa',
-      amount: total,
-      month,
-      description: `Despesas ${month} (Quadra R$${quadraCost} + Extras R$${extrasCost})`,
-      paid: true,
-      created_at: new Date().toISOString(),
-      auto: true
-    })
-  ))
+  // Deleta despesas auto de meses que já tinham uma despesa manual (duplicatas)
+  const toDelete = []
+  for (const [month, docs] of pastAutoByMonth) {
+    if (manualDespesaMonths.has(month)) {
+      toDelete.push(...docs)
+    }
+  }
+  if (toDelete.length > 0) {
+    await Promise.all(toDelete.map(d => deleteDoc(d.ref)))
+  }
 }
 
 type EditField = 'quadra' | 'extras' | 'mensalista' | 'avulso' | null
@@ -380,14 +396,16 @@ export default function CaixinhaPage() {
   // Auto-débito mensal: admin abre a página → verifica se precisa debitar despesas do dia 6
   useEffect(() => {
     if (!isAdmin || !config) return
-    // Sempre atualiza o summary quando admin abre a página
-    saveCaixinhaSummary().then(() => {
-      qc.invalidateQueries({ queryKey: ['caixinha-summary'] })
-    })
-    // E verifica auto-débito do dia 6
-    autoDebitarDespesaMensal(config.quadraCost, config.extrasCost).then(() => {
-      qc.invalidateQueries({ queryKey: ['payments'] })
-      saveCaixinhaSummary()
+    // Remove despesas auto-geradas retroativamente de forma incorreta (bug 2025-11-25)
+    cleanupRetroativeAutoDebitos().then(() => {
+      // Atualiza summary e verifica auto-débito do dia 6 após limpeza
+      saveCaixinhaSummary().then(() => {
+        qc.invalidateQueries({ queryKey: ['caixinha-summary'] })
+      })
+      autoDebitarDespesaMensal(config.quadraCost, config.extrasCost).then(() => {
+        qc.invalidateQueries({ queryKey: ['payments'] })
+        saveCaixinhaSummary()
+      })
     })
   }, [isAdmin, !!config])
 
