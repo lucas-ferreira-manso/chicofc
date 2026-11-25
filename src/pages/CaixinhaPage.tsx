@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { collection, getDocs, doc, updateDoc, addDoc, getDoc, setDoc, query, where, deleteDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
-import { format, isWednesday, nextWednesday, startOfDay } from 'date-fns'
+import { format, isWednesday, nextWednesday, startOfDay, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Copy, Check, PencilSimple, X, CheckCircle, Circle, CaretDown, FileArrowUp, CurrencyCircleDollar } from '@phosphor-icons/react'
 
@@ -73,18 +73,26 @@ interface CaixinhaConfig {
   mensalistaValue: number
   avulsoValue: number
   saldoInicial: number
+  goleiroCost: number
+  autoGoleiro_since: string | null
+  autoCdi_since: string | null
+  setupConcluido: boolean
 }
 
 async function fetchConfig(): Promise<CaixinhaConfig> {
   const snap = await getDoc(doc(db, 'config', 'caixinha'))
-  if (!snap.exists()) return { quadraCost: 760, extrasCost: 320, mensalistaValue: 80, avulsoValue: 22, saldoInicial: 1082 }
+  if (!snap.exists()) return { quadraCost: 760, extrasCost: 320, mensalistaValue: 80, avulsoValue: 22, saldoInicial: 1082, goleiroCost: 90, autoGoleiro_since: null, autoCdi_since: null, setupConcluido: false }
   const d = snap.data()
   return {
     quadraCost: d.quadraCost ?? 760,
     extrasCost: d.extrasCost ?? 320,
     mensalistaValue: d.mensalistaValue ?? 80,
     avulsoValue: d.avulsoValue ?? 22,
-    saldoInicial: d.saldoInicial ?? 1082
+    saldoInicial: d.saldoInicial ?? 1082,
+    goleiroCost: d.goleiroCost ?? 90,
+    autoGoleiro_since: d.autoGoleiro_since ?? null,
+    autoCdi_since: d.autoCdi_since ?? null,
+    setupConcluido: d.setupConcluido ?? false,
   }
 }
 
@@ -316,7 +324,83 @@ export async function cleanupRetroativeAutoDebitos() {
   }
 }
 
-type EditField = 'quadra' | 'extras' | 'mensalista' | 'avulso' | null
+/**
+ * Auto-débito do goleiro: para cada quarta-feira passada (>= autoGoleiro_since) com
+ * pelo menos 8 confirmações, cria despesa R$goleiroCost se ainda não existir.
+ */
+export async function autoDebitarGoleiro(goleiroCost: number, since: string) {
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+  const attendancesSnap = await getDocs(
+    query(collection(db, 'attendances'), where('status', '==', 'confirmed'))
+  )
+  const counts = new Map<string, number>()
+  for (const d of attendancesSnap.docs) {
+    const gid = d.data().game_id as string
+    if (gid && gid < todayStr && gid >= since) counts.set(gid, (counts.get(gid) ?? 0) + 1)
+  }
+  if (counts.size === 0) return
+  const goleiroSnap = await getDocs(
+    query(collection(db, 'payments'), where('auto_type', '==', 'goleiro'))
+  )
+  const paidGames = new Set(goleiroSnap.docs.map(d => d.data().game_id as string))
+  const toCharge = [...counts.entries()].filter(([gid, n]) => n >= 8 && !paidGames.has(gid)).map(([gid]) => gid)
+  if (toCharge.length === 0) return
+  await Promise.all(toCharge.map(gid => addDoc(collection(db, 'payments'), {
+    type: 'despesa', amount: goleiroCost,
+    description: `Goleiro - ${gid}`, game_id: gid,
+    month: gid.substring(0, 7), paid: true,
+    created_at: new Date().toISOString(), auto: true, auto_type: 'goleiro'
+  })))
+}
+
+/**
+ * Rendimento CDI: no dia 5+ de cada mês, busca o CDI acumulado do mês anterior
+ * na API do BCB e cria uma renda de 105% CDI se ainda não existir para aquele mês.
+ */
+export async function autoRendimentoCDI(since: string) {
+  const today = new Date()
+  if (today.getDate() < 5) return
+  const currentMonth = format(today, 'yyyy-MM')
+  const prevMonth = format(subMonths(today, 1), 'yyyy-MM')
+  if (prevMonth < since) return
+  const cdiSnap = await getDocs(
+    query(collection(db, 'payments'), where('auto_type', '==', 'cdi'))
+  )
+  const alreadyApplied = cdiSnap.docs.some(d => (d.data().month as string)?.substring(0, 7) === prevMonth)
+  if (alreadyApplied) return
+  let cdiRate: number
+  try {
+    const res = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.4389/dados/ultimos/2?formato=json')
+    if (!res.ok) return
+    const data = await res.json() as Array<{ data: string; valor: string }>
+    const entry = data.find(d => { const [, mm, yyyy] = d.data.split('/'); return `${yyyy}-${mm}` === prevMonth }) ?? data[data.length - 1]
+    cdiRate = parseFloat(entry.valor) / 100
+  } catch { return }
+  if (!cdiRate || cdiRate <= 0) return
+  const [paymentsSnap, configSnap] = await Promise.all([
+    getDocs(collection(db, 'payments')),
+    getDoc(doc(db, 'config', 'caixinha'))
+  ])
+  const cfg = configSnap.exists() ? configSnap.data() : {}
+  const saldoInicial: number = cfg.saldoInicial ?? 1082
+  const pmts = paymentsSnap.docs.map(d => d.data())
+  const beforeCurrent = pmts.filter(p => (p.month ?? '').substring(0, 7) < currentMonth)
+  const saldoPrev = saldoInicial
+    + beforeCurrent.filter(p => p.type === 'jogo' && p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
+    + beforeCurrent.filter(p => p.type === 'mensalidade' && p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
+    + beforeCurrent.filter(p => p.type === 'renda').reduce((s, p) => s + (p.amount ?? 0), 0)
+    - beforeCurrent.filter(p => p.type === 'despesa').reduce((s, p) => s + (p.amount ?? 0), 0)
+  if (saldoPrev <= 0) return
+  const rendimento = parseFloat((saldoPrev * cdiRate * 1.05).toFixed(2))
+  await addDoc(collection(db, 'payments'), {
+    type: 'renda', amount: rendimento,
+    description: `Rendimento CDI ${prevMonth} (105% CDI)`,
+    month: prevMonth, paid: true,
+    created_at: today.toISOString(), auto: true, auto_type: 'cdi'
+  })
+}
+
+type EditField = 'quadra' | 'extras' | 'mensalista' | 'avulso' | 'goleiro' | null
 
 export default function CaixinhaPage() {
   const qc = useQueryClient()
@@ -393,19 +477,16 @@ export default function CaixinhaPage() {
     }
   }, [isAdmin, config])
 
-  // Auto-débito mensal: admin abre a página → verifica se precisa debitar despesas do dia 6
+  // Auto-débito mensal + goleiro + CDI: roda toda vez que admin abre a página
   useEffect(() => {
     if (!isAdmin || !config) return
-    // Remove despesas auto-geradas retroativamente de forma incorreta (bug 2025-11-25)
-    cleanupRetroativeAutoDebitos().then(() => {
-      // Atualiza summary e verifica auto-débito do dia 6 após limpeza
-      saveCaixinhaSummary().then(() => {
-        qc.invalidateQueries({ queryKey: ['caixinha-summary'] })
-      })
-      autoDebitarDespesaMensal(config.quadraCost, config.extrasCost).then(() => {
-        qc.invalidateQueries({ queryKey: ['payments'] })
-        saveCaixinhaSummary()
-      })
+    cleanupRetroativeAutoDebitos().then(async () => {
+      await autoDebitarDespesaMensal(config.quadraCost, config.extrasCost)
+      if (config.autoGoleiro_since) await autoDebitarGoleiro(config.goleiroCost, config.autoGoleiro_since)
+      if (config.autoCdi_since) await autoRendimentoCDI(config.autoCdi_since)
+      await saveCaixinhaSummary()
+      qc.invalidateQueries({ queryKey: ['payments'] })
+      qc.invalidateQueries({ queryKey: ['caixinha-summary'] })
     })
   }, [isAdmin, !!config])
 
@@ -413,7 +494,8 @@ export default function CaixinhaPage() {
   const [extraTipo, setExtraTipo] = useState<'custo' | 'renda'>('custo')
   const [extraNome, setExtraNome] = useState('')
   const [extraValor, setExtraValor] = useState('')
-  useLockBodyScroll(showExtraSheet)
+  const [showSetupSheet, setShowSetupSheet] = useState(false)
+  useLockBodyScroll(showExtraSheet || showSetupSheet)
 
   const closeExtraSheet = () => { setShowExtraSheet(false); setExtraNome(''); setExtraValor(''); setExtraTipo('custo') }
 
@@ -471,10 +553,123 @@ export default function CaixinhaPage() {
     setEditValue(String(currentValue))
   }
 
+  // Setup inicial: cria registros históricos de novembro e calibra o saldoInicial
+  const setupInicial = useMutation({
+    mutationFn: async () => {
+      const today = format(new Date(), 'yyyy-MM-dd')
+      const currentMonth = format(new Date(), 'yyyy-MM')
+      const avulsoVal = config?.avulsoValue ?? 22
+      const mensalistaVal = config?.mensalistaValue ?? 80
+      const goleiroCost = config?.goleiroCost ?? 90
+
+      // 1. Busca jogadores ativos
+      const playersSnap = await getDocs(collection(db, 'players'))
+      const allPlayers = playersSnap.docs.map(d => ({ id: d.id, ...d.data() }) as any)
+      const activePlayers = allPlayers.filter((p: any) => p.active)
+
+      // 2. Busca confirmações de presença passadas em novembro/2026
+      const attendancesSnap = await getDocs(
+        query(collection(db, 'attendances'), where('status', '==', 'confirmed'))
+      )
+      const avulsoIds = new Set(activePlayers.filter((p: any) => p.player_type === 'avulso').map((p: any) => p.id))
+      // Avulsos confirmados em jogos de novembro antes de hoje
+      const pastNovAttendances = attendancesSnap.docs
+        .map(d => d.data())
+        .filter(a => { const gid = a.game_id as string; return gid && gid.startsWith('2026-11') && gid < today && avulsoIds.has(a.user_id) })
+      // Deduplica: 1 jogo pago por usuário por game_id
+      const seenJogos = new Set<string>()
+      const uniqueAttendances = pastNovAttendances.filter(a => {
+        const key = `${a.user_id}:${a.game_id}`
+        if (seenJogos.has(key)) return false
+        seenJogos.add(key); return true
+      })
+
+      // 3. Guto e George → jogo de hoje pendente
+      const guto = activePlayers.find((p: any) => p.name?.toLowerCase().includes('guto'))
+      const george = activePlayers.find((p: any) => p.name?.toLowerCase().includes('george'))
+      const todayGameId = getGameId(getNextWednesday())
+
+      // 4. Remove despesa manual de R$360 de goleiro (se existir)
+      const despesasSnap = await getDocs(
+        query(collection(db, 'payments'), where('type', '==', 'despesa'), where('amount', '==', 360))
+      )
+      await Promise.all(despesasSnap.docs.filter(d => !d.data().auto).map(d => deleteDoc(d.ref)))
+
+      const now = new Date().toISOString()
+
+      // 5. Cria mensalidade paga de novembro para cada mensalista ativo
+      const mensalistas = activePlayers.filter((p: any) => p.player_type === 'mensalista' && !isChinelinhoLongTerm(p))
+      // Evita duplicatas: verifica quais já têm mensalidade criada para este mês
+      const existingMensSnap = await getDocs(
+        query(collection(db, 'payments'), where('type', '==', 'mensalidade'), where('month', '==', currentMonth))
+      )
+      const existingMensIds = new Set(existingMensSnap.docs.map(d => d.data().user_id as string))
+      const mensalidadesNovamente = mensalistas.filter((p: any) => !existingMensIds.has(p.id))
+
+      // 6. Cria jogo pago para cada avulso confirmado em jogos passados de novembro
+      // Evita duplicatas: verifica quais já têm jogo criado para o mesmo game_id
+      const existingJogosSnap = await getDocs(
+        query(collection(db, 'payments'), where('type', '==', 'jogo'), where('month', '==', currentMonth))
+      )
+      const existingJogoKeys = new Set(existingJogosSnap.docs.map(d => `${d.data().user_id}:${d.data().game_id}`))
+      const novosJogos = uniqueAttendances.filter(a => !existingJogoKeys.has(`${a.user_id}:${a.game_id}`))
+
+      await Promise.all([
+        ...mensalidadesNovamente.map((p: any) => addDoc(collection(db, 'payments'), {
+          user_id: p.id, amount: mensalistaVal, type: 'mensalidade',
+          month: currentMonth, paid: true, paid_at: now, created_at: now,
+        })),
+        ...novosJogos.map(a => addDoc(collection(db, 'payments'), {
+          user_id: a.user_id, amount: avulsoVal, type: 'jogo',
+          game_id: a.game_id, month: (a.game_id as string).substring(0, 7),
+          paid: true, paid_at: now, created_at: now,
+        })),
+        ...[guto, george].filter(Boolean).map((p: any) => {
+          const alreadyHas = existingJogoKeys.has(`${p.id}:${todayGameId}`)
+          if (alreadyHas) return Promise.resolve()
+          return addDoc(collection(db, 'payments'), {
+            user_id: p.id, amount: avulsoVal, type: 'jogo',
+            game_id: todayGameId, month: todayGameId.substring(0, 7),
+            paid: false, created_at: now,
+          })
+        }),
+      ])
+
+      // 7. Recalcula saldoInicial para bater exatamente em R$2360,46
+      // Fórmula: saldoInicial = R$2360,46 - (pago_mensalistas + pago_avulsos + rendas - despesas)
+      const allPaymentsSnap = await getDocs(collection(db, 'payments'))
+      const pmts = allPaymentsSnap.docs.map(d => d.data())
+      const net =
+        pmts.filter(p => p.type === 'jogo' && p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
+        + pmts.filter(p => p.type === 'mensalidade' && p.paid).reduce((s, p) => s + (p.amount ?? 0), 0)
+        + pmts.filter(p => p.type === 'renda').reduce((s, p) => s + (p.amount ?? 0), 0)
+        - pmts.filter(p => p.type === 'despesa').reduce((s, p) => s + (p.amount ?? 0), 0)
+      const newSaldoInicial = parseFloat((2360.46 - net).toFixed(2))
+
+      await setDoc(doc(db, 'config', 'caixinha'), {
+        saldoInicial: newSaldoInicial,
+        goleiroCost,
+        autoGoleiro_since: today,
+        autoCdi_since: currentMonth,
+        setupConcluido: true,
+      }, { merge: true })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payments'] })
+      qc.invalidateQueries({ queryKey: ['caixinha-config'] })
+      qc.invalidateQueries({ queryKey: ['caixinha-summary'] })
+      qc.invalidateQueries({ queryKey: ['pending-requests'] })
+      saveCaixinhaSummary().then(() => qc.invalidateQueries({ queryKey: ['caixinha-summary'] }))
+      setShowSetupSheet(false)
+      toast.success('Setup concluído! Saldo base: R$ 2.360,46')
+    },
+    onError: (err) => { console.error(err); toast.error('Erro no setup inicial.') },
+  })
+
   const saveField = useMutation({
     mutationFn: async () => {
       const value = parseFloat(editValue) || 0
-      const fieldMap: Record<string, string> = { quadra: 'quadraCost', extras: 'extrasCost', mensalista: 'mensalistaValue', avulso: 'avulsoValue' }
+      const fieldMap: Record<string, string> = { quadra: 'quadraCost', extras: 'extrasCost', mensalista: 'mensalistaValue', avulso: 'avulsoValue', goleiro: 'goleiroCost' }
       await setDoc(doc(db, 'config', 'caixinha'), { [fieldMap[editingField!]]: value }, { merge: true })
     },
     onSuccess: () => {
@@ -875,6 +1070,20 @@ export default function CaixinhaPage() {
                 <div className="flex-1"><EditableRow field="quadra" label="Despesa Quadra" value={displayQuadra} /></div>
                 <div className="flex-1"><EditableRow field="extras" label="Despesas Extras" value={displayExtras} /></div>
               </div>
+              {isAdmin && (
+                <div className="flex gap-5">
+                  <div className="flex-1"><EditableRow field="goleiro" label="Goleiro/Jogo" value={config?.goleiroCost ?? 90} /></div>
+                  <div className="flex-1" />
+                </div>
+              )}
+              {isAdmin && !config?.setupConcluido && (
+                <button
+                  onClick={() => setShowSetupSheet(true)}
+                  style={{ width: '100%', height: 44, borderRadius: 9999, background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 14, border: 'none', cursor: 'pointer' }}
+                >
+                  ⚙️ Setup Inicial (rodar uma vez)
+                </button>
+              )}
               <div className="flex gap-5">
                 <div className="flex-1 flex flex-col gap-0.5">
                   <p style={{ color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontSize: 'var(--font-size-12)', lineHeight: '16px', fontWeight: 600 }}>Mensalista Recebido</p>
@@ -1328,6 +1537,21 @@ export default function CaixinhaPage() {
               </p>
             </div>
 
+            {/* Atalhos */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 12, color: 'var(--color-fg-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Atalhos</p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => { setExtraTipo('custo'); setExtraNome('Goleiro'); setExtraValor(String(config?.goleiroCost ?? 90)) }}
+                  style={{ flex: 1, height: 44, borderRadius: 9999, background: 'var(--color-surface-primary)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 14, color: 'var(--color-fg-primary)' }}
+                >🥅 Goleiro</button>
+                <button
+                  onClick={() => { setExtraTipo('renda'); setExtraNome(`Rendimento CDI ${format(subMonths(new Date(), 1), 'yyyy-MM')}`); setExtraValor('') }}
+                  style={{ flex: 1, height: 44, borderRadius: 9999, background: 'var(--color-surface-primary)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 14, color: 'var(--color-fg-primary)' }}
+                >📈 CDI</button>
+              </div>
+            </div>
+
             {/* Tipo: Custo / Renda */}
             <div style={{ display: 'flex', gap: 8 }}>
               {(['custo', 'renda'] as const).map(tipo => {
@@ -1405,6 +1629,38 @@ export default function CaixinhaPage() {
                 </button>
               )
             })()}
+          </div>
+        </>
+      )}
+
+      {/* Bottom Sheet — Setup Inicial */}
+      {showSetupSheet && isAdmin && (
+        <>
+          <div onClick={() => setShowSetupSheet(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 60 }} />
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70, background: 'var(--color-bg)', borderRadius: '24px 24px 0 0', padding: '28px 24px calc(40px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div className="w-10 h-1 rounded-full mx-auto mb-2" style={{ background: 'var(--color-border)' }} />
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 700, fontSize: 18, color: 'var(--color-fg-primary)' }}>⚙️ Setup Inicial</p>
+            <p style={{ fontFamily: 'var(--font-primary)', fontWeight: 400, fontSize: 14, color: 'var(--color-fg-secondary)', lineHeight: 1.6 }}>
+              Vai fazer o seguinte:{'\n\n'}
+              • Marcar todas as mensalidades de novembro como <strong>pagas</strong>{'\n'}
+              • Marcar jogos de avulsos de novembro como <strong>pagos</strong>{'\n'}
+              • Criar jogo <strong>pendente</strong> para Guto e George (hoje){'\n'}
+              • Ajustar saldo base para <strong>R$ 2.360,46</strong>{'\n'}
+              • Ativar automação de goleiro e CDI a partir de hoje
+            </p>
+            <button
+              onClick={() => setupInicial.mutate()}
+              disabled={setupInicial.isPending}
+              style={{ width: '100%', height: 56, borderRadius: 9999, background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-fg)', fontFamily: 'var(--font-primary)', fontWeight: 600, fontSize: 16, border: 'none', cursor: 'pointer', opacity: setupInicial.isPending ? 0.5 : 1 }}
+            >
+              {setupInicial.isPending ? 'Configurando...' : 'Executar Setup'}
+            </button>
+            <button
+              onClick={() => setShowSetupSheet(false)}
+              style={{ width: '100%', height: 56, borderRadius: 9999, background: 'var(--color-surface-primary)', color: 'var(--color-fg-primary)', fontFamily: 'var(--font-primary)', fontWeight: 500, fontSize: 16, border: 'none', cursor: 'pointer' }}
+            >
+              Cancelar
+            </button>
           </div>
         </>
       )}
